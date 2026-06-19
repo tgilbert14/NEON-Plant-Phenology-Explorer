@@ -123,29 +123,39 @@ server <- function(input, output, session) {
     phs <- names(sort(PHENO_RANK[intersect(names(PHENO_RANK), unique(wk$phenophaseName))]))
     phs <- c(phs, setdiff(unique(wk$phenophaseName), phs))   # any unranked appended
     full <- data.frame(week = 1:52)
-    theta_of <- function(w) (w - 1) / 52 * 360
+    # map a week to the ANGLE of its CENTRE day-of-year, on the SAME /365 scale as
+    # the month ticks below — otherwise petals (a /52 scale) drift 3-6 days off the
+    # month labels (a /365 scale) by year's end. Centre = (w-1)*7 + 3.5.
+    theta_of <- function(w) ((w - 1) * 7 + 3.5) / 365 * 360
     p <- plotly::plot_ly()
     for (pn in phs) {
-      d <- wk[wk$phenophaseName == pn, c("week","rate")]
-      m <- merge(full, d, by="week", all.x=TRUE); m$rate[is.na(m$rate)] <- 0
-      m <- m[order(m$week),]; m <- rbind(m, m[1,])   # close the ring
+      d <- wk[wk$phenophaseName == pn, c("week","rate","n")]
+      m <- merge(full, d, by="week", all.x=TRUE); m$rate[is.na(m$rate)] <- 0; m$n[is.na(m$n)] <- 0
+      m <- m[order(m$week),]
+      th <- theta_of(m$week); r <- m$rate; nn <- m$n
+      th <- c(th, th[1] + 360); r <- c(r, r[1]); nn <- c(nn, nn[1])   # close the ring at +360, not back to 0
       col <- COL_OF_PHENO(pn)
       p <- p %>% plotly::add_trace(type="scatterpolar", mode="lines", name=pn,
-        r = m$rate, theta = theta_of(m$week), fill = "toself",
-        fillcolor = grDevices::adjustcolor(col, alpha.f = 0.30), line = list(color = col, width = 2),
-        hovertemplate = paste0(pn, "<br>week %{customdata} · %{r:.0f}% of plants<extra></extra>"),
-        customdata = m$week)
+        r = r, theta = th, fill = "toself",
+        fillcolor = grDevices::adjustcolor(col, alpha.f = 0.22), line = list(color = col, width = 2),
+        customdata = nn,
+        hovertemplate = paste0(pn, "<br>%{r:.0f}% of plants 'yes'<br>%{customdata} obs that week<extra></extra>"))
     }
-    ink <- if (is_dark()) "#e8eef2" else "#1f2a30"; grid <- if (is_dark()) "rgba(220,230,240,0.12)" else "rgba(31,42,48,0.10)"
+    ink <- if (is_dark()) "#e8eef2" else "#1f2a30"; grid <- if (is_dark()) "rgba(220,230,240,0.20)" else "rgba(31,42,48,0.12)"
+    muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
     mo_theta <- (c(1,32,60,91,121,152,182,213,244,274,305,335) - 1)/365*360
+    scope <- sprintf("%s · %% of plants in each phenophase, by week · pooled across years%s",
+      rv$ctx %||% "", if (is.null(sci)) " · all species (mixes evergreen, deciduous & forb leaf calendars — pick a species to read timing)" else paste0(" · ", sci))
     p %>% plotly::layout(
       font = list(color = ink, family = "Rubik"), paper_bgcolor="rgba(0,0,0,0)",
       polar = list(bgcolor = "rgba(0,0,0,0)",
-        radialaxis = list(ticksuffix = "%", angle = 90, gridcolor = grid, tickfont = list(size = 9), range = c(0, 100)),
+        radialaxis = list(ticksuffix = "%", angle = 90, gridcolor = grid, tickfont = list(size = 9, color = ink), range = c(0, 100)),
         angularaxis = list(rotation = 90, direction = "clockwise", gridcolor = grid,
-          tickmode = "array", tickvals = mo_theta, ticktext = month.abb, tickfont = list(size = 10))),
+          tickmode = "array", tickvals = mo_theta, ticktext = month.abb, tickfont = list(size = 10, color = ink))),
       legend = list(orientation = "h", y = -0.12, font = list(color = ink)),
-      margin = list(l = 30, r = 30, t = 30, b = 30)) %>%
+      annotations = list(list(text = scope, x = 0, y = 1.10, xref = "paper", yref = "paper",
+        showarrow = FALSE, xanchor = "left", font = list(color = muted, size = 10.5))),
+      margin = list(l = 30, r = 30, t = 42, b = 30)) %>%
       plotly::config(displayModeBar = FALSE, responsive = TRUE)
   })
   output$trendPlot <- renderPlotly({
@@ -162,28 +172,37 @@ server <- function(input, output, session) {
       legend=list(font=list(size=9)))
   })
   output$trendInsight <- renderUI({
-    tr <- rv$trend; req(!is.null(tr) && nrow(tr) >= 4)
+    tr <- rv$trend; req(!is.null(tr) && nrow(tr) >= 3)
     site_yr <- tr %>% dplyr::group_by(.data$year) %>% dplyr::summarise(onset = stats::median(.data$onset), .groups="drop")
-    if (nrow(site_yr) < 3) return(NULL)
-    fit <- stats::lm(onset ~ year, data = site_yr); slope <- unname(stats::coef(fit)[2])
-    dir <- if (slope < 0) "earlier" else "later"; dec <- abs(slope) * 10
+    ny <- nrow(site_yr)
+    # never fit a trend to fewer than 5 annual points — and never extrapolate a
+    # 3–7 year line to "per decade". Report days/YEAR with a 95% CI; if the CI
+    # spans zero, say so instead of printing a directional verdict.
+    if (ny < 5) return(insight_banner("hourglass-split", tone = "navy",
+      HTML(sprintf("Only <b>%d</b> year%s of green-up are recorded here — too short to fit a trend. Phenology shifts need ~5+ years before a slope means anything.", ny, if (ny==1) "" else "s"))))
+    fit <- stats::lm(onset ~ year, data = site_yr); co <- summary(fit)$coefficients
+    slope <- co[2,1]; se <- co[2,2]; tcrit <- stats::qt(0.975, df = ny - 2)
+    lo <- slope - tcrit*se; hi <- slope + tcrit*se
+    if (lo < 0 && hi > 0) return(insight_banner("dash-circle", tone = "navy",
+      HTML(sprintf("Over <b>%d</b> years, green-up shows <b>no statistically detectable shift</b> (%.1f days/yr, 95%% CI %.1f to %.1f — spans zero). More years are needed to tell drift from noise.", ny, slope, lo, hi))))
+    dir <- if (slope < 0) "earlier" else "later"
     insight_banner(if (slope < 0) "arrow-down-right" else "arrow-up-right", tone = if (slope < 0) "pine" else "gold",
-      HTML(sprintf("Across %d years, site-wide green-up has trended <b>%.1f days %s per decade</b>. <em>%s</em>",
-        nrow(site_yr), dec, dir, "A short series — read as a hint, not a climate verdict.")))
+      HTML(sprintf("Over <b>%d</b> years, site-wide green-up has shifted <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series — a signal, not a verdict; partly reflects which species were monitored each year.</em>",
+        ny, abs(slope), dir, lo, hi)))
   })
 
   # ---- Onset Lab (flagship pinnable board) ----
   output$onsetBoard <- renderPlotly({
     is_ <- rv$ind_summary; req(is_)
-    d <- is_[is.finite(is_$greenup) & is.finite(is_$season), , drop=FALSE]
+    d <- is_[is.finite(is_$greenup) & is.finite(is_$leaf_active), , drop=FALSE]
     n_total <- nrow(is_); n_placed <- nrow(d)
-    if (!n_placed) return(note_plot("No plants yet have both leaf-out and leaf-off recorded"))
+    if (!n_placed) return(note_plot("No plants yet have both leaf-out and leaf-active days recorded"))
     cby <- input$onsetColor %||% "growthForm"; d$grp <- as.character(d[[cby]]); d$grp[is.na(d$grp)] <- "—"
     grps <- sort(unique(d$grp)); pal <- stats::setNames(grDevices::colorRampPalette(RColorBrewer::brewer.pal(8,"Dark2"))(length(grps)), grps)
     d$tip <- paste0("<span class='smt-pin-emoji'>\U0001F33F</span> <b>", d$scientificName, "</b><br/>",
       "<em>", d$growthForm, " · plot ", short_plot(d$plotID), "</em><br/>",
       "<span class='smt-pin-stats'>green-up day ", d$greenup, " (", vapply(d$greenup, doy_to_month, ""), ")<br/>",
-      "season ", d$season, " days",
+      "leaf-active ~", d$leaf_active, " days/yr",
       ifelse(is.finite(d$flower), paste0(" · flowers day ", d$flower), ""), "<br/>",
       d$n_years, " yr monitored</span>",
       "<br/><span class='smt-open' role='button' tabindex='0' data-tag='", d$individualID, "'>\U0001F50E Open plant profile &rarr;</span>",
@@ -191,22 +210,22 @@ server <- function(input, output, session) {
     qcol <- if (is_dark()) "#7e8da0" else "#9aa6b2"; muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
     p <- plotly::plot_ly()
     for (g in grps) { sub <- d[d$grp==g,]
-      p <- p %>% plotly::add_trace(data=sub, x=~greenup, y=~season, type="scatter", mode="markers", name=g,
+      p <- p %>% plotly::add_trace(data=sub, x=~greenup, y=~leaf_active, type="scatter", mode="markers", name=g,
         customdata=~tip, marker=list(color=pal[[g]], size=11, opacity=0.82, line=list(color="#fff", width=0.5)),
-        text=~scientificName, hovertemplate="%{text}<br>green-up day %{x} · season %{y} d<extra></extra>") }
-    mx <- stats::median(d$greenup); my <- stats::median(d$season)
-    xr <- range(d$greenup); yr <- range(d$season); px <- diff(xr)*0.02; py <- diff(yr)*0.02
+        text=~scientificName, hovertemplate="%{text}<br>green-up day %{x} · leaf-active ~%{y} d/yr<extra></extra>") }
+    mx <- stats::median(d$greenup); my <- stats::median(d$leaf_active)
+    xr <- range(d$greenup); yr <- range(d$leaf_active); px <- diff(xr)*0.02; py <- diff(yr)*0.02
     qlab <- function(x,y,t,xa,ya) list(text=t, x=x, y=y, xref="x", yref="y", showarrow=FALSE, xanchor=xa, yanchor=ya, font=list(color=qcol, size=10.5))
-    capt <- sprintf("each dot is a plant · green-up onset × season length · %d of %d plants placeable (both dates recorded)", n_placed, n_total)
+    capt <- sprintf("each dot is a plant · green-up onset × leaf-active days · %d of %d plants placeable (both recorded)", n_placed, n_total)
     ann <- list(list(text=capt, x=0, y=1.07, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(color=muted, size=11)),
-      qlab(xr[1]+px, yr[2]-py, "EARLY & LONG \U0001F33F", "left", "top"),
-      qlab(xr[2]-px, yr[2]-py, "LATE RISER, LONG SEASON", "right", "top"),
-      qlab(xr[1]+px, yr[1]+py, "EARLY & SHORT", "left", "bottom"),
-      qlab(xr[2]-px, yr[1]+py, "LATE & SHORT", "right", "bottom"))
+      qlab(xr[1]+px, yr[2]-py, "EARLY & LONG-LEAVED", "left", "top"),
+      qlab(xr[2]-px, yr[2]-py, "LATE RISER, LONG-LEAVED", "right", "top"),
+      qlab(xr[1]+px, yr[1]+py, "EARLY & BRIEF", "left", "bottom"),
+      qlab(xr[2]-px, yr[1]+py, "LATE & BRIEF", "right", "bottom"))
     if (!is.null(rv$ind)) { ir <- d[d$individualID == rv$ind, ]
-      if (nrow(ir)==1) p <- p %>% plotly::add_trace(x=ir$greenup, y=ir$season, type="scatter", mode="markers", name="★ viewing", customdata=ir$tip, showlegend=TRUE,
+      if (nrow(ir)==1) p <- p %>% plotly::add_trace(x=ir$greenup, y=ir$leaf_active, type="scatter", mode="markers", name="★ viewing", customdata=ir$tip, showlegend=TRUE,
         marker=list(symbol="diamond", size=18, color="#c9a300", line=list(color="#fff", width=1.6)), hovertemplate=paste0("viewing ", ir$scientificName, "<extra></extra>")) }
-    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) — earlier ← → later"), yaxis=list(title="Growing-season length (days)"),
+    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) — earlier ← → later"), yaxis=list(title="Leaf-active days per year — briefer ↓ ↑ longer"),
       shapes=list(list(type="line", xref="x", yref="paper", x0=mx, x1=mx, y0=0, y1=1, line=list(color=qcol, dash="dot", width=1)),
                   list(type="line", xref="paper", yref="y", x0=0, x1=1, y0=my, y1=my, line=list(color=qcol, dash="dot", width=1))),
       annotations=ann, hovermode="closest")
@@ -216,8 +235,8 @@ server <- function(input, output, session) {
       p("Tap a dot above and choose “Open plant profile”, or pick a plant in the sidebar.")))
     r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; if (!nrow(r)) return(NULL)
     div(class="lab-sel", span(class="ls-emoji","\U0001F50E"),
-      div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" — green-up day %s · season %s d",
-        ifelse(is.finite(r$greenup), r$greenup, "—"), ifelse(is.finite(r$season), r$season, "—"))),
+      div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" — green-up day %s · leaf-active ~%s d/yr",
+        ifelse(is.finite(r$greenup), r$greenup, "—"), ifelse(is.finite(r$leaf_active), r$leaf_active, "—"))),
         div(class="ls-dom", em(sprintf("%s · plot %s", r$growthForm, short_plot(r$plotID))))),
       actionButton("goProfFromCard", tagList(bs_icon("arrows-fullscreen"), " Open full profile"), class="btn-outline-dark btn-sm"))
   })
@@ -262,7 +281,7 @@ server <- function(input, output, session) {
         tile(ifelse(is.finite(r$greenup), r$greenup, "—"), "green-up DOY"),
         tile(ifelse(is.finite(r$flower), r$flower, "—"), "flowering DOY"),
         tile(ifelse(is.finite(r$leaf_off), r$leaf_off, "—"), "leaf-off DOY"),
-        tile(ifelse(is.finite(r$season), paste0(r$season,"d"), "—"), "season length"),
+        tile(ifelse(is.finite(r$leaf_active), paste0(r$leaf_active,"d"), "—"), "leaf-active days"),
         tile(n_yr, "years watched"), tile(n_ph, "phenophases")),
       div(class="qc-section-h", bs_icon("calendar3-range"), " Phenophase calendar — when each phase happens"),
       plotlyOutput("phenoSpark", height="240px"),

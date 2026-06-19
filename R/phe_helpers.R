@@ -25,10 +25,19 @@ PHENO_RANK <- c("Breaking leaf buds"=1, "Emerging needles"=1, "Breaking needle b
                 "Falling leaves"=6, "Fruits"=4)
 GREENUP <- c("Breaking leaf buds","Initial growth","Emerging needles","Breaking needle buds")
 SENESCE <- c("Colored leaves","Falling leaves")
-pheno_palette <- c("Breaking leaf buds"="#9acd6b","Increasing leaf size"="#5fae3a","Leaves"="#1a7f37",
-                   "Open flowers"="#d6336c","Fruits"="#9c6644","Colored leaves"="#e0962e","Falling leaves"="#b5651d",
-                   "Initial growth"="#9acd6b","Young leaves"="#5fae3a","Emerging needles"="#7fbf7f",
-                   "Young needles"="#5fae3a","Open pollen cones"="#caa84a","Breaking needle buds"="#9acd6b")
+# Each phenophase gets a DISTINCT colour (no duplicate hexes — overlapping petals
+# must stay separable). Leaf-stage progression is an ordered green ramp by
+# lightness; reproductive + senescence phenophases escape the green/brown band
+# onto CVD-safe distinct hues (flowers magenta, fruits violet) so a red–green
+# colour-blind reader can still tell them apart.
+pheno_palette <- c(
+  "Breaking leaf buds"  = "#c3e6a0", "Initial growth"      = "#a9d97f",
+  "Breaking needle buds"= "#b6e08f", "Emerging needles"    = "#8fcf72",
+  "Increasing leaf size"= "#6fb53f", "Young leaves"        = "#7cc04d",
+  "Young needles"       = "#5aa636", "Leaves"              = "#1a7f37",
+  "Open flowers"        = "#d6336c", "Open pollen cones"   = "#b59410",
+  "Fruits"              = "#7048a6", "Colored leaves"      = "#e8932b",
+  "Falling leaves"      = "#8a5a2b")
 
 COL_OF_PHENO <- function(p) unname(ifelse(p %in% names(pheno_palette), pheno_palette[p], "#9aa6b2"))
 
@@ -51,32 +60,37 @@ onset <- function(obs, phenophases = NULL) {
     dplyr::filter(is.finite(.data$onset_doy))
 }
 
-# green-up / flowering / leaf-off per individual per year.
-# leaf_off = last day "Leaves" was recorded 'yes' (the canopy-duration end). We do
-# NOT use first 'Colored leaves' as a senescence proxy: NEON records 'Colored
-# leaves: yes' for even a few early-stressed leaves (e.g. day 163 in June), which
-# makes first-coloration a wildly early, misleading end-of-season marker. Last
-# leaf-present day is the robust, ecologically meaningful growing-season end.
+# green-up / flowering / leaf-off / leaf-active per individual per year.
+# leaf_off = last day "Leaves" was recorded 'yes'. We do NOT use first 'Colored
+# leaves' as senescence: NEON records it for a few early-stressed leaves (e.g.
+# day 163 in June), which makes first-coloration a wildly early marker.
+# leaf_active = distinct weeks with leaves present x 7 ≈ days the plant actually
+# carries leaves. This is the honest growing-extent metric for EVERY growth form:
+# greenup→leaf_off would span ~300 days for a drought-deciduous desert plant that
+# flushes and drops several times a year, whereas leaf_active sums only the weeks
+# leaves are really present (~110 days). So the Onset Lab uses leaf_active, not a
+# green-up-to-leaf-off span.
 key_onsets <- function(obs) {
+  lv <- obs[obs$phenophaseName == "Leaves" & obs$status == "yes" & is.finite(obs$dayOfYear), , drop=FALSE]
   gu <- onset(obs, GREENUP) %>% dplyr::group_by(.data$individualID, .data$year) %>%
     dplyr::summarise(greenup = min(.data$onset_doy), .groups="drop")
   fl <- onset(obs, "Open flowers") %>% dplyr::transmute(individualID, year, flower = .data$onset_doy)
-  lo <- obs[obs$phenophaseName == "Leaves" & obs$status == "yes" & is.finite(obs$dayOfYear), , drop=FALSE] %>%
-    dplyr::group_by(.data$individualID, .data$year) %>%
+  lo <- lv %>% dplyr::group_by(.data$individualID, .data$year) %>%
     dplyr::summarise(leaf_off = max(.data$dayOfYear), .groups="drop")
-  out <- Reduce(function(a,b) dplyr::full_join(a,b,by=c("individualID","year")), list(gu, fl, lo))
-  out$season <- ifelse(is.finite(out$greenup) & is.finite(out$leaf_off), out$leaf_off - out$greenup, NA_real_)
-  out
+  la <- lv %>% dplyr::mutate(wk = (.data$dayOfYear - 1L) %/% 7L + 1L) %>%
+    dplyr::group_by(.data$individualID, .data$year) %>%
+    dplyr::summarise(leaf_active = dplyr::n_distinct(.data$wk) * 7L, .groups="drop")
+  Reduce(function(a,b) dplyr::full_join(a,b,by=c("individualID","year")), list(gu, fl, lo, la))
 }
 
-# one row per individual: median green-up / season length etc. (Onset Lab + picker)
+# one row per individual: median green-up / leaf-active etc. (Onset Lab + picker)
 individual_summary <- function(obs, inds) {
   ko <- key_onsets(obs); if (is.null(ko) || !nrow(ko)) return(NULL)
   agg <- ko %>% dplyr::group_by(.data$individualID) %>%
     dplyr::summarise(greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
                      flower = round(stats::median(.data$flower, na.rm=TRUE)),
                      leaf_off = round(stats::median(.data$leaf_off, na.rm=TRUE)),
-                     season = round(stats::median(.data$season, na.rm=TRUE)),
+                     leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
                      n_years = dplyr::n_distinct(.data$year[is.finite(.data$greenup) | is.finite(.data$flower)]),
                      .groups="drop")
   dplyr::left_join(inds, agg, by = "individualID")
@@ -95,7 +109,7 @@ weekly_yesrate <- function(obs, sci = NULL) {
   d %>% dplyr::group_by(.data$phenophaseName, .data$week) %>%
     dplyr::summarise(yes = sum(.data$status=="yes"), n = dplyr::n(), .groups="drop") %>%
     dplyr::mutate(rate = round(100 * .data$yes / .data$n, 1)) %>%
-    dplyr::filter(.data$n >= 1)
+    dplyr::filter(.data$n >= 5)   # suppress sub-threshold weeks: a 100%-of-3 ring must not look as solid as 100%-of-1000
 }
 
 # onset trend per species x year (the climate-shift signal — NOT pooled)

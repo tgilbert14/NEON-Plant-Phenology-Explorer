@@ -6,9 +6,10 @@ ok <- function(lbl, x) cat(sprintf("%-34s %s\n", lbl, x))
 
 t <- system.time({ is_ <- individual_summary(obs, inds) })
 ok("individual_summary rows", nrow(is_)); ok("  cols", paste(names(is_), collapse=","))
-ok("  placeable (greenup&season)", sum(is.finite(is_$greenup) & is.finite(is_$season)))
+ok("  placeable (greenup&leaf_active)", sum(is.finite(is_$greenup) & is.finite(is_$leaf_active)))
 ok("  median greenup", round(median(is_$greenup, na.rm=TRUE)))
-ok("  median season", round(median(is_$season, na.rm=TRUE)))
+ok("  median leaf_off", round(median(is_$leaf_off, na.rm=TRUE)))
+ok("  median leaf_active", round(median(is_$leaf_active, na.rm=TRUE)))
 ok("individual_summary time(s)", round(t[["elapsed"]],2))
 
 wk_all <- weekly_yesrate(obs); ok("weekly_yesrate(all) rows", nrow(wk_all))
@@ -19,7 +20,7 @@ wk_sp <- weekly_yesrate(obs, "Acer rubrum L."); ok("weekly_yesrate(Acer) rows", 
 tr <- onset_trend(obs); ok("onset_trend rows", if (is.null(tr)) 0 else nrow(tr))
 if (!is.null(tr)) ok("  species-years", paste(head(sort(unique(tr$scientificName)),3), collapse=", "))
 
-id <- is_$individualID[which(is.finite(is_$greenup) & is.finite(is_$season))[1]]
+id <- is_$individualID[which(is.finite(is_$greenup) & is.finite(is_$leaf_active))[1]]
 h <- indiv_history(obs, id); ok("indiv_history rows", nrow(h)); ok("  for", id)
 fl <- pheno_qc_flags(h); ok("qc flags", length(fl))
 if (length(fl)) for (f in fl) ok(paste0("  [",f$level,"]"), substr(f$text,1,60))
