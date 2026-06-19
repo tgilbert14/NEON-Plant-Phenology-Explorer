@@ -1,0 +1,5 @@
+# Normalize line endings so the repo is consistent across machines (no LF/CRLF churn).
+* text=auto eol=lf
+# Binary assets — never normalize.
+*.rds binary
+*.png binary

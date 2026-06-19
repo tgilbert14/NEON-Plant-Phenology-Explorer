@@ -1,5 +1,7 @@
 # NEON Plant Phenology Explorer
 
+**[Live landing & launch →](https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/)** · [Deploy runbook](DEPLOY.md) · NEON `DP1.10055.001` · 46 sites · 9,515 tagged plants · 499 species
+
 An (unofficial) R/Shiny explorer for NEON's **Plant phenology observations**
 (**DP1.10055.001**) — a *NEONize* sibling of the Small Mammal Tracker, built to the same
 Desert Data Labs quality bar.

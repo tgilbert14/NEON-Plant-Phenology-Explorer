@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NEON Plant Phenology Explorer</title>
+  <meta name="description"
+    content="Explore real NEON plant-phenology observations across ~46 field sites — the phenology clock of the year, every tagged plant's green-up timing, downloadable plant careers, and a national latitudinal green-up gradient. Honest timing statistics, instant loads." />
+
+  <meta name="theme-color" content="#1f6f3e" />
+
+  <!-- Open Graph / social card. Absolute URLs = the GitHub Pages domain for this repo. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/" />
+  <meta property="og:title" content="NEON Plant Phenology Explorer" />
+  <meta property="og:description"
+    content="Real NEON plant-phenology data across ~46 field sites — the phenology clock, green-up onset per plant, downloadable careers, and a national green-up gradient. Honest stats, instant loads." />
+  <meta property="og:image"
+    content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="NEON Plant Phenology Explorer" />
+  <meta name="twitter:description"
+    content="Real NEON plant-phenology data across ~46 field sites. Honest timing stats, instant loads." />
+  <meta name="twitter:image"
+    content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Rubik:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --forest: #1f6f3e;
+      --forest2: #14532a;
+      --terra: #b5481f;
+      --amber: #d98014;
+      --amber-ink: #9a5b0e;
+      --bloom: #c8417a;
+      --teal: #2f8f87;
+      --ink: #24302a;
+      --slate: #5f6f64;
+      --bg: #f6f3ea;
+      --card: #fffdf7;
+    }
+
+    * { box-sizing: border-box }
+
+    body {
+      margin: 0;
+      font-family: Rubik, system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.55
+    }
+
+    h1, h2, h3 { font-family: "Fraunces", Georgia, serif; line-height: 1.15; margin: 0; font-weight: 600 }
+    a { color: var(--teal) }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      color: #fff;
+      background: radial-gradient(120% 140% at 18% 0%, var(--forest) 0%, var(--forest2) 52%, #0e2c1a 100%)
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: .6;
+      pointer-events: none;
+      background:
+        radial-gradient(48px 48px at 12% 30%, rgba(217, 128, 20, .12), transparent 70%),
+        radial-gradient(64px 64px at 84% 22%, rgba(156, 207, 106, .10), transparent 70%),
+        radial-gradient(54px 54px at 70% 82%, rgba(200, 65, 122, .08), transparent 70%)
+    }
+
+    .hero .wrap { position: relative; padding: 70px 22px 64px }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: .76rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+      color: var(--amber); background: rgba(255, 255, 255, .10); padding: 6px 13px; border-radius: 999px
+    }
+
+    .hero h1 { font-size: clamp(2.1rem, 5vw, 3.3rem); margin: 18px 0 10px; letter-spacing: -.01em }
+    .hero h1 .tag {
+      font-size: .40em; font-weight: 700; vertical-align: middle; margin-left: 12px; font-family: Rubik, sans-serif;
+      text-transform: uppercase; letter-spacing: .12em; color: rgba(255,255,255,.66);
+      border: 1px solid rgba(255,255,255,.38); border-radius: 999px; padding: 3px 10px
+    }
+
+    .hero p.lead { font-size: clamp(1.05rem, 2.2vw, 1.26rem); max-width: 62ch; margin: 0 0 28px; color: rgba(255, 255, 255, .92) }
+
+    .cta-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.04rem;
+      padding: 14px 26px; border-radius: 12px; text-decoration: none;
+      transition: transform .12s ease, box-shadow .12s ease
+    }
+    .btn-primary { background: var(--amber); color: #2a1a05; box-shadow: 0 8px 24px rgba(0, 0, 0, .22) }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(0, 0, 0, .3) }
+    .btn-ghost { color: #fff; border: 1.5px solid rgba(255, 255, 255, .6) }
+    .btn-ghost:hover { background: rgba(255, 255, 255, .12) }
+    .warm { font-size: .82rem; color: rgba(255, 255, 255, .82); margin-top: 14px; min-height: 1.2em }
+
+    /* Stats strip */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: -34px auto 0; position: relative; z-index: 2 }
+    .stat { background: var(--card); border-radius: 14px; padding: 18px 16px; box-shadow: 0 6px 22px rgba(20, 48, 28, .12) }
+    .stat .n { font-weight: 800; font-size: 1.7rem; color: var(--forest); font-family: "Fraunces", Georgia, serif }
+    .stat .l { font-size: .82rem; color: var(--slate); font-weight: 500 }
+
+    /* Features */
+    section.body { padding: 54px 0 10px }
+    .sub { color: var(--slate); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: .78rem }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 22px }
+
+    .feat { background: var(--card); border: 1px solid #e7e1d2; border-top: 3px solid #ded7c5; border-radius: 12px; padding: 20px }
+    .feat-star { border-top: 3px solid var(--amber); background: linear-gradient(180deg, rgba(217, 128, 20, .06), var(--card) 42%) }
+    .feat h3 { font-size: 1.08rem; margin-bottom: 6px; color: var(--forest) }
+    .feat p { margin: 0; color: #46544a; font-size: .95rem }
+
+    .honest { margin: 40px 0; background: rgba(31, 111, 62, .06); border-left: 4px solid var(--amber); border-radius: 10px; padding: 20px 22px }
+    .honest h2 { font-size: 1.25rem; margin-bottom: 10px; color: var(--forest) }
+    .honest ul { margin: 0; padding-left: 18px; color: #3b4f42 }
+    .honest li { margin: 6px 0 }
+
+    footer { border-top: 1px solid #e3ddcd; padding: 26px 0 50px; color: var(--slate); font-size: .9rem }
+    footer a { font-weight: 600; text-decoration: none }
+    .cta-foot { display: inline-block; margin-bottom: 10px; font-weight: 700; color: var(--terra) }
+
+    @media(max-width:760px) { .stats { grid-template-columns: repeat(2, 1fr) } .grid { grid-template-columns: 1fr } }
+  </style>
+</head>
+
+<body>
+
+  <header class="hero">
+    <div class="wrap">
+      <span class="badge"><span aria-hidden="true">🌿</span> NEON · Plant Phenology Observations · DP1.10055.001</span>
+      <h1>NEON Plant Phenology Explorer <span class="tag">unofficial</span></h1>
+      <p class="lead">When the leaves break, the flowers open, and the canopy turns — every tagged plant
+        NEON watches, week by week, year after year. Tap a site on the national map, read the year as a
+        phenology clock, and follow any plant's green-up career — on real data, with statistics that show
+        their work.</p>
+      <div class="cta-row">
+        <a id="launch" class="btn btn-primary" href="#">Launch the app&nbsp;→</a>
+        <a class="btn btn-ghost" href="https://github.com/tgilbert14/NEON-Plant-Phenology-Explorer"
+          target="_blank" rel="noopener">View on GitHub</a>
+      </div>
+      <div class="warm" id="warm"></div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="stats">
+      <div class="stat"><div class="n">46</div><div class="l">field sites</div></div>
+      <div class="stat"><div class="n">9,515</div><div class="l">tagged plants</div></div>
+      <div class="stat"><div class="n">499</div><div class="l">species</div></div>
+      <div class="stat"><div class="n">instant</div><div class="l">no live API waits</div></div>
+    </div>
+  </div>
+
+  <section class="body">
+    <div class="wrap">
+      <span class="sub">What you can do</span>
+      <div class="grid">
+        <div class="feat feat-star">
+          <h3>Read the phenology clock</h3>
+          <p>The typical year as overlapping seasonal petals — where the greens peak is leaf-out, the
+            pink is bloom, the amber is autumn. Switch species to compare how each times its year.</p>
+        </div>
+        <div class="feat feat-star">
+          <h3>The Onset Lab</h3>
+          <p>Every tagged plant on one board — when it wakes (green-up onset) × how many days a year it
+            carries leaves. Tap a dot to pin its card, then open its full career.</p>
+        </div>
+        <div class="feat">
+          <h3>Pick a site on the map</h3>
+          <p>The landing is a national map of every NEON site — dot size is plants tagged, color is
+            median green-up (green = early spring, amber = late). Tap a dot to dive in.</p>
+        </div>
+        <div class="feat">
+          <h3>Follow one plant</h3>
+          <p>Each tagged individual becomes a downloadable card — green-up / first-flower / leaf timing,
+            its phenophase calendar across years, and low-noise quality checks (PNG + CSV).</p>
+        </div>
+        <div class="feat feat-star">
+          <h3>Across sites — the gradient</h3>
+          <p>Median green-up vs latitude across the network: spring marching later as you move north —
+            the spatial echo of Hopkins' bioclimatic law — plus the same species across its range.</p>
+        </div>
+        <div class="feat">
+          <h3>Take the data with you</h3>
+          <p>A one-click analysis-ready export — tidy CSVs of observations, onsets, per-plant summaries,
+            the clock and the trend, plus a <b>codebook</b> decoding every column and method.</p>
+        </div>
+      </div>
+
+      <div class="honest">
+        <h2>Statistics — timing, not abundance</h2>
+        <p>Phenology is monitored on a <b>fixed roster of tagged plants</b> along transects, so it is a
+          <b>timing</b> signal (when each phenophase happens), not a measure of how common a species is.
+          Every view leads with transparent methods:</p>
+        <ul>
+          <li><b>Onset</b> is interval-censored to the midpoint between the last "no" and first "yes"
+            visit — honest about the twice-weekly resolution — and rows where the first visit was already
+            "yes" are flagged left-censored.</li>
+          <li><b>Growing extent</b> is "days carrying leaves" (distinct leaf-weeks × 7), not a
+            green-up-to-leaf-off span, so a drought-deciduous desert plant that flushes twice a year isn't
+            credited a 300-day season.</li>
+          <li><b>The clock pools years</b> by design (the typical season); year-to-year shifts live in the
+            onset trend, which refuses to fit fewer than 5 years and says "no detectable shift" when the
+            confidence interval spans zero.</li>
+          <li><b>Sample-size gates</b> everywhere: a phenophase-week needs ≥ 5 observations, a species-year
+            needs ≥ 3 plants, and the colour palette is colour-vision-deficiency safe.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    .series { background: var(--forest2); color: #fff; padding: 56px 0; }
+    .series h2 { color: #fff; margin: 0; font-size: 1.6rem; }
+    .series-sub { color: #cbe0d2; margin: 8px 0 26px; max-width: 640px; }
+    .series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+    .series-card { display: flex; flex-direction: column; gap: 5px; padding: 22px; border-radius: 16px;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); color: #fff;
+      text-decoration: none; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+    .series-card:hover { transform: translateY(-3px); border-color: var(--amber); background: rgba(255,255,255,.10); }
+    .series-emoji { font-size: 1.9rem; line-height: 1; }
+    .series-name { font-weight: 800; font-size: 1.12rem; }
+    .series-tag { color: #cbe0d2; font-size: .95rem; }
+    .series-go { color: var(--amber); font-weight: 700; margin-top: 6px; }
+    @media (max-width: 640px) { .series-grid { grid-template-columns: 1fr; } }
+  </style>
+  <section class="series">
+    <div class="wrap">
+      <h2>Check out some of our other NEON series apps</h2>
+      <p class="series-sub">Pick another data type to explore.</p>
+      <div class="series-grid">
+        <a class="series-card" href="https://tgilbert14.github.io/NEON-Small-Mammal-Tracker-App/" target="_blank" rel="noopener">
+          <span class="series-emoji">🐾</span>
+          <span class="series-name">NEON Small Mammal Tracker</span>
+          <span class="series-tag">Small-mammal box trapping across 46 NEON field sites.</span>
+          <span class="series-go">Open&nbsp;→</span>
+        </a>
+        <a class="series-card" href="https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/" target="_blank" rel="noopener">
+          <span class="series-emoji">💧</span>
+          <span class="series-name">NEON Water Chemistry Analyte Viewer</span>
+          <span class="series-tag">Surface-water chemistry across 34 aquatic sites.</span>
+          <span class="series-go">Open&nbsp;→</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Phenology%20Explorer"><span aria-hidden="true">👋</span> Want a custom data app like this for your project?</a><br>
+      Built on the NEON <a href="https://data.neonscience.org/data-products/DP1.10055.001" target="_blank"
+        rel="noopener">Plant Phenology Observations</a> product by <b>Desert Data Labs</b> · Tucson, AZ.
+      Data: National Ecological Observatory Network (operated by Battelle, funded by NSF). An
+      educational data-exploration tool, not affiliated with NEON, Battelle, or the NSF.
+    </div>
+  </footer>
+
+  <script>
+    // ── Set this to your deployed app URL. After deploying on Posit Connect Cloud
+    //    (reads manifest.json from this repo), paste the published share URL here
+    //    (or "app/" for a shinylive static build) and re-publish Pages. ──
+    const APP_URL = "https://REPLACE-WITH-YOUR-CONNECT-CLOUD-URL/";
+
+    (function () {
+      const placeholder = APP_URL.indexOf("REPLACE-WITH") !== -1;
+      const launch = document.getElementById("launch");
+      const warm = document.getElementById("warm");
+
+      if (placeholder) {
+        launch.addEventListener("click", function (e) {
+          e.preventDefault();
+          warm.textContent = "⚠ Set APP_URL in docs/index.html to your deployed app URL, then re-publish Pages.";
+        });
+        return;
+      }
+      launch.href = APP_URL;
+
+      // Pre-warm the (possibly sleeping) app while the visitor reads, to soften cold start.
+      // Aborts after 8s so a hung request never leaves "Warming up…" stuck on screen.
+      try {
+        warm.textContent = "Warming up the app…";
+        var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+        var killer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+        fetch(APP_URL, { mode: "no-cors", cache: "no-store", signal: ctrl ? ctrl.signal : undefined })
+          .then(function () { warm.textContent = "Ready when you are."; })
+          .catch(function () { warm.textContent = ""; })
+          .finally(function () { if (killer) clearTimeout(killer); });
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+</body>
+
+</html>
