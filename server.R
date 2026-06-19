@@ -1,0 +1,317 @@
+# ===========================================================================
+# NEON Plant Phenology Explorer — server.R
+# ===========================================================================
+server <- function(input, output, session) {
+  is_dark <- function() identical(input$colorMode, "dark")
+  plotly_theme <- function(p, legend = TRUE) {
+    dark <- is_dark(); ink <- if (dark) "#e8eef2" else "#1f2a30"
+    grid <- if (dark) "rgba(220,230,240,0.10)" else "rgba(31,42,48,0.08)"; zero <- if (dark) "rgba(220,230,240,0.22)" else "rgba(31,42,48,0.15)"
+    lin <- if (dark) "#3a4759" else "#d6ddd4"; legc <- if (dark) "#c3cedd" else "#344049"
+    p %>% plotly::layout(paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)",
+      font = list(color = ink, family = "Rubik"),
+      xaxis = list(gridcolor = grid, zerolinecolor = zero, linecolor = lin),
+      yaxis = list(gridcolor = grid, zerolinecolor = zero, linecolor = lin),
+      legend = list(bgcolor = "rgba(0,0,0,0)", orientation = "h", y = -0.2, font = list(color = legc)),
+      margin = list(l = 55, r = 30, t = 48, b = 44),
+      hoverlabel = list(bgcolor = "rgba(12,35,75,0.96)", bordercolor = "#FFD200", font = list(color = "#fff", family = "Rubik", size = 13))) %>%
+      plotly::config(displayModeBar = FALSE, responsive = TRUE)
+  }
+  note_plot <- function(msg, icon = "\U0001F33F") plotly::plot_ly(type="scatter", mode="markers") %>%
+    plotly::layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", xaxis=list(visible=FALSE), yaxis=list(visible=FALSE),
+      annotations=list(list(text=paste0(icon,"<br>",msg), showarrow=FALSE, font=list(color=if(is_dark())"#9fb0c4" else "#6b7a85", size=15), align="center"))) %>%
+    plotly::config(displayModeBar = FALSE)
+
+  rv <- reactiveValues(obs=NULL, inds=NULL, ind_summary=NULL, trend=NULL, label=NULL, site=NULL, ind=NULL, ctx=NULL, is_demo=FALSE)
+
+  observe({ ch <- phe_state_choices(); updateSelectInput(session, "stateSel", choices = ch, selected = if ("MA" %in% ch) "MA" else NULL) })
+  observeEvent(input$stateSel, updateSelectInput(session, "site", choices = phe_sites_in_state(input$stateSel)), ignoreInit = FALSE)
+  output$siteBio <- renderUI({ req(input$site); b <- site_bio(input$site); if (is.null(b)) return(NULL); div(class="site-bio", bs_icon("info-circle-fill"), span(b)) })
+  output$siteCards <- renderUI({
+    if (is.null(SITE_INDEX) || !nrow(site_table)) return(NULL)
+    div(class="site-cards", lapply(seq_len(nrow(site_table)), function(i){ r <- site_table[i,]
+      tags$a(class="site-card", href="#",
+        onclick=sprintf("smtLoadStart('%s — loading…');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;", gsub("'","",r$name), r$site),
+        div(class="sc-emoji","\U0001F33F"),
+        div(class="sc-body", div(class="sc-name", tags$b(r$site), sprintf(" · %s", r$name)),
+          div(class="sc-meta", sprintf("%s · %s plants · %s species · %s", r$state, r$n_individuals, r$n_species, r$dominant_form)))) }))
+  })
+  shinyjs::hide("mainTabsWrap")
+
+  ingest <- function(b, label, is_demo = FALSE) {
+    if (is.null(b) || is.null(b$obs) || !nrow(b$obs)) { session$sendCustomMessage("loadDone", list()); showNotification("No phenology data for that site.", type="warning"); return(invisible()) }
+    rv$obs <- b$obs; rv$inds <- b$inds
+    rv$ind_summary <- individual_summary(b$obs, b$inds)
+    rv$trend <- onset_trend(b$obs)
+    rv$label <- label; rv$site <- b$meta$site; rv$is_demo <- is_demo; rv$ind <- NULL
+    yrs <- range(b$obs$year, na.rm=TRUE); rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1]==yrs[2]) yrs[1] else paste0(yrs[1],"–",yrs[2]))
+    shinyjs::show("mainTabsWrap"); shinyjs::show("spPickerWrap"); shinyjs::hide("splash")
+    # plant picker (one row per tagged individual)
+    is_ <- rv$ind_summary
+    ch <- if (!is.null(is_) && nrow(is_)) setNames(is_$individualID,
+      sprintf("%s · %s (%s)", is_$scientificName, short_ind(is_$individualID), short_plot(is_$plotID))) else character(0)
+    updateSelectizeInput(session, "indSel", choices = c("Pick a tagged plant…"="", ch), selected = "", server = TRUE)
+    # species choices for the clock
+    sp <- sort(unique(species_level_only(b$obs)$scientificName)); sp <- sp[!is.na(sp)]
+    updateSelectInput(session, "clockSp", choices = c("All species" = "", setNames(sp, sp)), selected = "")
+    nav_select("tabs", "overview"); session$sendCustomMessage("countUp", list()); session$sendCustomMessage("loadDone", list())
+    invisible(TRUE)
+  }
+  load_site <- function(site){ if (is.null(site)||site=="") { session$sendCustomMessage("loadDone", list()); return() }
+    b <- load_site_bundle(site); if (is.null(b)) { session$sendCustomMessage("loadDone", list()); showNotification("That site isn't bundled in this demo.", type="error"); return() }
+    row <- site_table[site_table$site==site,]; ingest(b, sprintf("%s · %s", site, if (nrow(row)) row$name else site)) }
+  observeEvent(input$loadBtn, load_site(input$site)); observeEvent(input$pickSite, load_site(input$pickSite))
+  observeEvent(input$demoBtn, ingest(load_demo(), DEMO_META$label, is_demo=TRUE)); observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo=TRUE))
+
+  pick_individual <- function(id, navigate=FALSE){ if (is.null(id)||is.na(id)||id=="") return()
+    if (is.null(rv$ind_summary) || !(id %in% rv$ind_summary$individualID)) return()
+    rv$ind <- id; if (!identical(input$indSel, id)) updateSelectizeInput(session, "indSel", selected=id); if (navigate) nav_select("tabs","profile") }
+  observeEvent(input$indSel, if (nzchar(input$indSel %||% "")) pick_individual(input$indSel, navigate=TRUE), ignoreInit=TRUE)
+  observeEvent(input$qcCardRequest, if (nzchar(input$qcCardRequest %||% "")) pick_individual(input$qcCardRequest, navigate=TRUE), ignoreInit=TRUE)
+  observeEvent(input$surpriseBtn, { req(rv$ind_summary); pick_individual(sample(rv$ind_summary$individualID, 1), navigate=TRUE) })
+  observeEvent(input$goClock, nav_select("tabs","clock")); observeEvent(input$goOnset, nav_select("tabs","onset"))
+  observeEvent(input$goProfile, { if (is.null(rv$ind) && !is.null(rv$ind_summary)) rv$ind <- rv$ind_summary$individualID[1]; nav_select("tabs","profile") })
+  observeEvent(input$goMap, nav_select("tabs","map"))
+
+  # ---- hero ----
+  output$heroStats <- renderUI({
+    inds <- rv$inds; req(inds)
+    n_sp <- dplyr::n_distinct(species_level_only(inds)$scientificName)
+    n_pl <- dplyr::n_distinct(inds$plotID)
+    gu <- suppressWarnings(stats::median(rv$ind_summary$greenup, na.rm=TRUE))
+    hero <- function(v,l,suf="",icon,tone,ttl=NULL) div(class=paste0("hero-stat hero-",tone), title=ttl,
+      div(class="hs-icon", bs_icon(icon)), div(div(class="hs-v count-up", `data-target`=v, `data-suffix`=suf, "0"), div(class="hs-l", l)))
+    div(class="hero-band", div(class="hero-title", bs_icon("flower3"), tags$b(rv$label)),
+      div(class="hero-grid",
+        hero(nrow(inds), "tagged plants", icon="flower1", tone="pine"),
+        hero(n_sp, "species", icon="tree", tone="navy"),
+        hero(n_pl, "phenology plots", icon="geo", tone="terra"),
+        hero(if (is.finite(gu)) round(gu) else 0, "median green-up (day-of-year)", icon="clock-history", tone="gold",
+             ttl="Typical day-of-year the average plant first breaks leaf — a within-site timing signal pooled across years.")))
+  })
+
+  # ---- Overview ----
+  output$formBar <- renderPlotly({
+    inds <- rv$inds; req(inds); cb <- comp_by(inds, "growthForm"); cb <- cb[!is.na(cb$growthForm),]
+    cb$lab <- factor(cb$growthForm, levels = rev(cb$growthForm))
+    plot_ly(cb, x=~n, y=~lab, type="bar", orientation="h", marker=list(color=DDL$green),
+      hovertemplate="%{y}<br>%{x} plants<extra></extra>") %>%
+      plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE, xaxis=list(title="Tagged plants"), yaxis=list(title=""), margin=list(l=200))
+  })
+  output$overviewInsight <- renderUI({
+    inds <- rv$inds; req(inds); cb <- comp_by(inds, "growthForm"); cb <- cb[!is.na(cb$growthForm),]
+    dom <- cb$growthForm[1]; n_sp <- dplyr::n_distinct(species_level_only(inds)$scientificName)
+    insight_banner("flower3", tone="pine", HTML(sprintf("This site watches <span class='ci-hero'>%d</span> tagged plants across <b>%d</b> species; the dominant growth form is <b>%s</b> (%d plants).",
+      nrow(inds), n_sp, tolower(dom), cb$n[1])))
+  })
+  output$siteInsights <- renderUI({
+    inds <- rv$inds; obs <- rv$obs; req(inds, obs)
+    gu <- suppressWarnings(stats::median(rv$ind_summary$greenup, na.rm=TRUE))
+    se <- suppressWarnings(stats::median(rv$ind_summary$leaf_off, na.rm=TRUE))
+    yrs <- sort(unique(obs$year))
+    pts <- c(sprintf("Over <b>%d</b> years (%s), observers logged <b>%s</b> phenophase records on <b>%d</b> tagged plants.",
+      length(yrs), paste0(min(yrs),"–",max(yrs)), format(nrow(obs), big.mark=","), nrow(inds)))
+    if (is.finite(gu)) pts <- c(pts, sprintf("The typical plant breaks leaf around <b>%s</b> (day %d)%s.",
+      doy_to_month(gu), round(gu), if (is.finite(se)) sprintf(" and holds leaves until about <b>%s</b> (day %d)", doy_to_month(se), round(se)) else ""))
+    pts <- c(pts, "Phenology is recorded on a <b>fixed roster of tagged individuals</b> along transects — it captures <b>timing</b> (when each phenophase happens), not abundance. Open the Phenology Clock to see the year unfold.")
+    div(class="insight-list", lapply(pts, function(t) div(class="il-item", bs_icon("dot"), HTML(t))))
+  })
+
+  # ---- Phenology Clock (flagship) ----
+  output$clockPlot <- renderPlotly({
+    obs <- rv$obs; req(obs); sci <- if (nzchar(input$clockSp %||% "")) input$clockSp else NULL
+    wk <- weekly_yesrate(obs, sci); if (is.null(wk) || !nrow(wk)) return(note_plot("No phenophase records for that selection"))
+    phs <- names(sort(PHENO_RANK[intersect(names(PHENO_RANK), unique(wk$phenophaseName))]))
+    phs <- c(phs, setdiff(unique(wk$phenophaseName), phs))   # any unranked appended
+    full <- data.frame(week = 1:52)
+    theta_of <- function(w) (w - 1) / 52 * 360
+    p <- plotly::plot_ly()
+    for (pn in phs) {
+      d <- wk[wk$phenophaseName == pn, c("week","rate")]
+      m <- merge(full, d, by="week", all.x=TRUE); m$rate[is.na(m$rate)] <- 0
+      m <- m[order(m$week),]; m <- rbind(m, m[1,])   # close the ring
+      col <- COL_OF_PHENO(pn)
+      p <- p %>% plotly::add_trace(type="scatterpolar", mode="lines", name=pn,
+        r = m$rate, theta = theta_of(m$week), fill = "toself",
+        fillcolor = grDevices::adjustcolor(col, alpha.f = 0.30), line = list(color = col, width = 2),
+        hovertemplate = paste0(pn, "<br>week %{customdata} · %{r:.0f}% of plants<extra></extra>"),
+        customdata = m$week)
+    }
+    ink <- if (is_dark()) "#e8eef2" else "#1f2a30"; grid <- if (is_dark()) "rgba(220,230,240,0.12)" else "rgba(31,42,48,0.10)"
+    mo_theta <- (c(1,32,60,91,121,152,182,213,244,274,305,335) - 1)/365*360
+    p %>% plotly::layout(
+      font = list(color = ink, family = "Rubik"), paper_bgcolor="rgba(0,0,0,0)",
+      polar = list(bgcolor = "rgba(0,0,0,0)",
+        radialaxis = list(ticksuffix = "%", angle = 90, gridcolor = grid, tickfont = list(size = 9), range = c(0, 100)),
+        angularaxis = list(rotation = 90, direction = "clockwise", gridcolor = grid,
+          tickmode = "array", tickvals = mo_theta, ticktext = month.abb, tickfont = list(size = 10))),
+      legend = list(orientation = "h", y = -0.12, font = list(color = ink)),
+      margin = list(l = 30, r = 30, t = 30, b = 30)) %>%
+      plotly::config(displayModeBar = FALSE, responsive = TRUE)
+  })
+  output$trendPlot <- renderPlotly({
+    tr <- rv$trend; if (is.null(tr) || !nrow(tr)) return(note_plot("Not enough plants per year for an onset trend"))
+    top <- names(sort(table(tr$scientificName), decreasing=TRUE)); top <- head(top, 8)
+    tr <- tr[tr$scientificName %in% top,]
+    pal <- make_species_pal(tr)
+    p <- plotly::plot_ly()
+    for (s in unique(tr$scientificName)) { d <- tr[tr$scientificName==s,]; d <- d[order(d$year),]
+      p <- p %>% plotly::add_trace(data=d, x=~year, y=~onset, type="scatter", mode="lines+markers", name=s,
+        line=list(color=pal[[s]], width=2), marker=list(color=pal[[s]], size=7),
+        hovertemplate=paste0("<b>",s,"</b><br>%{x}: green-up day %{y}<extra></extra>")) }
+    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Year", dtick=1), yaxis=list(title="Green-up onset (day-of-year)"),
+      legend=list(font=list(size=9)))
+  })
+  output$trendInsight <- renderUI({
+    tr <- rv$trend; req(!is.null(tr) && nrow(tr) >= 4)
+    site_yr <- tr %>% dplyr::group_by(.data$year) %>% dplyr::summarise(onset = stats::median(.data$onset), .groups="drop")
+    if (nrow(site_yr) < 3) return(NULL)
+    fit <- stats::lm(onset ~ year, data = site_yr); slope <- unname(stats::coef(fit)[2])
+    dir <- if (slope < 0) "earlier" else "later"; dec <- abs(slope) * 10
+    insight_banner(if (slope < 0) "arrow-down-right" else "arrow-up-right", tone = if (slope < 0) "pine" else "gold",
+      HTML(sprintf("Across %d years, site-wide green-up has trended <b>%.1f days %s per decade</b>. <em>%s</em>",
+        nrow(site_yr), dec, dir, "A short series — read as a hint, not a climate verdict.")))
+  })
+
+  # ---- Onset Lab (flagship pinnable board) ----
+  output$onsetBoard <- renderPlotly({
+    is_ <- rv$ind_summary; req(is_)
+    d <- is_[is.finite(is_$greenup) & is.finite(is_$season), , drop=FALSE]
+    n_total <- nrow(is_); n_placed <- nrow(d)
+    if (!n_placed) return(note_plot("No plants yet have both leaf-out and leaf-off recorded"))
+    cby <- input$onsetColor %||% "growthForm"; d$grp <- as.character(d[[cby]]); d$grp[is.na(d$grp)] <- "—"
+    grps <- sort(unique(d$grp)); pal <- stats::setNames(grDevices::colorRampPalette(RColorBrewer::brewer.pal(8,"Dark2"))(length(grps)), grps)
+    d$tip <- paste0("<span class='smt-pin-emoji'>\U0001F33F</span> <b>", d$scientificName, "</b><br/>",
+      "<em>", d$growthForm, " · plot ", short_plot(d$plotID), "</em><br/>",
+      "<span class='smt-pin-stats'>green-up day ", d$greenup, " (", vapply(d$greenup, doy_to_month, ""), ")<br/>",
+      "season ", d$season, " days",
+      ifelse(is.finite(d$flower), paste0(" · flowers day ", d$flower), ""), "<br/>",
+      d$n_years, " yr monitored</span>",
+      "<br/><span class='smt-open' role='button' tabindex='0' data-tag='", d$individualID, "'>\U0001F50E Open plant profile &rarr;</span>",
+      "<br/><em class='smt-pin-hint'>Tap the dot to pin this card</em>")
+    qcol <- if (is_dark()) "#7e8da0" else "#9aa6b2"; muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
+    p <- plotly::plot_ly()
+    for (g in grps) { sub <- d[d$grp==g,]
+      p <- p %>% plotly::add_trace(data=sub, x=~greenup, y=~season, type="scatter", mode="markers", name=g,
+        customdata=~tip, marker=list(color=pal[[g]], size=11, opacity=0.82, line=list(color="#fff", width=0.5)),
+        text=~scientificName, hovertemplate="%{text}<br>green-up day %{x} · season %{y} d<extra></extra>") }
+    mx <- stats::median(d$greenup); my <- stats::median(d$season)
+    xr <- range(d$greenup); yr <- range(d$season); px <- diff(xr)*0.02; py <- diff(yr)*0.02
+    qlab <- function(x,y,t,xa,ya) list(text=t, x=x, y=y, xref="x", yref="y", showarrow=FALSE, xanchor=xa, yanchor=ya, font=list(color=qcol, size=10.5))
+    capt <- sprintf("each dot is a plant · green-up onset × season length · %d of %d plants placeable (both dates recorded)", n_placed, n_total)
+    ann <- list(list(text=capt, x=0, y=1.07, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(color=muted, size=11)),
+      qlab(xr[1]+px, yr[2]-py, "EARLY & LONG \U0001F33F", "left", "top"),
+      qlab(xr[2]-px, yr[2]-py, "LATE RISER, LONG SEASON", "right", "top"),
+      qlab(xr[1]+px, yr[1]+py, "EARLY & SHORT", "left", "bottom"),
+      qlab(xr[2]-px, yr[1]+py, "LATE & SHORT", "right", "bottom"))
+    if (!is.null(rv$ind)) { ir <- d[d$individualID == rv$ind, ]
+      if (nrow(ir)==1) p <- p %>% plotly::add_trace(x=ir$greenup, y=ir$season, type="scatter", mode="markers", name="★ viewing", customdata=ir$tip, showlegend=TRUE,
+        marker=list(symbol="diamond", size=18, color="#c9a300", line=list(color="#fff", width=1.6)), hovertemplate=paste0("viewing ", ir$scientificName, "<extra></extra>")) }
+    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) — earlier ← → later"), yaxis=list(title="Growing-season length (days)"),
+      shapes=list(list(type="line", xref="x", yref="paper", x0=mx, x1=mx, y0=0, y1=1, line=list(color=qcol, dash="dot", width=1)),
+                  list(type="line", xref="paper", yref="y", x0=0, x1=1, y0=my, y1=my, line=list(color=qcol, dash="dot", width=1))),
+      annotations=ann, hovermode="closest")
+  })
+  output$indCardSlot <- renderUI({
+    if (is.null(rv$ind)) return(div(class="qc-empty", div(class="qc-empty-icon","\U0001F33F"), h4("Tap a plant to see its card"),
+      p("Tap a dot above and choose “Open plant profile”, or pick a plant in the sidebar.")))
+    r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; if (!nrow(r)) return(NULL)
+    div(class="lab-sel", span(class="ls-emoji","\U0001F50E"),
+      div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" — green-up day %s · season %s d",
+        ifelse(is.finite(r$greenup), r$greenup, "—"), ifelse(is.finite(r$season), r$season, "—"))),
+        div(class="ls-dom", em(sprintf("%s · plot %s", r$growthForm, short_plot(r$plotID))))),
+      actionButton("goProfFromCard", tagList(bs_icon("arrows-fullscreen"), " Open full profile"), class="btn-outline-dark btn-sm"))
+  })
+  observeEvent(input$goProfFromCard, nav_select("tabs","profile"))
+
+  # ---- Plant Profile (downloadable career card) ----
+  output$phenoSpark <- renderPlotly({
+    id <- rv$ind; req(id); h <- indiv_history(rv$obs, id); if (is.null(h)) return(note_plot("No records for this plant"))
+    yes <- h[h$status == "yes" & is.finite(h$dayOfYear),]; if (!nrow(yes)) return(note_plot("No phenophase recorded 'yes' yet"))
+    phs <- names(sort(PHENO_RANK[intersect(names(PHENO_RANK), unique(yes$phenophaseName))], decreasing=TRUE))
+    phs <- c(setdiff(unique(yes$phenophaseName), phs), phs)
+    yes$phenophaseName <- factor(yes$phenophaseName, levels = phs)
+    p <- plotly::plot_ly()
+    for (pn in levels(yes$phenophaseName)) { sub <- yes[yes$phenophaseName==pn,]; if (!nrow(sub)) next
+      p <- p %>% plotly::add_trace(data=sub, x=~dayOfYear, y=~phenophaseName, type="scatter", mode="markers", name=pn,
+        marker=list(color=COL_OF_PHENO(pn), size=9, opacity=0.7, line=list(color="#fff", width=0.5)),
+        text=~paste0(year), hovertemplate=paste0(pn, "<br>%{text} · day %{x}<extra></extra>"), showlegend=FALSE) }
+    mo_doy <- c(1,32,60,91,121,152,182,213,244,274,305,335)
+    p %>% plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE,
+      xaxis=list(title="Day of year", range=c(0,366), tickmode="array", tickvals=mo_doy, ticktext=month.abb, tickfont=list(size=9)),
+      yaxis=list(title=""), margin=list(l=140,r=15,t=10,b=36))
+  })
+  output$plantProfile <- renderUI({
+    if (is.null(rv$ind)) return(div(class="qc-empty", div(class="qc-empty-icon","\U0001F33F"), h4("Pick a plant to open its profile"),
+      p("Use the Onset Lab (tap a dot → “Open plant profile”) or the sidebar picker.")))
+    r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; req(nrow(r)==1)
+    h <- indiv_history(rv$obs, rv$ind); flags <- pheno_qc_flags(h, r$growthForm)
+    n_ph <- if (!is.null(h)) dplyr::n_distinct(h$phenophaseName[h$status=="yes"]) else 0
+    n_yr <- if (!is.null(h)) dplyr::n_distinct(h$year) else 0
+    tile <- function(v,l) div(class="qc-tile", div(class="qc-tile-v", v), div(class="qc-tile-l", l))
+    has_problem <- any(vapply(flags, function(f) f$level %in% c("high","warn"), logical(1)))
+    flag_items <- lapply(flags, function(f) div(class=paste0("qc-flag qc-flag-", f$level),
+      bs_icon(switch(f$level, high="exclamation-octagon-fill", warn="exclamation-triangle-fill", "info-circle-fill")), span(HTML(f$text))))
+    flag_ui <- if (!has_problem) c(list(div(class="qc-flag qc-flag-ok", bs_icon("check-circle-fill"),
+      span("No phenophase-ordering issues detected for this plant."))), flag_items) else flag_items
+    body <- div(id="qcCardNode", class="qc-card", `data-short`=gsub("[^A-Za-z]","",substr(r$scientificName,1,20)),
+      div(class="qc-head", span(class="qc-emoji","\U0001F33F"),
+        div(div(class="qc-id", r$scientificName), div(class="qc-sci", em(sprintf("%s · %s · plot %s",
+          r$growthForm, switch(as.character(r$nativeStatusCode), "N"="native", "I"="introduced", "NI"="native & introduced", as.character(r$nativeStatusCode) %||% "—"), short_plot(r$plotID))))),
+        div(class="qc-head-badges", glow_badge(paste0(short_ind(r$individualID)), DDL$green))),
+      div(class="qc-tiles",
+        tile(ifelse(is.finite(r$greenup), r$greenup, "—"), "green-up DOY"),
+        tile(ifelse(is.finite(r$flower), r$flower, "—"), "flowering DOY"),
+        tile(ifelse(is.finite(r$leaf_off), r$leaf_off, "—"), "leaf-off DOY"),
+        tile(ifelse(is.finite(r$season), paste0(r$season,"d"), "—"), "season length"),
+        tile(n_yr, "years watched"), tile(n_ph, "phenophases")),
+      div(class="qc-section-h", bs_icon("calendar3-range"), " Phenophase calendar — when each phase happens"),
+      plotlyOutput("phenoSpark", height="240px"),
+      div(class="qc-section-h", bs_icon("clipboard-check"), " Quality checks"),
+      div(class="qc-flags", flag_ui),
+      p(class="qc-cap-note", style="margin-top:8px", bs_icon("info-circle"),
+        " Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years."))
+    div(div(class="plot-profile-wrap", body), div(class="qc-toolbar",
+      tags$button(class="smt-snap-btn", type="button", onclick="smtSaveQcCard()", bsicons::bs_icon("download"), " Save plant card (PNG)"),
+      downloadButton("indCsv", "Download history (CSV)", class="smt-clear-btn")))
+  })
+  output$indCsv <- downloadHandler(
+    filename = function() sprintf("NEON-Phenology_%s_%s.csv", gsub("[^A-Za-z0-9]","",short_ind(rv$ind %||% "plant")), format(Sys.Date(),"%Y%m%d")),
+    content = function(file){ id <- rv$ind; req(id); h <- indiv_history(rv$obs, id); req(!is.null(h))
+      utils::write.csv(h, file, row.names=FALSE, na="") },
+    contentType="text/csv")
+
+  # ---- Map (plots) ----
+  output$map <- leaflet::renderLeaflet({
+    ps <- plot_summary_phe(rv$obs, rv$inds); req(ps); ps <- ps[is.finite(ps$lat) & is.finite(ps$lng),]
+    req(nrow(ps) > 0)
+    metric <- input$mapMetric %||% "greenup"; val <- ps[[metric]]; val[is.na(val)] <- stats::median(val, na.rm=TRUE)
+    dom <- if (diff(range(val,na.rm=TRUE))>0) range(val,na.rm=TRUE) else c(val[1]-1,val[1]+1)
+    pal <- leaflet::colorNumeric(if (metric=="greenup") "viridis" else "YlGn", domain=dom, reverse = (metric=="greenup"))
+    rr <- range(ps$n_ind, na.rm=TRUE); ps$radius <- if (diff(rr)>0) 7 + 13*(ps$n_ind-rr[1])/diff(rr) else 11
+    leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "Esri.WorldImagery") %>%
+      leaflet::addCircleMarkers(lng=~lng, lat=~lat, radius=~radius, fillColor=pal(val), color="#fff", weight=1, fillOpacity=0.85,
+        label=~lapply(sprintf("<b>%s</b><br>%d plants · green-up day %s", short_plot(plotID), n_ind, ifelse(is.finite(greenup), greenup, "—")), htmltools::HTML)) %>%
+      leaflet::addLegend("bottomright", pal=pal, values=val, title=if (metric=="greenup") "green-up DOY" else "plants")
+  })
+
+  output$aboutPanel <- renderUI({
+    div(class="about-wrap",
+      div(class="about-card", h4("\U0001F33F What this is"),
+        p("An (unofficial) explorer for NEON's ", tags$b("Plant phenology observations"), " (", tags$code("DP1.10055.001"), "). A fixed roster of tagged plants along transects is checked ", tags$b("up to twice a week"), " through the growing season; for each, observers record which ", tags$b("phenophases"), " are active — breaking leaf buds, leaves, open flowers, colored leaves, falling leaves.")),
+      div(class="about-card", h4(bs_icon("clock-history"), " Timing, not abundance"),
+        p("Phenology is a ", tags$b("timing signal"), ": when a plant wakes, blooms, and senesces. Because the roster is fixed, it is not a measure of how common a species is — it tracks the ", tags$b("calendar of the canopy"), ", and how that calendar shifts year to year."),
+        p("Onset is ", tags$b("interval-censored"), ": the true first-leaf day lies between the last 'no' and first 'yes' visit, so we use the midpoint — honest about the twice-weekly resolution.")),
+      div(class="about-card", h4(bs_icon("graph-down-arrow"), " Why it matters"),
+        p("Shifts in green-up and bloom timing are among the clearest biological fingerprints of a changing climate, and drive mismatches with pollinators and migrating birds."),
+        p(bs_icon("envelope"), " ", tags$a(href="mailto:desertdatalabs@gmail.com","desertdatalabs@gmail.com"), " · ",
+          tags$a(href="https://data.neonscience.org/data-products/DP1.10055.001", target="_blank", "NEON data product"))))
+  })
+  observeEvent(input$help, showModal(modalDialog(easyClose=TRUE, title=tagList(bs_icon("question-circle"), " How it works"),
+    tags$ul(
+      tags$li(HTML("Pick a <b>site</b> (or open the Harvard Forest demo).")),
+      tags$li(HTML("<b>Phenology Clock</b> — the typical year, week by week; switch species to compare.")),
+      tags$li(HTML("<b>Onset Lab</b> — every plant by green-up onset × season length; <b>tap one</b> to pin its card, then “Open plant profile”.")),
+      tags$li(HTML("<b>Plant Profile</b> — a plant's phenophase calendar, onset dates, quality checks, and downloads.")),
+      tags$li(HTML("Phenology is a <b>timing</b> signal on a fixed roster — not a measure of abundance."))),
+    footer=modalButton("Got it"))))
+}
