@@ -13,7 +13,7 @@ server <- function(input, output, session) {
       yaxis = list(gridcolor = grid, zerolinecolor = zero, linecolor = lin),
       legend = list(bgcolor = "rgba(0,0,0,0)", orientation = "h", y = -0.2, font = list(color = legc)),
       margin = list(l = 55, r = 30, t = 48, b = 44),
-      hoverlabel = list(bgcolor = "rgba(12,35,75,0.96)", bordercolor = "#FFD200", font = list(color = "#fff", family = "Rubik", size = 13))) %>%
+      hoverlabel = list(bgcolor = "rgba(20,83,42,0.96)", bordercolor = "#d98014", font = list(color = "#fff", family = "Rubik", size = 13))) %>%
       plotly::config(displayModeBar = FALSE, responsive = TRUE)
   }
   note_plot <- function(msg, icon = "\U0001F33F") plotly::plot_ly(type="scatter", mode="markers") %>%
@@ -26,22 +26,15 @@ server <- function(input, output, session) {
   observe({ ch <- phe_state_choices(); updateSelectInput(session, "stateSel", choices = ch, selected = if ("MA" %in% ch) "MA" else NULL) })
   observeEvent(input$stateSel, updateSelectInput(session, "site", choices = phe_sites_in_state(input$stateSel)), ignoreInit = FALSE)
   output$siteBio <- renderUI({ req(input$site); b <- site_bio(input$site); if (is.null(b)) return(NULL); div(class="site-bio", bs_icon("info-circle-fill"), span(b)) })
-  output$siteCards <- renderUI({
-    if (is.null(SITE_INDEX) || !nrow(site_table)) return(NULL)
-    div(class="site-cards", lapply(seq_len(nrow(site_table)), function(i){ r <- site_table[i,]
-      tags$a(class="site-card", href="#",
-        onclick=sprintf("smtLoadStart('%s — loading…');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;", gsub("'","",r$name), r$site),
-        div(class="sc-emoji","\U0001F33F"),
-        div(class="sc-body", div(class="sc-name", tags$b(r$site), sprintf(" · %s", r$name)),
-          div(class="sc-meta", sprintf("%s · %s plants · %s species · %s", r$state, r$n_individuals, r$n_species, r$dominant_form)))) }))
-  })
   shinyjs::hide("mainTabsWrap")
 
   ingest <- function(b, label, is_demo = FALSE) {
     if (is.null(b) || is.null(b$obs) || !nrow(b$obs)) { session$sendCustomMessage("loadDone", list()); showNotification("No phenology data for that site.", type="warning"); return(invisible()) }
     rv$obs <- b$obs; rv$inds <- b$inds
-    rv$ind_summary <- individual_summary(b$obs, b$inds)
-    rv$trend <- onset_trend(b$obs)
+    # prefer the bundle's precomputed summaries (saves ~430ms/load); fall back
+    # for older bundles that predate the precompute.
+    rv$ind_summary <- b$ind_summary %||% individual_summary(b$obs, b$inds)
+    rv$trend <- b$trend %||% onset_trend(b$obs)
     rv$label <- label; rv$site <- b$meta$site; rv$is_demo <- is_demo; rv$ind <- NULL
     yrs <- range(b$obs$year, na.rm=TRUE); rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1]==yrs[2]) yrs[1] else paste0(yrs[1],"–",yrs[2]))
     shinyjs::show("mainTabsWrap"); shinyjs::show("spPickerWrap"); shinyjs::hide("splash")
@@ -50,9 +43,15 @@ server <- function(input, output, session) {
     ch <- if (!is.null(is_) && nrow(is_)) setNames(is_$individualID,
       sprintf("%s · %s (%s)", is_$scientificName, short_ind(is_$individualID), short_plot(is_$plotID))) else character(0)
     updateSelectizeInput(session, "indSel", choices = c("Pick a tagged plant…"="", ch), selected = "", server = TRUE)
-    # species choices for the clock
+    # species choices for the clock; DEFAULT to the most-monitored species so the
+    # first paint is a clean single-calendar ring (not the "All species" view the
+    # caption itself warns mixes evergreen/deciduous/forb calendars).
     sp <- sort(unique(species_level_only(b$obs)$scientificName)); sp <- sp[!is.na(sp)]
-    updateSelectInput(session, "clockSp", choices = c("All species" = "", setNames(sp, sp)), selected = "")
+    top_sp <- names(sort(table(species_level_only(b$inds)$scientificName), decreasing = TRUE))
+    top_sp <- top_sp[!is.na(top_sp) & nzchar(top_sp)]
+    sel_sp <- if (length(top_sp) && top_sp[1] %in% sp) top_sp[1] else ""
+    updateSelectInput(session, "clockSp", choices = c("All species" = "", setNames(sp, sp)), selected = sel_sp)
+    session$sendCustomMessage("pheSite", list(site = b$meta$site))   # for export filenames
     nav_select("tabs", "overview"); session$sendCustomMessage("countUp", list()); session$sendCustomMessage("loadDone", list())
     invisible(TRUE)
   }
@@ -61,6 +60,37 @@ server <- function(input, output, session) {
     row <- site_table[site_table$site==site,]; ingest(b, sprintf("%s · %s", site, if (nrow(row)) row$name else site)) }
   observeEvent(input$loadBtn, load_site(input$site)); observeEvent(input$pickSite, load_site(input$pickSite))
   observeEvent(input$demoBtn, ingest(load_demo(), DEMO_META$label, is_demo=TRUE)); observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo=TRUE))
+
+  # ---- national site-picker map (the splash landing) --------------------
+  # STATIC leafletOutput in ui (never inside renderUI — avoids the re-bind race).
+  output$nationalMap <- leaflet::renderLeaflet({
+    st <- site_table[is.finite(site_table$lat) & is.finite(site_table$lng), , drop=FALSE]
+    if (!nrow(st)) return(leaflet::leaflet() %>% leaflet::addProviderTiles("CartoDB.Positron") %>% leaflet::setView(-96, 38, 3))
+    gv <- if ("median_greenup" %in% names(st)) suppressWarnings(as.numeric(st$median_greenup)) else rep(NA_real_, nrow(st))
+    pal <- greenup_pal(gv)
+    mx <- max(st$n_individuals, 1, na.rm=TRUE); st$radius <- 6 + 12 * sqrt(pmax(st$n_individuals, 1)) / sqrt(mx)
+    elev <- ifelse(is.finite(st$elevation_m), paste0(st$elevation_m, " m"), "—")
+    gtxt <- ifelse(is.finite(gv), paste0(" · green-up day ", gv, " (", doy_to_month(gv), ")"), "")
+    pop <- sprintf(paste0(
+      "<div class='site-pop'><div class='pm-pop-t'>%s <span class='sp-code'>%s</span></div>",
+      "<div class='pm-pop-s'>%s · NEON %s · %s</div><div class='sp-bio'>%s</div>",
+      "<div class='sp-years'>%s plants · %s species%s</div>",
+      "<div class='sp-actions'><button class='sp-btn sp-go' onclick=\"smtLoadStart('%s');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;\">Explore this site &rarr;</button></div></div>"),
+      st$name, st$site, ifelse(is.na(state_names[st$state]), st$state, state_names[st$state]), st$domain, elev, st$bio,
+      st$n_individuals, st$n_species, gtxt, gsub("'", "", st$name), st$site)
+    lab <- sprintf("<b>%s</b> · %s<br>%s plants · tap for details", st$site, st$name, st$n_individuals)
+    leaflet::leaflet(st) %>% leaflet::addProviderTiles("CartoDB.Positron") %>%
+      leaflet::addCircleMarkers(lng=~lng, lat=~lat, radius=~radius, layerId=~site,
+        fillColor=pal(gv), color="#fff", weight=1, fillOpacity=0.9,
+        label=lapply(lab, htmltools::HTML), popup=pop,
+        popupOptions=leaflet::popupOptions(className="pm-pop-card")) %>%
+      leaflet::addLegend("bottomright", pal=pal, values=gv[is.finite(gv)], title="median green-up DOY", na.label="—")
+  })
+  observe({ updateSelectizeInput(session, "siteSearch", server=TRUE, selected="",
+    choices = c("Jump to a site…" = "", stats::setNames(site_table$site,
+      sprintf("%s — %s (%s)", site_table$site, site_table$name, site_table$state)))) })
+  observeEvent(input$siteSearch, if (nzchar(input$siteSearch %||% "")) {
+    session$sendCustomMessage("smtLoadStart", list(label = input$siteSearch)); load_site(input$siteSearch) }, ignoreInit=TRUE)
 
   pick_individual <- function(id, navigate=FALSE){ if (is.null(id)||is.na(id)||id=="") return()
     if (is.null(rv$ind_summary) || !(id %in% rv$ind_summary$individualID)) return()
@@ -106,12 +136,12 @@ server <- function(input, output, session) {
   output$siteInsights <- renderUI({
     inds <- rv$inds; obs <- rv$obs; req(inds, obs)
     gu <- suppressWarnings(stats::median(rv$ind_summary$greenup, na.rm=TRUE))
-    se <- suppressWarnings(stats::median(rv$ind_summary$leaf_off, na.rm=TRUE))
+    la <- suppressWarnings(stats::median(rv$ind_summary$leaf_active, na.rm=TRUE))
     yrs <- sort(unique(obs$year))
     pts <- c(sprintf("Over <b>%d</b> years (%s), observers logged <b>%s</b> phenophase records on <b>%d</b> tagged plants.",
       length(yrs), paste0(min(yrs),"–",max(yrs)), format(nrow(obs), big.mark=","), nrow(inds)))
     if (is.finite(gu)) pts <- c(pts, sprintf("The typical plant breaks leaf around <b>%s</b> (day %d)%s.",
-      doy_to_month(gu), round(gu), if (is.finite(se)) sprintf(" and holds leaves until about <b>%s</b> (day %d)", doy_to_month(se), round(se)) else ""))
+      doy_to_month(gu), round(gu), if (is.finite(la)) sprintf(" and carries leaves about <b>%d</b> days a year", round(la)) else ""))
     pts <- c(pts, "Phenology is recorded on a <b>fixed roster of tagged individuals</b> along transects — it captures <b>timing</b> (when each phenophase happens), not abundance. Open the Phenology Clock to see the year unfold.")
     div(class="insight-list", lapply(pts, function(t) div(class="il-item", bs_icon("dot"), HTML(t))))
   })
@@ -160,6 +190,7 @@ server <- function(input, output, session) {
   })
   output$trendPlot <- renderPlotly({
     tr <- rv$trend; if (is.null(tr) || !nrow(tr)) return(note_plot("Not enough plants per year for an onset trend"))
+    n_all <- dplyr::n_distinct(tr$scientificName)
     top <- names(sort(table(tr$scientificName), decreasing=TRUE)); top <- head(top, 8)
     tr <- tr[tr$scientificName %in% top,]
     pal <- make_species_pal(tr)
@@ -168,8 +199,10 @@ server <- function(input, output, session) {
       p <- p %>% plotly::add_trace(data=d, x=~year, y=~onset, type="scatter", mode="lines+markers", name=s,
         line=list(color=pal[[s]], width=2), marker=list(color=pal[[s]], size=7),
         hovertemplate=paste0("<b>",s,"</b><br>%{x}: green-up day %{y}<extra></extra>")) }
+    note <- if (n_all > 8) list(list(text=sprintf("showing the 8 most-monitored of %d species (the banner above pools all %d)", n_all, n_all),
+      x=0, y=1.06, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))) else list()
     p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Year", dtick=1), yaxis=list(title="Green-up onset (day-of-year)"),
-      legend=list(font=list(size=9)))
+      legend=list(font=list(size=9)), annotations=note)
   })
   output$trendInsight <- renderUI({
     tr <- rv$trend; req(!is.null(tr) && nrow(tr) >= 3)
@@ -202,9 +235,9 @@ server <- function(input, output, session) {
     d$tip <- paste0("<span class='smt-pin-emoji'>\U0001F33F</span> <b>", d$scientificName, "</b><br/>",
       "<em>", d$growthForm, " · plot ", short_plot(d$plotID), "</em><br/>",
       "<span class='smt-pin-stats'>green-up day ", d$greenup, " (", vapply(d$greenup, doy_to_month, ""), ")<br/>",
-      "leaf-active ~", d$leaf_active, " days/yr",
+      "carries leaves ~", d$leaf_active, " days/yr",
       ifelse(is.finite(d$flower), paste0(" · flowers day ", d$flower), ""), "<br/>",
-      d$n_years, " yr monitored</span>",
+      d$n_years, " yr watched (any metric)</span>",
       "<br/><span class='smt-open' role='button' tabindex='0' data-tag='", d$individualID, "'>\U0001F50E Open plant profile &rarr;</span>",
       "<br/><em class='smt-pin-hint'>Tap the dot to pin this card</em>")
     qcol <- if (is_dark()) "#7e8da0" else "#9aa6b2"; muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
@@ -213,29 +246,37 @@ server <- function(input, output, session) {
       p <- p %>% plotly::add_trace(data=sub, x=~greenup, y=~leaf_active, type="scatter", mode="markers", name=g,
         customdata=~tip, marker=list(color=pal[[g]], size=11, opacity=0.82, line=list(color="#fff", width=0.5)),
         text=~scientificName, hovertemplate="%{text}<br>green-up day %{x} · leaf-active ~%{y} d/yr<extra></extra>") }
-    mx <- stats::median(d$greenup); my <- stats::median(d$leaf_active)
-    xr <- range(d$greenup); yr <- range(d$leaf_active); px <- diff(xr)*0.02; py <- diff(yr)*0.02
-    qlab <- function(x,y,t,xa,ya) list(text=t, x=x, y=y, xref="x", yref="y", showarrow=FALSE, xanchor=xa, yanchor=ya, font=list(color=qcol, size=10.5))
-    capt <- sprintf("each dot is a plant · green-up onset × leaf-active days · %d of %d plants placeable (both recorded)", n_placed, n_total)
-    ann <- list(list(text=capt, x=0, y=1.07, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(color=muted, size=11)),
-      qlab(xr[1]+px, yr[2]-py, "EARLY & LONG-LEAVED", "left", "top"),
-      qlab(xr[2]-px, yr[2]-py, "LATE RISER, LONG-LEAVED", "right", "top"),
-      qlab(xr[1]+px, yr[1]+py, "EARLY & BRIEF", "left", "bottom"),
-      qlab(xr[2]-px, yr[1]+py, "LATE & BRIEF", "right", "bottom"))
+    xr <- range(d$greenup); yr <- range(d$leaf_active)
+    capt <- sprintf("each dot is a plant · green-up onset × days carrying leaves · %d of %d plants placeable (both recorded)", n_placed, n_total)
+    ann <- list(list(text=capt, x=0, y=1.07, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(color=muted, size=11)))
+    shp <- list()
+    # only draw quadrant labels + median crosshair when there are enough plants
+    # AND real spread on both axes — otherwise a 1-3 plant site stacks all four
+    # labels on one point and the crosshair is meaningless.
+    if (n_placed >= 4 && diff(xr) > 0 && diff(yr) > 0) {
+      mx <- stats::median(d$greenup); my <- stats::median(d$leaf_active)
+      px <- diff(xr)*0.02; py <- diff(yr)*0.02
+      qlab <- function(x,y,t,xa,ya) list(text=t, x=x, y=y, xref="x", yref="y", showarrow=FALSE, xanchor=xa, yanchor=ya, font=list(color=qcol, size=10.5))
+      ann <- c(ann, list(
+        qlab(xr[1]+px, yr[2]-py, "EARLY & LONG-LEAVED", "left", "top"),
+        qlab(xr[2]-px, yr[2]-py, "LATE RISER, LONG-LEAVED", "right", "top"),
+        qlab(xr[1]+px, yr[1]+py, "EARLY & BRIEF", "left", "bottom"),
+        qlab(xr[2]-px, yr[1]+py, "LATE & BRIEF", "right", "bottom")))
+      shp <- list(list(type="line", xref="x", yref="paper", x0=mx, x1=mx, y0=0, y1=1, line=list(color=qcol, dash="dot", width=1)),
+                  list(type="line", xref="paper", yref="y", x0=0, x1=1, y0=my, y1=my, line=list(color=qcol, dash="dot", width=1)))
+    }
     if (!is.null(rv$ind)) { ir <- d[d$individualID == rv$ind, ]
       if (nrow(ir)==1) p <- p %>% plotly::add_trace(x=ir$greenup, y=ir$leaf_active, type="scatter", mode="markers", name="★ viewing", customdata=ir$tip, showlegend=TRUE,
-        marker=list(symbol="diamond", size=18, color="#c9a300", line=list(color="#fff", width=1.6)), hovertemplate=paste0("viewing ", ir$scientificName, "<extra></extra>")) }
-    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) — earlier ← → later"), yaxis=list(title="Leaf-active days per year — briefer ↓ ↑ longer"),
-      shapes=list(list(type="line", xref="x", yref="paper", x0=mx, x1=mx, y0=0, y1=1, line=list(color=qcol, dash="dot", width=1)),
-                  list(type="line", xref="paper", yref="y", x0=0, x1=1, y0=my, y1=my, line=list(color=qcol, dash="dot", width=1))),
-      annotations=ann, hovermode="closest")
+        marker=list(symbol="diamond", size=18, color="#d98014", line=list(color="#fff", width=1.6)), hovertemplate=paste0("viewing ", ir$scientificName, "<extra></extra>")) }
+    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) — earlier ← → later"), yaxis=list(title="Days carrying leaves per year — briefer ↓ ↑ longer"),
+      shapes=shp, annotations=ann, hovermode="closest")
   })
   output$indCardSlot <- renderUI({
     if (is.null(rv$ind)) return(div(class="qc-empty", div(class="qc-empty-icon","\U0001F33F"), h4("Tap a plant to see its card"),
       p("Tap a dot above and choose “Open plant profile”, or pick a plant in the sidebar.")))
     r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; if (!nrow(r)) return(NULL)
     div(class="lab-sel", span(class="ls-emoji","\U0001F50E"),
-      div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" — green-up day %s · leaf-active ~%s d/yr",
+      div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" — green-up day %s · carries leaves ~%s d/yr",
         ifelse(is.finite(r$greenup), r$greenup, "—"), ifelse(is.finite(r$leaf_active), r$leaf_active, "—"))),
         div(class="ls-dom", em(sprintf("%s · plot %s", r$growthForm, short_plot(r$plotID))))),
       actionButton("goProfFromCard", tagList(bs_icon("arrows-fullscreen"), " Open full profile"), class="btn-outline-dark btn-sm"))
@@ -267,6 +308,8 @@ server <- function(input, output, session) {
     n_ph <- if (!is.null(h)) dplyr::n_distinct(h$phenophaseName[h$status=="yes"]) else 0
     n_yr <- if (!is.null(h)) dplyr::n_distinct(h$year) else 0
     tile <- function(v,l) div(class="qc-tile", div(class="qc-tile-v", v), div(class="qc-tile-l", l))
+    # day-of-year tile that shows the calendar date in its label (no bare DOY)
+    gtile <- function(v,l) tile(ifelse(is.finite(v), v, "—"), if (is.finite(v)) paste0(l, " · ", doy_to_month(v)) else l)
     has_problem <- any(vapply(flags, function(f) f$level %in% c("high","warn"), logical(1)))
     flag_items <- lapply(flags, function(f) div(class=paste0("qc-flag qc-flag-", f$level),
       bs_icon(switch(f$level, high="exclamation-octagon-fill", warn="exclamation-triangle-fill", "info-circle-fill")), span(HTML(f$text))))
@@ -278,17 +321,17 @@ server <- function(input, output, session) {
           r$growthForm, switch(as.character(r$nativeStatusCode), "N"="native", "I"="introduced", "NI"="native & introduced", as.character(r$nativeStatusCode) %||% "—"), short_plot(r$plotID))))),
         div(class="qc-head-badges", glow_badge(paste0(short_ind(r$individualID)), DDL$green))),
       div(class="qc-tiles",
-        tile(ifelse(is.finite(r$greenup), r$greenup, "—"), "green-up DOY"),
-        tile(ifelse(is.finite(r$flower), r$flower, "—"), "flowering DOY"),
-        tile(ifelse(is.finite(r$leaf_off), r$leaf_off, "—"), "leaf-off DOY"),
-        tile(ifelse(is.finite(r$leaf_active), paste0(r$leaf_active,"d"), "—"), "leaf-active days"),
+        gtile(r$greenup, "green-up"),
+        gtile(r$flower, "first flower"),
+        gtile(r$leaf_off, "last leaf-week"),
+        tile(ifelse(is.finite(r$leaf_active), paste0(r$leaf_active,"d"), "—"), "days carrying leaves"),
         tile(n_yr, "years watched"), tile(n_ph, "phenophases")),
       div(class="qc-section-h", bs_icon("calendar3-range"), " Phenophase calendar — when each phase happens"),
       plotlyOutput("phenoSpark", height="240px"),
       div(class="qc-section-h", bs_icon("clipboard-check"), " Quality checks"),
       div(class="qc-flags", flag_ui),
       p(class="qc-cap-note", style="margin-top:8px", bs_icon("info-circle"),
-        " Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years."))
+        HTML(" Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years. <b>Last leaf-week</b> is the last week leaves were recorded — not measured senescence (a plant that flushes twice a year carries no single leaf-off date), so read <b>days carrying leaves</b> for growing extent.")))
     div(div(class="plot-profile-wrap", body), div(class="qc-toolbar",
       tags$button(class="smt-snap-btn", type="button", onclick="smtSaveQcCard()", bsicons::bs_icon("download"), " Save plant card (PNG)"),
       downloadButton("indCsv", "Download history (CSV)", class="smt-clear-btn")))
@@ -299,18 +342,116 @@ server <- function(input, output, session) {
       utils::write.csv(h, file, row.names=FALSE, na="") },
     contentType="text/csv")
 
+  # ---- analysis-ready data bundle: tidy CSVs + a shipped codebook (zip) ----
+  output$siteBundle <- downloadHandler(
+    filename = function() sprintf("NEON-phe_%s_%s.zip", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      req(rv$obs)
+      td <- tempfile("phebundle"); dir.create(td)
+      obs <- as.data.frame(rv$obs)
+      # re-attach nativeStatusCode (kept on inds, not obs, to save memory)
+      obs$nativeStatusCode <- rv$inds$nativeStatusCode[match(obs$individualID, rv$inds$individualID)]
+      ko <- key_onsets(rv$obs)
+      if (!is.null(ko)) {
+        sp <- as.data.frame(rv$inds)[, c("individualID","scientificName","growthForm")]
+        ko <- dplyr::left_join(ko, sp, by = "individualID")
+        ko <- ko[, intersect(c("individualID","year","scientificName","growthForm",
+                               "greenup","flower","leaf_off","leaf_active","left_censored"), names(ko)), drop=FALSE]
+      }
+      clk <- weekly_yesrate(rv$obs, NULL)
+      w <- function(df, nm) if (!is.null(df) && nrow(df)) utils::write.csv(df, file.path(td, nm), row.names=FALSE, na="")
+      w(obs, "obs_long.csv"); w(ko, "onsets_by_individual_year.csv")
+      w(as.data.frame(rv$ind_summary), "individual_summary.csv")
+      w(clk, "phenology_clock_weekly.csv"); w(as.data.frame(rv$trend), "onset_trend_by_species_year.csv")
+      w(phe_codebook_csv(site = rv$site, app_version = APP_VERSION), "codebook.csv")
+      writeLines(c(
+        sprintf("NEON Plant Phenology Explorer — analysis-ready export for site %s", rv$site %||% ""),
+        sprintf("Generated %s · Desert Data Labs · app %s", Sys.Date(), APP_VERSION),
+        "Data product: NEON DP1.10055.001 (data.neonscience.org). Not affiliated with NEON/Battelle/NSF.", "",
+        "FILES:",
+        "  obs_long.csv                     one row per individual x visit x phenophase (tidy long)",
+        "  onsets_by_individual_year.csv    per individual-year green-up/flower/leaf-off/leaf-active + left_censored flag",
+        "  individual_summary.csv           one row per tagged plant (medians across years)",
+        "  phenology_clock_weekly.csv       % of plants 'yes' per phenophase per week (pooled years; n>=5)",
+        "  onset_trend_by_species_year.csv  median green-up per species per year (n>=3 individuals)",
+        "  codebook.csv                     every column's type/units/definition + _phenophase_decode + _provenance", "",
+        "Unit of analysis: tagged plant individual (repeated measures); plotID = spatial block.",
+        "TIMING, not abundance. Onset is interval-censored. The clock pools years by design.",
+        "leaf_off is the last leaf-week, NOT senescence (meaningless for multi-flush plants) — read leaf_active.",
+        "See codebook.csv for the full contract."),
+        file.path(td, "README.txt"))
+      fs <- list.files(td)
+      if (requireNamespace("zip", quietly = TRUE)) zip::zip(file, files = fs, root = td)
+      else utils::zip(file, file.path(td, fs), flags = "-j")
+    },
+    contentType = "application/zip")
+
   # ---- Map (plots) ----
   output$map <- leaflet::renderLeaflet({
-    ps <- plot_summary_phe(rv$obs, rv$inds); req(ps); ps <- ps[is.finite(ps$lat) & is.finite(ps$lng),]
+    ps <- plot_summary_phe(rv$obs, rv$inds, rv$ind_summary); req(ps); ps <- ps[is.finite(ps$lat) & is.finite(ps$lng),]
     req(nrow(ps) > 0)
-    metric <- input$mapMetric %||% "greenup"; val <- ps[[metric]]; val[is.na(val)] <- stats::median(val, na.rm=TRUE)
-    dom <- if (diff(range(val,na.rm=TRUE))>0) range(val,na.rm=TRUE) else c(val[1]-1,val[1]+1)
-    pal <- leaflet::colorNumeric(if (metric=="greenup") "viridis" else "YlGn", domain=dom, reverse = (metric=="greenup"))
-    rr <- range(ps$n_ind, na.rm=TRUE); ps$radius <- if (diff(rr)>0) 7 + 13*(ps$n_ind-rr[1])/diff(rr) else 11
-    leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "Esri.WorldImagery") %>%
-      leaflet::addCircleMarkers(lng=~lng, lat=~lat, radius=~radius, fillColor=pal(val), color="#fff", weight=1, fillOpacity=0.85,
-        label=~lapply(sprintf("<b>%s</b><br>%d plants · green-up day %s", short_plot(plotID), n_ind, ifelse(is.finite(greenup), greenup, "—")), htmltools::HTML)) %>%
-      leaflet::addLegend("bottomright", pal=pal, values=val, title=if (metric=="greenup") "green-up DOY" else "plants")
+    metric <- input$mapMetric %||% "greenup"
+    val <- ps[[metric]]; has <- is.finite(val)         # NA stays NA — never median-filled (honest gaps)
+    if (metric == "greenup") { pal <- greenup_pal(val[has]); legtitle <- "median green-up DOY (earlier = green)" }
+    else { dom <- if (sum(has) && diff(range(val[has])) > 0) range(val[has]) else c(0, max(val[has], 1))
+           pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "plants tagged" }
+    mx <- max(ps$n_ind, 1); ps$radius <- 8 + 13 * sqrt(pmax(ps$n_ind, 1)) / sqrt(mx)   # area ∝ plants
+    mon <- doy_to_month(ps$greenup)
+    gtxt <- ifelse(is.finite(ps$greenup), paste0("day ", ps$greenup, " (", mon, ")"), "no green-up scored")
+    lab <- sprintf("<b>%s</b><br>%d plants · green-up %s", short_plot(ps$plotID), ps$n_ind, gtxt)
+    leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "CartoDB.Positron") %>%
+      leaflet::addCircleMarkers(lng = ~lng, lat = ~lat, radius = ~radius, fillColor = pal(val), color = "#fff", weight = 1, fillOpacity = 0.85,
+        label = lapply(lab, htmltools::HTML), popup = lapply(lab, htmltools::HTML)) %>%
+      leaflet::addLegend("bottomright", pal = pal, values = val[has], title = legtitle, na.label = "no green-up data")
+  })
+
+  # ---- Across sites (the national gradient the 46-site data unlocks) ------
+  output$gradientPlot <- renderPlotly({
+    st <- site_table
+    if (!("median_greenup" %in% names(st))) return(note_plot("Rebuild the data bundle to enable cross-site views", "\U0001F30E"))
+    d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
+    if (nrow(d) < 4) return(note_plot("Need more bundled sites for a latitude gradient", "\U0001F30E"))
+    cols <- greenup_pal(d$median_greenup)(d$median_greenup)
+    d$n_species <- if ("n_species" %in% names(d)) d$n_species else NA_integer_
+    p <- plotly::plot_ly(d, x=~lat, y=~median_greenup, type="scatter", mode="markers",
+      text=~paste0(site, " — ", name), customdata=~n_species,
+      marker=list(size=11, color=cols, line=list(color="#fff", width=0.8)),
+      hovertemplate="<b>%{text}</b><br>lat %{x:.1f}°N · green-up day %{y} (%{customdata} species)<extra></extra>")
+    fit <- stats::lm(median_greenup ~ lat, data=d)
+    xs <- range(d$lat); ys <- as.numeric(stats::predict(fit, newdata=data.frame(lat=xs)))
+    p <- p %>% plotly::add_trace(x=xs, y=ys, type="scatter", mode="lines", inherit=FALSE,
+      line=list(color="#b5481f", width=2, dash="dash"), hoverinfo="skip", showlegend=FALSE)
+    p %>% plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE,
+      xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median green-up (day-of-year)"))
+  })
+  output$gradientInsight <- renderUI({
+    st <- site_table; if (!("median_greenup" %in% names(st))) return(NULL)
+    d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
+    if (nrow(d) < 4) return(NULL)
+    co <- summary(stats::lm(median_greenup ~ lat, data=d))$coefficients; slope <- co[2,1]
+    insight_banner(if (slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
+      "Across <b>%d</b> sites, green-up shifts roughly <b>%.0f days %s per degree of latitude north</b> — the spatial echo of Hopkins' bioclimatic law. <em>Each point is a site's median across its species (different species mixes, n as few as 4), so read it as a coarse across-network gradient, not a controlled comparison.</em>",
+      nrow(d), abs(slope), if (slope >= 0) "later" else "earlier")))
+  })
+  observe({ if (is.null(NATIONAL_ONSETS) || !nrow(NATIONAL_ONSETS)) {
+      updateSelectInput(session, "xsSpecies", choices = c("(rebuild data bundle)" = "")); return() }
+    tab <- sort(table(NATIONAL_ONSETS$scientificName), decreasing=TRUE); multi <- names(tab)[tab >= 2]
+    updateSelectInput(session, "xsSpecies",
+      choices = if (length(multi)) stats::setNames(multi, multi) else c("(no species spans ≥2 sites yet)" = ""),
+      selected = if (length(multi)) multi[1] else "") })
+  output$speciesAcrossPlot <- renderPlotly({
+    no <- NATIONAL_ONSETS; if (is.null(no) || !nrow(no)) return(note_plot("Rebuild the data bundle to enable this view", "\U0001F33F"))
+    sp <- input$xsSpecies %||% ""; if (!nzchar(sp)) return(note_plot("Pick a species monitored at several sites", "\U0001F33F"))
+    d <- no[no$scientificName == sp & is.finite(no$greenup), , drop=FALSE]
+    if (nrow(d) < 2) return(note_plot("This species is bundled at only one site", "\U0001F33F"))
+    d <- d[order(d$lat),]
+    # markers only — a line through discrete sites would fabricate a continuous
+    # latitudinal path that was never estimated.
+    plotly::plot_ly(d, x=~lat, y=~greenup, type="scatter", mode="markers",
+      text=~site, customdata=~n_ind, marker=list(size=12, color="#1f7a3f", line=list(color="#fff", width=1)),
+      hovertemplate=paste0("<b>", sp, "</b> @ %{text}<br>lat %{x:.1f}°N · green-up day %{y} (n=%{customdata} plants)<extra></extra>")) %>%
+      plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE,
+        xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median green-up (day-of-year)"))
   })
 
   output$aboutPanel <- renderUI({

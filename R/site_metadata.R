@@ -55,6 +55,18 @@ neon_sites <- tibble::tribble(
   "HEAL", "D19",  "Healy",                                         "AK",   63.8758, -149.2133,  "Boreal-to-tundra transition near Denali, Alaska."
 )
 
+# Mean site elevation (m) — NEON's published field_mean_elevation_m (official
+# Field Site Metadata CSV). Feeds the cross-site latitudinal/elevational green-up
+# gradient (Hopkins' bioclimatic law). Joined by code so the tribble stays readable.
+neon_sites$elevation_m <- c(
+  HARV=348L, BART=274L, BLAN=183L, SCBI=352L, SERC=33L, DSNY=20L, JERC=47L, OSBS=46L,
+  GUAN=125L, LAJA=16L, STEI=476L, TREE=467L, UNDE=521L, KONA=323L, KONZ=414L, UKFS=322L,
+  GRSM=575L, MLBS=1170L, ORNL=344L, DELA=25L, LENO=13L, TALL=166L, DCFS=575L, NOGP=589L,
+  WOOD=591L, CPER=1654L, RMNP=2742L, STER=1365L, CLBJ=272L, OAES=519L, YELL=2133L,
+  MOAB=1799L, NIWO=3490L, JORN=1324L, SRER=997L, ONAQ=1662L, ABBY=365L, WREF=351L,
+  SJER=400L, SOAP=1210L, TEAK=2149L, BARR=4L, TOOL=832L, BONA=230L, DEJU=517L, HEAL=677L
+)[neon_sites$site]
+
 # full state name for grouping the picker
 state_names <- c(
   AK = "Alaska", AL = "Alabama", AZ = "Arizona", CA = "California", CO = "Colorado",

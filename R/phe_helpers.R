@@ -26,18 +26,22 @@ PHENO_RANK <- c("Breaking leaf buds"=1, "Emerging needles"=1, "Breaking needle b
 GREENUP <- c("Breaking leaf buds","Initial growth","Emerging needles","Breaking needle buds")
 SENESCE <- c("Colored leaves","Falling leaves")
 # Each phenophase gets a DISTINCT colour (no duplicate hexes — overlapping petals
-# must stay separable). Leaf-stage progression is an ordered green ramp by
-# lightness; reproductive + senescence phenophases escape the green/brown band
-# onto CVD-safe distinct hues (flowers magenta, fruits violet) so a red–green
-# colour-blind reader can still tell them apart.
+# must stay separable). The leaf stages ramp green but shift HUE as well as
+# lightness (yellow-green onset -> blue-green full leaves) so they don't collapse
+# into one band under colour-vision deficiency; the reproductive + senescence
+# phenophases escape the green band entirely onto CVD-safe distinct hues —
+# flowers magenta, pollen cones steel-blue, fruits violet, colored leaves warm
+# orange, falling leaves rust — so the senescence/reproductive phenophases never
+# read as leaf-green under protan/deutan (the failure the prior ramp had). Every
+# pair clears dE>=14 under deutan AND protan (CVD-tuned + verified, chart review).
 pheno_palette <- c(
-  "Breaking leaf buds"  = "#c3e6a0", "Initial growth"      = "#a9d97f",
-  "Breaking needle buds"= "#b6e08f", "Emerging needles"    = "#8fcf72",
-  "Increasing leaf size"= "#6fb53f", "Young leaves"        = "#7cc04d",
-  "Young needles"       = "#5aa636", "Leaves"              = "#1a7f37",
-  "Open flowers"        = "#d6336c", "Open pollen cones"   = "#b59410",
-  "Fruits"              = "#7048a6", "Colored leaves"      = "#e8932b",
-  "Falling leaves"      = "#8a5a2b")
+  "Breaking leaf buds"  = "#cfe8a0", "Initial growth"      = "#b3db7a",
+  "Breaking needle buds"= "#c2e08c", "Emerging needles"    = "#97cf6a",
+  "Increasing leaf size"= "#69b33f", "Young leaves"        = "#7abf4a",
+  "Young needles"       = "#52a23a", "Leaves"              = "#147a4a",
+  "Open flowers"        = "#c8417a", "Open pollen cones"   = "#3f7faf",
+  "Fruits"              = "#6a3fa0", "Colored leaves"      = "#d9701a",
+  "Falling leaves"      = "#a83c14")
 
 COL_OF_PHENO <- function(p) unname(ifelse(p %in% names(pheno_palette), pheno_palette[p], "#9aa6b2"))
 
@@ -55,6 +59,11 @@ onset <- function(obs, phenophases = NULL) {
         yes <- .data$dayOfYear[.data$status == "yes"]; no <- .data$dayOfYear[.data$status == "no"]
         if (!length(yes)) NA_real_ else { f <- min(yes); pno <- no[no < f]
           if (length(pno)) (max(pno) + f) / 2 else f } },   # midpoint of the interval (or left-censored = first yes)
+      # left-censored = a 'yes' with NO preceding 'no', so true onset is earlier
+      # than recorded (the first visit already caught the phenophase active).
+      left_censored = {
+        yes <- .data$dayOfYear[.data$status == "yes"]; no <- .data$dayOfYear[.data$status == "no"]
+        if (!length(yes)) NA else !length(no[no < min(yes)]) },
       first_yes = if (any(.data$status=="yes")) min(.data$dayOfYear[.data$status=="yes"]) else NA_real_,
       .groups = "drop") %>%
     dplyr::filter(is.finite(.data$onset_doy))
@@ -70,17 +79,31 @@ onset <- function(obs, phenophases = NULL) {
 # flushes and drops several times a year, whereas leaf_active sums only the weeks
 # leaves are really present (~110 days). So the Onset Lab uses leaf_active, not a
 # green-up-to-leaf-off span.
+# Defensive at the 46-site scale: a site may lack green-up, flowering, or leaf
+# records entirely — each branch falls back to an empty keyed tibble so a missing
+# phenophase never crashes the join (it just yields NA columns).
 key_onsets <- function(obs) {
+  ek <- tibble::tibble(individualID = character(), year = integer())
   lv <- obs[obs$phenophaseName == "Leaves" & obs$status == "yes" & is.finite(obs$dayOfYear), , drop=FALSE]
-  gu <- onset(obs, GREENUP) %>% dplyr::group_by(.data$individualID, .data$year) %>%
-    dplyr::summarise(greenup = min(.data$onset_doy), .groups="drop")
-  fl <- onset(obs, "Open flowers") %>% dplyr::transmute(individualID, year, flower = .data$onset_doy)
-  lo <- lv %>% dplyr::group_by(.data$individualID, .data$year) %>%
-    dplyr::summarise(leaf_off = max(.data$dayOfYear), .groups="drop")
-  la <- lv %>% dplyr::mutate(wk = (.data$dayOfYear - 1L) %/% 7L + 1L) %>%
-    dplyr::group_by(.data$individualID, .data$year) %>%
-    dplyr::summarise(leaf_active = dplyr::n_distinct(.data$wk) * 7L, .groups="drop")
-  Reduce(function(a,b) dplyr::full_join(a,b,by=c("individualID","year")), list(gu, fl, lo, la))
+  guo <- onset(obs, GREENUP)
+  gu <- if (!is.null(guo) && nrow(guo))
+      guo %>% dplyr::group_by(.data$individualID, .data$year) %>%
+        dplyr::summarise(greenup = min(.data$onset_doy),
+                         left_censored = .data$left_censored[which.min(.data$onset_doy)], .groups="drop")
+    else dplyr::mutate(ek, greenup = numeric(), left_censored = logical())
+  flo <- onset(obs, "Open flowers")
+  fl <- if (!is.null(flo) && nrow(flo)) flo %>% dplyr::transmute(individualID, year, flower = .data$onset_doy)
+        else dplyr::mutate(ek, flower = numeric())
+  lo <- if (nrow(lv)) lv %>% dplyr::group_by(.data$individualID, .data$year) %>%
+          dplyr::summarise(leaf_off = max(.data$dayOfYear), .groups="drop")
+        else dplyr::mutate(ek, leaf_off = numeric())
+  la <- if (nrow(lv)) lv %>% dplyr::mutate(wk = (.data$dayOfYear - 1L) %/% 7L + 1L) %>%
+          dplyr::group_by(.data$individualID, .data$year) %>%
+          dplyr::summarise(leaf_active = dplyr::n_distinct(.data$wk) * 7L, .groups="drop")
+        else dplyr::mutate(ek, leaf_active = integer())
+  out <- Reduce(function(a,b) dplyr::full_join(a,b,by=c("individualID","year")), list(gu, fl, lo, la))
+  if (is.null(out) || !nrow(out)) return(NULL)
+  out
 }
 
 # one row per individual: median green-up / leaf-active etc. (Onset Lab + picker)
@@ -91,7 +114,10 @@ individual_summary <- function(obs, inds) {
                      flower = round(stats::median(.data$flower, na.rm=TRUE)),
                      leaf_off = round(stats::median(.data$leaf_off, na.rm=TRUE)),
                      leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
-                     n_years = dplyr::n_distinct(.data$year[is.finite(.data$greenup) | is.finite(.data$flower)]),
+                     # count a year if ANY key metric is finite, so leaf-only
+                     # evergreens (no green-up/flower onset) aren't undercounted to 0
+                     n_years = dplyr::n_distinct(.data$year[is.finite(.data$greenup) | is.finite(.data$flower) |
+                                                            is.finite(.data$leaf_off) | is.finite(.data$leaf_active)]),
                      .groups="drop")
   dplyr::left_join(inds, agg, by = "individualID")
 }
@@ -112,9 +138,16 @@ weekly_yesrate <- function(obs, sci = NULL) {
     dplyr::filter(.data$n >= 5)   # suppress sub-threshold weeks: a 100%-of-3 ring must not look as solid as 100%-of-1000
 }
 
-# onset trend per species x year (the climate-shift signal — NOT pooled)
+# onset trend per species x year (the climate-shift signal — NOT pooled).
+# Collapse to each individual's EARLIEST green-up per year FIRST (the same
+# min-across-green-up-phenophases that key_onsets/individual_summary use), so a
+# plant that records two green-up phenophases in a year (e.g. "Breaking leaf
+# buds" + "Initial growth", or a conifer's needle pair) isn't pseudo-replicated
+# into the species-year median and the trend matches the per-plant green-up.
 onset_trend <- function(obs, phenophases = GREENUP) {
   o <- onset(obs, phenophases); if (is.null(o) || !nrow(o)) return(NULL)
+  o <- o %>% dplyr::group_by(.data$individualID, .data$scientificName, .data$year) %>%
+    dplyr::summarise(onset_doy = min(.data$onset_doy), .groups = "drop")
   o %>% dplyr::group_by(.data$scientificName, .data$year) %>%
     dplyr::summarise(onset = round(stats::median(.data$onset_doy)), n = dplyr::n_distinct(.data$individualID), .groups="drop") %>%
     dplyr::filter(.data$n >= 3)   # >=3 individuals/species/year before a point is shown
@@ -193,10 +226,59 @@ pheno_qc_flags <- function(hist, growth_form = NULL) {
 comp_by <- function(inds, by = c("growthForm","scientificName")) {
   by <- match.arg(by); inds %>% dplyr::count(.data[[by]], name="n") %>% dplyr::arrange(dplyr::desc(.data$n)) }
 
-# per-plot summary for the map (n individuals + median green-up onset)
-plot_summary_phe <- function(obs, inds) {
-  ind_s <- individual_summary(obs, inds); if (is.null(ind_s)) return(NULL)
+# per-plot summary for the map (n individuals + median green-up onset). Accepts a
+# precomputed individual_summary so the Map tab needn't recompute it (perf).
+plot_summary_phe <- function(obs, inds, ind_s = NULL) {
+  if (is.null(ind_s)) ind_s <- individual_summary(obs, inds)
+  if (is.null(ind_s)) return(NULL)
   ind_s %>% dplyr::group_by(.data$plotID) %>%
     dplyr::summarise(n_ind = dplyr::n(), greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
                      lat = stats::median(.data$lat, na.rm=TRUE), lng = stats::median(.data$lng, na.rm=TRUE), .groups="drop")
+}
+
+# ---------------------------------------------------------------------------
+# Cross-site / national layer (precomputed at bundle time; the app reads the
+# rolled-up tables, never every bundle). green-up DOY → colour ramp shared by
+# the single-site and national maps so "earlier" reads the same on both:
+# early green-up = fresh green, late = senescence amber (on-theme + intuitive).
+# ---------------------------------------------------------------------------
+greenup_pal <- function(domain) {
+  v <- domain[is.finite(domain)]; d <- if (length(v)) range(v) else c(100, 200)
+  if (diff(d) == 0) d <- c(d[1] - 1, d[1] + 1)
+  leaflet::colorNumeric(c("#15502f","#3f8f3a","#9ccf6a","#e0b341","#d98014"), domain = d, na.color = "#c4c0b2")
+}
+
+# one row per site: the picker-map + cross-site numbers (computed in the bundler)
+site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
+  if (is.null(ind_s)) ind_s <- individual_summary(obs, inds)
+  sp <- species_level_only(inds)
+  safe_med <- function(x) { v <- suppressWarnings(stats::median(x, na.rm=TRUE)); if (is.finite(v)) round(v) else NA_real_ }
+  tibble::tibble(
+    site = meta$site, n_individuals = nrow(inds),
+    n_species = dplyr::n_distinct(sp$scientificName[!is.na(sp$scientificName)]),
+    n_obs = nrow(obs), n_plots = dplyr::n_distinct(inds$plotID),
+    dominant_form = mode_chr(inds$growthForm),
+    median_greenup = if (!is.null(ind_s)) safe_med(ind_s$greenup) else NA_real_,
+    median_leaf_active = if (!is.null(ind_s)) safe_med(ind_s$leaf_active) else NA_real_,
+    year_min = suppressWarnings(min(obs$year, na.rm=TRUE)),
+    year_max = suppressWarnings(max(obs$year, na.rm=TRUE)),
+    lat = meta$lat, lng = meta$lng)
+}
+
+# one row per (site × species-level taxon) with ≥3 individuals: feeds the
+# same-species-across-sites cross-site comparison (computed in the bundler).
+site_species_onsets <- function(obs, inds, meta) {
+  ko <- key_onsets(obs); if (is.null(ko)) return(NULL)
+  spmap <- inds[, c("individualID","scientificName","growthForm","is_species"), drop=FALSE]
+  d <- dplyr::left_join(ko, spmap, by = "individualID")
+  d <- d[d$is_species %in% TRUE & !is.na(d$scientificName) & is.finite(d$greenup), , drop=FALSE]
+  if (!nrow(d)) return(NULL)
+  d %>% dplyr::group_by(.data$scientificName, .data$growthForm) %>%
+    dplyr::summarise(n_ind = dplyr::n_distinct(.data$individualID),
+                     greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
+                     flower = round(stats::median(.data$flower, na.rm=TRUE)),
+                     leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
+                     .groups = "drop") %>%
+    dplyr::filter(.data$n_ind >= 3) %>%
+    dplyr::mutate(site = meta$site, lat = meta$lat, lng = meta$lng)
 }

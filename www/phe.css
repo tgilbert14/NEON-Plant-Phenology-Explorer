@@ -26,16 +26,6 @@
 .hs-v { font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1; }
 .hs-l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
 
-/* ---- splash site cards ------------------------------------------------- */
-.site-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 18px 0; }
-.site-card { display: flex; gap: 14px; align-items: center; background: var(--paper); border: 1px solid var(--line);
-  border-radius: 12px; padding: 14px 16px; text-decoration: none; color: inherit; box-shadow: 0 4px 14px var(--shadow);
-  border-left: 4px solid var(--green); transition: transform .12s ease, box-shadow .12s ease; }
-.site-card:hover { transform: translateY(-3px); box-shadow: 0 10px 26px var(--shadow); }
-.sc-emoji { font-size: 30px; }
-.sc-name { font-weight: 600; color: var(--ink); }
-.sc-meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-
 /* ---- overview insight list -------------------------------------------- */
 .insight-list { display: flex; flex-direction: column; gap: 6px; }
 .il-item { display: flex; gap: 8px; align-items: baseline; color: var(--ink); font-size: 14px; line-height: 1.5; }
@@ -53,5 +43,4 @@
 .plot-profile-wrap { max-width: 760px; margin: 0 auto; }
 
 /* hero count-up uses the shared .count-up engine from app.js */
-[data-bs-theme="dark"] .hero-stat,
-[data-bs-theme="dark"] .site-card { background: var(--paper); }
+[data-bs-theme="dark"] .hero-stat { background: var(--paper); }

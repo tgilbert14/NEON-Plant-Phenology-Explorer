@@ -14,3 +14,7 @@ Thumbs.db
 
 # transient fetch staging
 /phe-data-fetch/
+
+# local tooling (machine-specific paths) + scratch
+.claude/
+scripts/_*
