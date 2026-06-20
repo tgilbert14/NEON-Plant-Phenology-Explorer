@@ -43,4 +43,85 @@
 .plot-profile-wrap { max-width: 760px; margin: 0 auto; }
 
 /* hero count-up uses the shared .count-up engine from app.js */
-[data-bs-theme="dark"] .hero-stat { background: var(--paper); }
+
+/* ====================================================================== *
+ *  PREMIUM "CANOPY AT DUSK" layer — the light page keeps its parchment +
+ *  forest Field-Notebook identity, but the prominent INFO BOXES (the hero
+ *  command band + the stat value-boxes) wear a dark forest-night scheme
+ *  with light text, per-tone accent rails, a drifting starfield and a
+ *  sheen-sweep on hover — in BOTH modes (the "light page, dark hero" look).
+ *  Every animation is prefers-reduced-motion gated at the bottom.          *
+ * ====================================================================== */
+@keyframes pheStars { to { background-position: 0 220px, 0 220px, 0 220px, 0 220px; } }
+@keyframes pheSheen { 0% { left:-65%; opacity:0; } 12% { opacity:.85; } 100% { left:135%; opacity:0; } }
+@keyframes pheFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+/* the hero becomes a dark forest COMMAND BAND with a drifting starfield + nebula.
+   Tuned to the Field-Notebook palette: canopy green -> deep pine -> midnight,
+   with amber/leaf/bloom motes instead of the mammal app's teal/coral. */
+.app-hero {
+  position: relative; overflow: hidden;
+  background: radial-gradient(125% 150% at 16% -12%, #1d5e38 0%, #103b22 46%, #07160d 100%) !important;
+  box-shadow: 0 18px 46px rgba(5,18,10,.45), inset 0 0 0 1px rgba(156,207,106,.18) !important;
+}
+.app-hero > * { position: relative; z-index: 1; }
+.app-hero::before {            /* drifting starfield (fireflies over the canopy) */
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.5;
+  background-repeat: repeat; background-size: 210px 220px,210px 220px,210px 220px,210px 220px;
+  background-image:
+    radial-gradient(1.4px 1.4px at 30px 40px, rgba(255,255,255,.55), transparent),
+    radial-gradient(1.2px 1.2px at 150px 90px, rgba(156,207,106,.55), transparent),
+    radial-gradient(1.5px 1.5px at 90px 175px, rgba(217,128,20,.45), transparent),
+    radial-gradient(1.1px 1.1px at 175px 28px, rgba(200,65,122,.40), transparent);
+  animation: pheStars 120s linear infinite;
+}
+.app-hero::after {             /* leaf/amber/bloom nebula */
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.6;
+  background:
+    radial-gradient(48px 48px at 10% 26%, rgba(156,207,106,.18), transparent 70%),
+    radial-gradient(66px 66px at 86% 16%, rgba(217,128,20,.14), transparent 70%),
+    radial-gradient(54px 54px at 64% 94%, rgba(200,65,122,.12), transparent 70%);
+}
+.app-title { color: #ffce7a !important; }   /* warm senescence-amber on the dark band */
+.app-hero .app-subtitle { color: #d8e7d6 !important; }
+.app-hero .title-tag { border-color: rgba(255,255,255,.45) !important; color: #f0efe6 !important; }
+.brand-mark, .app-emoji { display: inline-block; animation: pheFloat 6s ease-in-out infinite; }
+
+/* ---- DARK "info-box" stat value-cards on the LIGHT page ---------------- *
+ * The hero-band stats wear the dark forest-night command-band scheme with
+ * light text + the per-tone accent rail, in BOTH modes. */
+.hero-stat {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: linear-gradient(180deg, #18482c 0%, #103b22 100%) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  box-shadow: 0 12px 28px -12px rgba(5,18,10,.6) !important;
+  transition: transform .2s cubic-bezier(.22,1,.36,1), box-shadow .28s ease, border-color .2s ease;
+}
+.hero-stat .hs-v { color: #ffffff !important; }
+.hero-stat .hs-l { color: #b6c9ba !important; }
+/* per-tone accent rail + icon read brighter on the dark card */
+.hero-stat.hero-pine  { border-top-color: #9ccf6a !important; }
+.hero-stat.hero-navy  { border-top-color: #5fd089 !important; }
+.hero-stat.hero-terra { border-top-color: #e8895f !important; }
+.hero-stat.hero-gold  { border-top-color: #e8b15a !important; }
+.hero-stat.hero-pine  .hs-icon { color: #9ccf6a !important; opacity: 1; }
+.hero-stat.hero-navy  .hs-icon { color: #5fd089 !important; opacity: 1; }
+.hero-stat.hero-terra .hs-icon { color: #e8895f !important; opacity: 1; }
+.hero-stat.hero-gold  .hs-icon { color: #e8b15a !important; opacity: 1; }
+.hero-stat::before {
+  content:""; position:absolute; top:0; left:-65%; width:55%; height:100%; z-index:4;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.42), transparent);
+  transform: skewX(-18deg); pointer-events:none; opacity:0;
+}
+.hero-stat:hover::before { animation: pheSheen .85s ease; }
+.hero-stat:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 34px rgba(0,0,0,.4), 0 0 0 1px rgba(156,207,106,.30) !important;
+}
+.hero-title { color: var(--pine); }
+[data-bs-theme="dark"] .hero-title { color: #8fdca8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-hero::before, .brand-mark, .app-emoji, .hero-stat::before { animation: none !important; }
+  .hero-stat:hover { transform: none; }
+}
