@@ -123,6 +123,7 @@ ui <- bslib::page_sidebar(
             tags$button(class = "smt-snap-btn", type = "button", onclick = "smtSaveScatter()", bsicons::bs_icon("camera-fill"), " Download (with pinned cards)"),
             tags$button(class = "smt-clear-btn", type = "button", onclick = "smtClearPins()", bsicons::bs_icon("eraser-fill"), " Clear pins"),
             tags$span(class = "sizelab-hint", bs_icon("hand-index-thumb"), " interactive · tap a dot to pin its card")),
+          uiOutput("onsetCoverage"),
           div(class = "smt-pinnable", spin(plotlyOutput("onsetBoard", height = "560px")))),
         uiOutput("indCardSlot")),
 
@@ -133,8 +134,9 @@ ui <- bslib::page_sidebar(
           h4("Phenology plots across the site"),
           p("Each marker is a NEON phenology plot, sized by how many plants are tagged there and coloured by your chosen metric.")),
           div(class = "map-controls",
-            selectInput("mapMetric", "Colour by", width = "190px", choices = c("Median green-up (DOY)" = "greenup", "Plants tagged" = "n_ind")),
+            selectInput("mapMetric", "Colour by", width = "210px", choices = c("Median green-up (DOY)" = "greenup", "Leaf-active days (desert-safe)" = "leaf_active", "Plants tagged" = "n_ind")),
             selectInput("view", "Basemap", width = "160px", choices = c("Light" = "CartoDB.Positron", "Terrain" = "Esri.WorldTopoMap", "Satellite" = "Esri.WorldImagery")))),
+        uiOutput("mapCoverage"),
         card(full_screen = TRUE, spin(leafletOutput("map", height = "620px")))),
 
       nav_panel(title = tagList(bs_icon("globe-americas"), " Across sites"), value = "cross",
@@ -142,7 +144,8 @@ ui <- bslib::page_sidebar(
           h4("Green-up across the network",
              info_pop("Cross-site gradient",
                p("Each point is a ", tags$b("bundled site"), ", placed by its latitude and its median green-up day pooled across all its species. The dashed line is the fit."),
-               p(class="caveat", bs_icon("exclamation-triangle"), " Sites differ in which species they monitor, so this is a ", tags$b("gradient across the network"), " — the spatial echo of Hopkins' bioclimatic law, not a controlled experiment."))),
+               p(class="caveat", bs_icon("exclamation-triangle"), " Sites differ in which species they monitor, so this is a ", tags$b("gradient across the network"), " — the spatial echo of Hopkins' bioclimatic law, not a controlled experiment. The banner leads with the ", tags$b("within-species"), " slope (species held constant), which removes that confound."),
+               p(class="caveat", bs_icon("clock-history"), " Sites also differ in ", tags$b("visit cadence"), ": onset is interval-censored to the gap between visits, so part of an onset difference between two sites can be censoring geometry, not plant biology — read across-site differences as approximate."))),
           p("Move north and up in elevation, and spring arrives later — the same signal climate change shifts in time, laid out here in space."))),
         uiOutput("gradientInsight"),
         layout_columns(col_widths = c(7, 5),

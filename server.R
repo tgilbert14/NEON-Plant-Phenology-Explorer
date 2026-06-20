@@ -23,6 +23,27 @@ server <- function(input, output, session) {
 
   rv <- reactiveValues(obs=NULL, inds=NULL, ind_summary=NULL, trend=NULL, label=NULL, site=NULL, ind=NULL, ctx=NULL, is_demo=FALSE)
 
+  # ---- green-up coverage badge (the desert biome-conditional honesty) ------
+  # When < ~half of a site's plants ever resolve a green-up onset, the
+  # median green-up is a thin, biased subsample (warm deserts log most plants
+  # straight into "Leaves"). Surface a small CLICKABLE badge — clean by default,
+  # the why behind a tap (a bslib popover, the app's existing disclosure chrome).
+  GU_COVERAGE_FLOOR <- 0.5
+  gu_badge <- function(share, where = "here") {
+    if (!is.finite(share) || share >= GU_COVERAGE_FLOOR) return(NULL)
+    pct <- round(share * 100)
+    bslib::popover(
+      tags$span(class = "gu-cov-badge", role = "button", tabindex = "0",
+        bsicons::bs_icon("exclamation-triangle-fill"),
+        sprintf(" green-up scored for %d%% of plants %s", pct, where)),
+      title = "Thin green-up coverage",
+      p(HTML(sprintf("Only <b>%d%%</b> of the tagged plants %s ever record a green-up <em>phenophase</em> (“Breaking leaf buds” / “Initial growth”).", pct, where))),
+      p(HTML("In warm deserts, drought-deciduous, cactus and evergreen plants are scored straight into “Leaves” — so this green-up median rests on a <b>small, non-random subset</b>, not a noisy whole-site number.")),
+      p(class = "caveat", bsicons::bs_icon("arrow-right-circle"),
+        HTML(" Read <b>leaf-active</b> (days carrying leaves) instead — it survives where green-up collapses. Switch the metric on the Map and Onset Lab.")),
+      placement = "bottom")
+  }
+
   observe({ ch <- phe_state_choices(); updateSelectInput(session, "stateSel", choices = ch, selected = if ("MA" %in% ch) "MA" else NULL) })
   observeEvent(input$stateSel, updateSelectInput(session, "site", choices = phe_sites_in_state(input$stateSel)), ignoreInit = FALSE)
   output$siteBio <- renderUI({ req(input$site); b <- site_bio(input$site); if (is.null(b)) return(NULL); div(class="site-bio", bs_icon("info-circle-fill"), span(b)) })
@@ -108,15 +129,18 @@ server <- function(input, output, session) {
     n_sp <- dplyr::n_distinct(species_level_only(inds)$scientificName)
     n_pl <- dplyr::n_distinct(inds$plotID)
     gu <- suppressWarnings(stats::median(rv$ind_summary$greenup, na.rm=TRUE))
+    gu_share <- greenup_coverage(rv$ind_summary)
     hero <- function(v,l,suf="",icon,tone,ttl=NULL) div(class=paste0("hero-stat hero-",tone), title=ttl,
       div(class="hs-icon", bs_icon(icon)), div(div(class="hs-v count-up", `data-target`=v, `data-suffix`=suf, "0"), div(class="hs-l", l)))
+    cov <- gu_badge(gu_share, where = "here")
     div(class="hero-band", div(class="hero-title", bs_icon("flower3"), tags$b(rv$label)),
       div(class="hero-grid",
         hero(nrow(inds), "tagged plants", icon="flower1", tone="pine"),
         hero(n_sp, "species", icon="tree", tone="navy"),
         hero(n_pl, "phenology plots", icon="geo", tone="terra"),
         hero(if (is.finite(gu)) round(gu) else 0, "median green-up (day-of-year)", icon="clock-history", tone="gold",
-             ttl="Typical day-of-year the average plant first breaks leaf — a within-site timing signal pooled across years.")))
+             ttl="Typical day-of-year the average plant first breaks leaf — a within-site timing signal pooled across years.")),
+      if (!is.null(cov)) div(class="hero-cov-row", cov))
   })
 
   # ---- Overview ----
@@ -169,7 +193,7 @@ server <- function(input, output, session) {
         r = r, theta = th, fill = "toself",
         fillcolor = grDevices::adjustcolor(col, alpha.f = 0.22), line = list(color = col, width = 2),
         customdata = nn,
-        hovertemplate = paste0(pn, "<br>%{r:.0f}% of plants 'yes'<br>%{customdata} obs that week<extra></extra>"))
+        hovertemplate = paste0(pn, "<br>%{r:.0f}% of plants 'yes'<br>%{customdata} plants that week<extra></extra>"))
     }
     ink <- if (is_dark()) "#e8eef2" else "#1f2a30"; grid <- if (is_dark()) "rgba(220,230,240,0.20)" else "rgba(31,42,48,0.12)"
     muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
@@ -222,6 +246,16 @@ server <- function(input, output, session) {
     insight_banner(if (slope < 0) "arrow-down-right" else "arrow-up-right", tone = if (slope < 0) "pine" else "gold",
       HTML(sprintf("Over <b>%d</b> years, site-wide green-up has shifted <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series — a signal, not a verdict; partly reflects which species were monitored each year.</em>",
         ny, abs(slope), dir, lo, hi)))
+  })
+
+  # Onset Lab coverage note — when green-up is scored for few plants, the X axis
+  # (green-up onset) places only a biased fifth of the roster; point users to the
+  # Y axis (leaf-active days), which spans the whole roster. Clickable, clean by
+  # default (absent at forest sites).
+  output$onsetCoverage <- renderUI({
+    req(rv$ind_summary); cov <- gu_badge(greenup_coverage(rv$ind_summary), where = "here")
+    if (is.null(cov)) return(NULL)
+    div(class = "map-cov-row", cov)   # guidance ("read leaf-active") lives in the badge popover — nothing always-on
   })
 
   # ---- Onset Lab (flagship pinnable board) ----
@@ -392,17 +426,32 @@ server <- function(input, output, session) {
     req(nrow(ps) > 0)
     metric <- input$mapMetric %||% "greenup"
     val <- ps[[metric]]; has <- is.finite(val)         # NA stays NA — never median-filled (honest gaps)
-    if (metric == "greenup") { pal <- greenup_pal(val[has]); legtitle <- "median green-up DOY (earlier = green)" }
+    if (metric == "greenup") { pal <- greenup_pal(val[has]); legtitle <- "median green-up DOY (earlier = green)"; nalab <- "no green-up scored" }
+    else if (metric == "leaf_active") {
+      dom <- if (sum(has) && diff(range(val[has])) > 0) range(val[has]) else c(0, max(val[has], 1))
+      pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "median leaf-active days/yr"; nalab <- "no leaf record" }
     else { dom <- if (sum(has) && diff(range(val[has])) > 0) range(val[has]) else c(0, max(val[has], 1))
-           pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "plants tagged" }
+           pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "plants tagged"; nalab <- "—" }
     mx <- max(ps$n_ind, 1); ps$radius <- 8 + 13 * sqrt(pmax(ps$n_ind, 1)) / sqrt(mx)   # area ∝ plants
     mon <- doy_to_month(ps$greenup)
     gtxt <- ifelse(is.finite(ps$greenup), paste0("day ", ps$greenup, " (", mon, ")"), "no green-up scored")
-    lab <- sprintf("<b>%s</b><br>%d plants · green-up %s", short_plot(ps$plotID), ps$n_ind, gtxt)
+    # per-plot green-up coverage — say it on the marker where the number is thin,
+    # so a 1/5-of-plants plot can't read like a whole-plot number.
+    covtxt <- ifelse(is.finite(ps$gu_share) & ps$gu_share < GU_COVERAGE_FLOOR,
+      sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants — read leaf-active</span>", round(ps$gu_share * 100)), "")
+    latxt <- ifelse(is.finite(ps$leaf_active), paste0(" · carries leaves ~", ps$leaf_active, " d/yr"), "")
+    lab <- sprintf("<b>%s</b><br>%d plants · green-up %s%s%s", short_plot(ps$plotID), ps$n_ind, gtxt, latxt, covtxt)
     leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng = ~lng, lat = ~lat, radius = ~radius, fillColor = pal(val), color = "#fff", weight = 1, fillOpacity = 0.85,
         label = lapply(lab, htmltools::HTML), popup = lapply(lab, htmltools::HTML)) %>%
-      leaflet::addLegend("bottomright", pal = pal, values = val[has], title = legtitle, na.label = "no green-up data")
+      leaflet::addLegend("bottomright", pal = pal, values = val[has], title = legtitle, na.label = nalab)
+  })
+  # site-level green-up coverage badge above the Map — clickable disclosure, only
+  # appears when coverage is thin (clean by default at forest sites).
+  output$mapCoverage <- renderUI({
+    req(rv$ind_summary); cov <- gu_badge(greenup_coverage(rv$ind_summary), where = "at this site")
+    if (is.null(cov)) return(NULL)
+    div(class = "map-cov-row", cov)   # guidance ("switch to leaf-active") lives in the badge popover — nothing always-on
   })
 
   # ---- Across sites (the national gradient the 46-site data unlocks) ------
@@ -428,10 +477,21 @@ server <- function(input, output, session) {
     st <- site_table; if (!("median_greenup" %in% names(st))) return(NULL)
     d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
     if (nrow(d) < 4) return(NULL)
-    co <- summary(stats::lm(median_greenup ~ lat, data=d))$coefficients; slope <- co[2,1]
-    insight_banner(if (slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
+    co <- summary(stats::lm(median_greenup ~ lat, data=d))$coefficients; net_slope <- co[2,1]
+    # LEAD with the within-species slope (the confound-controlled read the app
+    # already computes in the secondary panel); demote the network slope to the
+    # coarse echo it is. Falls back to the network read if no species spans enough
+    # sites yet (older/partial bundles).
+    ws <- within_species_gradient(NATIONAL_ONSETS, min_sites = 4)
+    if (!is.null(ws)) {
+      sp_short <- sub("^([A-Z][a-z]+ [a-z\\-]+).*$", "\\1", ws$species)
+      return(insight_banner(if (ws$slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
+        "Holding the species constant, <b><em>%s</em></b> greens up <b>%.1f days %s per °N</b> across <b>%d</b> sites (95%% CI %.1f to %.1f, R²=%.2f) — the spatial echo of Hopkins' bioclimatic law, with the species-mix confound removed. <em>The across-network slope (all species pooled, ~%.0f d/°N) is a coarser echo of the same temperature signal.</em>",
+        sp_short, abs(ws$slope), if (ws$slope >= 0) "later" else "earlier", ws$n_sites, ws$lo, ws$hi, ws$r2, abs(net_slope)))))
+    }
+    insight_banner(if (net_slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
       "Across <b>%d</b> sites, green-up shifts roughly <b>%.0f days %s per degree of latitude north</b> — the spatial echo of Hopkins' bioclimatic law. <em>Each point is a site's median across its species (different species mixes, n as few as 4), so read it as a coarse across-network gradient, not a controlled comparison.</em>",
-      nrow(d), abs(slope), if (slope >= 0) "later" else "earlier")))
+      nrow(d), abs(net_slope), if (net_slope >= 0) "later" else "earlier")))
   })
   observe({ if (is.null(NATIONAL_ONSETS) || !nrow(NATIONAL_ONSETS)) {
       updateSelectInput(session, "xsSpecies", choices = c("(rebuild data bundle)" = "")); return() }

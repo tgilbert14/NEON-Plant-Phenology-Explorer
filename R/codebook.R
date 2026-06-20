@@ -35,7 +35,7 @@ PHE_CODEBOOK_ROWS <- tibble::tribble(
   "onsets", "greenup", "numeric", "day-of-year", "1-366; NA if no green-up phase reached 'yes'", "Green-up onset: EARLIEST interval-censored onset across green-up phenophases. Interval-censored = midpoint between last preceding 'no' and first 'yes'; may be a .5. If no preceding 'no', left-censored to first 'yes' (see left_censored).",
   "onsets", "flower", "numeric", "day-of-year", "1-366; NA if 'Open flowers' never 'yes'", "Flowering onset: interval-censored onset for 'Open flowers'.",
   "onsets", "leaf_off", "numeric", "day-of-year", "1-366; NA if 'Leaves'=='yes' never recorded", "LAST day 'Leaves' was 'yes' that year. WARNING: last leaf-WEEK observed, NOT measured senescence; meaningless for multi-flush/drought-deciduous plants. First 'Colored leaves' deliberately NOT used.",
-  "onsets", "leaf_active", "integer", "days", ">=7 in multiples of 7; NA if no 'Leaves' yes", "Days the plant actually carried leaves = (distinct weeks with 'Leaves'=='yes') x 7. A summed presence extent, NOT a green-up-to-leaf-off span; honest for multi-flush plants. Quantized to 7-day units. NOTE: leaf_off MINUS greenup is NOT leaf_active and will not reconcile for multi-flush plants.",
+  "onsets", "leaf_active", "integer", "days", ">=7 in multiples of 7; NA if no 'Leaves' yes", "Days the plant actually carried leaves = (distinct weeks with 'Leaves'=='yes') x 7. A summed presence extent, NOT a green-up-to-leaf-off span; honest for multi-flush plants. Quantized to 7-day units. NOTE: leaf_off MINUS greenup is NOT leaf_active and will not reconcile for multi-flush plants. CADENCE-SENSITIVE: has a hard 7-day floor (one scored leaf-week -> 7 days) and undercounts at sites with sparse visits (a leaf-present week never visited is never credited), so it is honest but not visit-cadence-immune.",
   "onsets", "left_censored", "logical", "", "TRUE | FALSE", "TRUE if the earliest visit was already 'yes' for a green-up phenophase (no preceding 'no'). Then greenup equals the first 'yes' and TRUE onset is EARLIER than shown; exclude or model as censored for onset-timing analysis. SCOPE is GREEN-UP only; NA when greenup is NA — do NOT filter left_censored==FALSE to clean flower/leaf_off/leaf_active rows (those are uncensored regardless).",
 
   # 3. individual_summary (one row per individualID; medians across years)
@@ -55,9 +55,9 @@ PHE_CODEBOOK_ROWS <- tibble::tribble(
   # 4. clock / weekly_yesrate (one row per phenophaseName x week; n>=5 gate)
   "clock", "phenophaseName", "character", "", "see PHE_PHENOPHASE_DECODE", "Phenophase whose weekly active-share is summarized.",
   "clock", "week", "integer", "week-of-year", "1-52 (final partial week folded into 52)", "Week of year (7-day bins from Jan 1).",
-  "clock", "yes", "integer", "count", ">=0", "Number of (individual x visit) observations with status=='yes' for this phenophase-week, POOLED ACROSS ALL YEARS (and the selected species, or all).",
-  "clock", "n", "integer", "count", ">=5 (rows with n<5 suppressed)", "Denominator: yes-or-no observations for this phenophase-week (uncertain excluded). Weeks with n<5 dropped.",
-  "clock", "rate", "numeric", "percent", "0-100, one decimal", "100 * yes / n: percent of observed plants in this phenophase this week, pooled across years. A TIMING signal, NOT abundance.",
+  "clock", "yes", "integer", "count", ">=0", "Number of DISTINCT plants recorded 'yes' for this phenophase in this week (a plant visited twice in a week counts once), POOLED ACROSS ALL YEARS (and the selected species, or all).",
+  "clock", "n", "integer", "count", ">=5 (rows with n<5 suppressed)", "Denominator: DISTINCT plants with a yes-or-no record for this phenophase-week (PLANT-weighted, not visit-weighted; uncertain excluded). Weeks with n<5 distinct plants dropped.",
+  "clock", "rate", "numeric", "percent", "0-100, one decimal", "100 * yes / n: percent of monitored PLANTS in this phenophase this week (plant-weighted), pooled across years. A TIMING signal, NOT abundance.",
 
   # 5. onset_trend (one row per scientificName x year; n>=3 gate)
   "onset_trend", "scientificName", "character", "", "Genus species (species-level only)", "Species whose green-up trend is tracked.",
@@ -97,8 +97,10 @@ PHE_PROVENANCE <- list(
     "TIMING, not abundance: a fixed roster of tagged individuals is scored for WHEN phenophases occur; rates and counts here do not measure how common a species is.",
     "The clock (weekly_yesrate) POOLS all years into one average calendar by design; for between-year shifts use onset_trend.",
     "individual_summary fields are medians-of-per-year values; onset_trend$onset is a median across individuals per species-year. Both collapse within-group variance, so n must travel with any point.",
-    "Suppression gates: clock rows need n>=5 obs/phenophase-week; onset_trend points need n>=3 individuals/species-year. Suppressed cells are absent rows, NOT zeros.",
+    "Suppression gates: clock rows need n>=5 DISTINCT PLANTS/phenophase-week (plant-weighted, not visit-weighted); onset_trend points need n>=3 individuals/species-year. Suppressed cells are absent rows, NOT zeros.",
     "Left-censored onsets bias greenup LATE; not-sampled / not-yet-reached phenophases appear as NA, distinct from a structural 'no'.",
+    "GREEN-UP COVERAGE varies by biome: in warm deserts the green-up PHENOPHASE itself is scored for only ~1/5 of plants (drought-deciduous/cactus/evergreen forms are logged straight into 'Leaves'), so a desert median_greenup rests on a small, non-random subsample. Pair it with the green-up coverage share and read leaf_active, which survives where green-up collapses.",
+    "CROSS-SITE onset comparisons are not cadence-controlled: sites differ in effective visit frequency, so part of an onset difference between two sites can be censoring geometry, not plant biology (the phenology analog of detection probability). leaf_active is likewise visit-cadence-sensitive (7-day floor; undercounts at sparse-visit sites).",
     "Coordinates are NEON-published plot locations (may be fuzzed); treat as plot-level."
   ),
   site         = NA_character_,

@@ -26,6 +26,23 @@
 .hs-v { font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1; }
 .hs-l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; margin-top: 3px; }
 
+/* ---- green-up coverage badge (clickable disclosure) ------------------- *
+ * Only rendered server-side when green-up coverage is thin (warm deserts), so
+ * it never clutters the default forest view. A small amber chip that opens a
+ * popover explaining the bias + pointing to leaf-active. */
+.hero-cov-row { margin-top: 10px; }
+.map-cov-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 2px 2px 12px; }
+.gu-cov-badge {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; line-height: 1.2;
+  color: #6e3a14; background: #fbf0df; border: 1px solid #efcf9a;
+  border-radius: 20px; padding: 4px 12px; transition: background .15s, border-color .15s, transform .12s; }
+.gu-cov-badge:hover { background: #f7e6c8; border-color: var(--gold-ink); transform: translateY(-1px); }
+.gu-cov-badge .bi { color: var(--gold-ink); font-size: 13px; }
+[data-bs-theme="dark"] .gu-cov-badge { color: #ecd28a; background: #322a13; border-color: #4a3d18; }
+[data-bs-theme="dark"] .gu-cov-badge .bi { color: #ecd28a; }
+.map-cov-hint { font-size: 12px; color: var(--muted); }
+
 /* ---- overview insight list -------------------------------------------- */
 .insight-list { display: flex; flex-direction: column; gap: 6px; }
 .il-item { display: flex; gap: 8px; align-items: baseline; color: var(--ink); font-size: 14px; line-height: 1.5; }

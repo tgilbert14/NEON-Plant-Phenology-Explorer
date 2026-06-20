@@ -106,6 +106,19 @@ key_onsets <- function(obs) {
   out
 }
 
+# green-up COVERAGE share: fraction of tagged plants that ever resolve a finite
+# green-up onset. In warm deserts the green-up *phenophase* ("Breaking leaf buds"
+# / "Initial growth") is rarely scored — drought-deciduous / cactus / evergreen
+# plants are logged straight into "Leaves" — so a desert median_greenup rests on a
+# small, non-random subsample (SRER 19%, JORN 54%) while leaf_active survives.
+# This is the number behind the coverage badge; computed at runtime from the
+# per-plant summary so it needs no bundle rebuild.
+greenup_coverage <- function(ind_s) {
+  if (is.null(ind_s) || !nrow(ind_s) || !("greenup" %in% names(ind_s))) return(NA_real_)
+  n <- nrow(ind_s); if (!n) return(NA_real_)
+  sum(is.finite(ind_s$greenup)) / n
+}
+
 # one row per individual: median green-up / leaf-active etc. (Onset Lab + picker)
 individual_summary <- function(obs, inds) {
   ko <- key_onsets(obs); if (is.null(ko) || !nrow(ko)) return(NULL)
@@ -132,10 +145,16 @@ weekly_yesrate <- function(obs, sci = NULL) {
   if (!is.null(sci)) d <- d[d$scientificName %in% sci, , drop=FALSE]
   if (!nrow(d)) return(NULL)
   d$week <- pmin(52L, ((d$dayOfYear - 1L) %/% 7L) + 1L)
+  # PLANT-weighted, not visit-weighted: a plant visited twice in a week must count
+  # ONCE, or the "% of plants" label is false (it would be "% of observations").
+  # Collapse to one row per individual x phenophase x week first; the plant counts
+  # 'yes' if ANY visit that week was 'yes' (the phenophase was active that week).
+  d <- d %>% dplyr::group_by(.data$individualID, .data$phenophaseName, .data$week) %>%
+    dplyr::summarise(plant_yes = any(.data$status == "yes"), .groups = "drop")
   d %>% dplyr::group_by(.data$phenophaseName, .data$week) %>%
-    dplyr::summarise(yes = sum(.data$status=="yes"), n = dplyr::n(), .groups="drop") %>%
+    dplyr::summarise(yes = sum(.data$plant_yes), n = dplyr::n(), .groups="drop") %>%
     dplyr::mutate(rate = round(100 * .data$yes / .data$n, 1)) %>%
-    dplyr::filter(.data$n >= 5)   # suppress sub-threshold weeks: a 100%-of-3 ring must not look as solid as 100%-of-1000
+    dplyr::filter(.data$n >= 5)   # suppress sub-threshold weeks: a 100%-of-3 ring must not look as solid as 100%-of-1000 (n is now distinct plants/week)
 }
 
 # onset trend per species x year (the climate-shift signal — NOT pooled).
@@ -228,11 +247,17 @@ comp_by <- function(inds, by = c("growthForm","scientificName")) {
 
 # per-plot summary for the map (n individuals + median green-up onset). Accepts a
 # precomputed individual_summary so the Map tab needn't recompute it (perf).
+# Also carries gu_share (fraction of the plot's plants that resolve a green-up
+# onset) so the map can flag plots where green-up rests on a thin subsample, and
+# leaf_active (median days carrying leaves) for the biome-conditional metric
+# switch — leaf_active survives where green-up collapses in warm deserts.
 plot_summary_phe <- function(obs, inds, ind_s = NULL) {
   if (is.null(ind_s)) ind_s <- individual_summary(obs, inds)
   if (is.null(ind_s)) return(NULL)
   ind_s %>% dplyr::group_by(.data$plotID) %>%
     dplyr::summarise(n_ind = dplyr::n(), greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
+                     gu_share = sum(is.finite(.data$greenup)) / dplyr::n(),
+                     leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
                      lat = stats::median(.data$lat, na.rm=TRUE), lng = stats::median(.data$lng, na.rm=TRUE), .groups="drop")
 }
 
@@ -260,9 +285,42 @@ site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
     dominant_form = mode_chr(inds$growthForm),
     median_greenup = if (!is.null(ind_s)) safe_med(ind_s$greenup) else NA_real_,
     median_leaf_active = if (!is.null(ind_s)) safe_med(ind_s$leaf_active) else NA_real_,
+    # green-up COVERAGE share (fraction of plants resolving a green-up onset). In
+    # warm deserts the green-up phenophase is scored for ~1/5 of plants, so this
+    # flags when median_greenup rests on a biased subsample. Carried to
+    # site_index for the national-map coverage badge (next bundle rebuild).
+    gu_share = if (!is.null(ind_s)) round(greenup_coverage(ind_s), 3) else NA_real_,
     year_min = suppressWarnings(min(obs$year, na.rm=TRUE)),
     year_max = suppressWarnings(max(obs$year, na.rm=TRUE)),
     lat = meta$lat, lng = meta$lng)
+}
+
+# within-species latitude gradient — the CONFOUND-CONTROLLED read of the cross-
+# site gradient. The network slope (median_greenup ~ lat) pools different species
+# mixes at every site; holding ONE widespread species constant removes that
+# confound (red maple alone ~ +4.4 d/°N, R² 0.78 vs the network's +2.5, R² 0.41).
+# Picks the species spanning the most sites (>= min_sites), fits greenup ~ lat,
+# and returns the slope + its 95% CI + R² so the banner can LEAD with it. Reads
+# the precomputed national_onsets table (one row per site×species); NULL if none
+# qualifies. Pure base lm, no extra deps.
+within_species_gradient <- function(national_onsets, min_sites = 4) {
+  no <- national_onsets
+  if (is.null(no) || !nrow(no) || !all(c("scientificName","greenup","lat") %in% names(no))) return(NULL)
+  no <- no[is.finite(no$greenup) & is.finite(no$lat), , drop=FALSE]
+  if (!nrow(no)) return(NULL)
+  tab <- sort(table(no$scientificName), decreasing = TRUE)
+  cand <- names(tab)[tab >= min_sites]
+  if (!length(cand)) return(NULL)
+  sp <- cand[1]                       # the most widely-monitored species
+  d <- no[no$scientificName == sp, , drop=FALSE]
+  if (nrow(d) < 3 || diff(range(d$lat)) == 0) return(NULL)
+  fit <- stats::lm(greenup ~ lat, data = d); co <- summary(fit)$coefficients
+  if (nrow(co) < 2) return(NULL)
+  slope <- co[2,1]; se <- co[2,2]; df <- nrow(d) - 2
+  tcrit <- stats::qt(0.975, df = df)
+  list(species = sp, n_sites = nrow(d), slope = slope,
+       lo = slope - tcrit*se, hi = slope + tcrit*se,
+       r2 = summary(fit)$r.squared, p = co[2,4])
 }
 
 # one row per (site × species-level taxon) with ≥3 individuals: feeds the
