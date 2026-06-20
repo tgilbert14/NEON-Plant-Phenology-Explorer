@@ -174,3 +174,40 @@
   .hero-stat::before, .site-bio::before { animation: none !important; }
   .hero-stat:hover, .site-bio:hover { transform: none; }
 }
+
+/* ---- "Browse all 46 sites" collapsible list (splash) -------------------- */
+/* Closed by default; mirrors the sibling apps' picker-list, in the phenology
+   green-up accent. Native disclosure triangle killed; chevron rotates on open. */
+.picker-list { margin: 14px auto 0; max-width: 920px; text-align: left; }
+.picker-list > summary { list-style: none; }
+.picker-list > summary::-webkit-details-marker { display: none; }
+.picker-list-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 40px; padding: 9px 16px; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+  color: var(--ink); font-weight: 700; font-size: 14px;
+  box-shadow: 0 2px 8px var(--shadow); transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.picker-list-summary:hover {
+  border-color: var(--green); box-shadow: 0 6px 18px -6px var(--shadow);
+}
+.picker-list > summary:focus-visible { outline: none; }
+.picker-list > summary:focus-visible .picker-list-summary {
+  border-color: var(--green); box-shadow: 0 0 0 3px rgba(31,122,63,.25);
+}
+.pls-label { display: inline-flex; align-items: center; gap: 8px; color: var(--green); }
+.pls-chevron { display: inline-flex; transition: transform .2s ease; color: var(--green); opacity: .85; }
+.picker-list[open] .pls-chevron { transform: rotate(180deg); }
+.picker-list-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 14px;
+  max-height: 340px; overflow-y: auto;
+  margin-top: 8px; padding: 10px 12px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 4px 14px -6px var(--shadow);
+}
+.picker-list-link { display: block; padding: 7px 9px; border-radius: 8px; color: var(--ink); font-size: 13px; text-decoration: none; min-height: 34px; }
+.picker-list-link:hover { background: var(--bg); color: var(--green); }
+.picker-list-link b { color: var(--green); }
+.pll-meta { color: var(--muted); font-size: 11.5px; }
+@media (max-width: 900px) { .picker-list-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .picker-list-grid { grid-template-columns: 1fr; } }

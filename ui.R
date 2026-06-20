@@ -60,6 +60,24 @@ ui <- bslib::page_sidebar(
           options = list(placeholder = "Jump to a site by code, name, or state…")))),
     div(class = "picker-map-wrap", leafletOutput("nationalMap", height = "460px")),
     div(class = "picker-map-hint", bs_icon("hand-index-thumb"), " tap a dot, then ", tags$b("Explore this site"), " — or pick by state in the sidebar"),
+    local({
+      ord <- site_table[order(site_table$name), , drop = FALSE]
+      n_plants <- suppressWarnings(as.integer(ord$n_individuals))
+      tags$details(class = "picker-list",
+        tags$summary(class = "picker-list-summary",
+          tags$span(class = "pls-label", bs_icon("list-ul"),
+                    tagList(" Browse all ", nrow(ord), " sites")),
+          tags$span(class = "pls-chevron", bs_icon("chevron-down"))),
+        div(class = "picker-list-grid",
+          lapply(seq_len(nrow(ord)), function(i)
+            tags$a(class = "picker-list-link", href = "#",
+              onclick = sprintf("smtLoadStart('%s — loading…');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;",
+                                gsub("'", "\\\\'", ord$name[i]), ord$site[i]),
+              tags$b(ord$site[i]), sprintf(" — %s ", ord$name[i]),
+              tags$span(class = "pll-meta",
+                if (!is.na(n_plants[i]))
+                  sprintf("%s · %s plants", ord$state[i], format(n_plants[i], big.mark = ","))
+                else ord$state[i]))))) }),
     div(class = "picker-actions", actionButton("demoBtn2", tagList(bs_icon("stars"), " Open the Harvard Forest demo instantly"),
       class = "btn-primary btn-lg", onclick = "smtLoadStart('Harvard Forest — demo dataset')")))),
   div(id = "mainTabsWrap", class = "main-tabs-wrap",
