@@ -76,6 +76,7 @@ jobs:
         run: Rscript scripts/fetch_all_phe.R
 
       - name: Rebuild per-site bundles + indexes + national table
+        if: ${{ github.event.inputs.skip_download != 'true' }}
         run: Rscript scripts/bundle_phe_data.R
 
       - name: Commit refreshed bundles to master (auto-redeploys Connect Cloud)
