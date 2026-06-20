@@ -39,7 +39,7 @@ APP_VERSION <- "2.0 (Field Notebook)"
 BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
 site_table <- if (length(BUNDLED)) {
   m <- neon_sites[match(BUNDLED, neon_sites$site), ]
-  want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots"), names(SITE_INDEX))
+  want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots","gu_share"), names(SITE_INDEX))
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), want, drop = FALSE])
 } else neon_sites[0, ]
 

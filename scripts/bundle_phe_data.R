@@ -89,6 +89,11 @@ for (s in SITES) {
 site_index <- dplyr::bind_rows(summ)
 # attach elevation (and confirm name/state come from neon_sites in the app)
 site_index$elevation_m <- neon_sites$elevation_m[match(site_index$site, neon_sites$site)]
+# gu_share = green-up COVERAGE share per site (greenup_coverage(); site_phe_summary
+# emits it). PERSIST it so the national map can mute thin-coverage sites without a
+# bundle reload. Backfill NA if an older summary in `summ` predates the column, so
+# the column always exists and the app read never errors.
+if (!("gu_share" %in% names(site_index))) site_index$gu_share <- NA_real_
 saveRDS(site_index, "data/site_index.rds", compress="xz")
 
 # ---- national_onsets: one row per (site × species) for the cross-site tab --

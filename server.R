@@ -92,17 +92,27 @@ server <- function(input, output, session) {
     mx <- max(st$n_individuals, 1, na.rm=TRUE); st$radius <- 6 + 12 * sqrt(pmax(st$n_individuals, 1)) / sqrt(mx)
     elev <- ifelse(is.finite(st$elevation_m), paste0(st$elevation_m, " m"), "—")
     gtxt <- ifelse(is.finite(gv), paste0(" · green-up day ", gv, " (", doy_to_month(gv), ")"), "")
+    # green-up COVERAGE share per site (gu_share). Sites where green-up is scored
+    # for < ~half the roster (warm deserts) carry a biased median_greenup, so they
+    # READ as thin — a muted, hollow marker (no always-on text), with the why in the
+    # click-popup + hover label only. 0.5 mirrors gu_badge's GU_COVERAGE_FLOOR.
+    gs <- if ("gu_share" %in% names(st)) suppressWarnings(as.numeric(st$gu_share)) else rep(NA_real_, nrow(st))
+    thin <- is.finite(gs) & gs < 0.5
+    mk_stroke <- ifelse(thin, "#9b8f74", "#fff")            # muted vs crisp ring
+    mk_opacity <- ifelse(thin, 0.45, 0.9)                   # thin sites recede
+    covtxt <- ifelse(thin, sprintf("<div class='sp-cov-thin'>&#9888; green-up scored for %d%% of plants here — read leaf-active.</div>", round(gs * 100)), "")
     pop <- sprintf(paste0(
       "<div class='site-pop'><div class='pm-pop-t'>%s <span class='sp-code'>%s</span></div>",
       "<div class='pm-pop-s'>%s · NEON %s · %s</div><div class='sp-bio'>%s</div>",
-      "<div class='sp-years'>%s plants · %s species%s</div>",
+      "<div class='sp-years'>%s plants · %s species%s</div>%s",
       "<div class='sp-actions'><button class='sp-btn sp-go' onclick=\"smtLoadStart('%s');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;\">Explore this site &rarr;</button></div></div>"),
       st$name, st$site, ifelse(is.na(state_names[st$state]), st$state, state_names[st$state]), st$domain, elev, st$bio,
-      st$n_individuals, st$n_species, gtxt, gsub("'", "", st$name), st$site)
-    lab <- sprintf("<b>%s</b> · %s<br>%s plants · tap for details", st$site, st$name, st$n_individuals)
+      st$n_individuals, st$n_species, gtxt, covtxt, gsub("'", "", st$name), st$site)
+    lab <- sprintf("<b>%s</b> · %s<br>%s plants%s · tap for details", st$site, st$name, st$n_individuals,
+      ifelse(thin, " · thin green-up coverage", ""))
     leaflet::leaflet(st) %>% leaflet::addProviderTiles("CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng=~lng, lat=~lat, radius=~radius, layerId=~site,
-        fillColor=pal(gv), color="#fff", weight=1, fillOpacity=0.9,
+        fillColor=pal(gv), color=mk_stroke, weight=1, fillOpacity=mk_opacity,
         label=lapply(lab, htmltools::HTML), popup=pop,
         popupOptions=leaflet::popupOptions(className="pm-pop-card")) %>%
       leaflet::addLegend("bottomright", pal=pal, values=gv[is.finite(gv)], title="median green-up DOY", na.label="—")

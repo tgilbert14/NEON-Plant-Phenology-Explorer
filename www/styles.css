@@ -242,6 +242,9 @@ body {
 .site-pop { min-width: 210px; }
 .site-pop .sp-code { color: var(--muted); font-weight: 700; }
 .site-pop .sp-years { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.site-pop .sp-cov-thin { font-size: 11.5px; color: #6e5a2a; background: #fbf3e3; border: 1px solid #efdcae;
+  border-radius: 6px; padding: 4px 7px; margin-top: 6px; line-height: 1.4; }
+[data-bs-theme="dark"] .site-pop .sp-cov-thin { color: #ecd28a; background: #322a13; border-color: #4a3d18; }
 .sp-bio { color: var(--green); font-weight: 600; font-size: 12px; margin-top: 4px; line-height: 1.4; }
 .sp-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 11px; }
 .sp-btn { display: block; width: 100%; min-height: 44px; border-radius: 10px; font-weight: 700;
