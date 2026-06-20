@@ -4,23 +4,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>NEON Plant Phenology — the Explorer Suite by Desert Data Labs</title>
+  <title>NEON Plant Phenology, the Explorer Suite by Desert Data Labs</title>
   <meta name="description"
-    content="A seasonal notebook of real NEON plant-phenology observations across ~46 field sites: when green-up, flowering, and fruiting switch on at each site, and how that timing shifts year to year. Honest timing statistics, instant loads." />
+    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States, and how that timing shifts year to year. Free, pick a site and start. No account needed." />
   <meta name="theme-color" content="#0a140c" />
 
   <!-- Open Graph / social card. Absolute URLs = the GitHub Pages domain for this repo. -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/" />
-  <meta property="og:title" content="NEON Plant Phenology — Desert Data Labs" />
+  <meta property="og:title" content="NEON Plant Phenology, by Desert Data Labs" />
   <meta property="og:description"
-    content="A seasonal notebook of real NEON plant-phenology data across ~46 field sites — when green-up, flowering, and fruiting switch on, and how the timing shifts year to year. Honest stats, instant loads." />
+    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States, and how that timing shifts year to year. Free, pick a site and start." />
   <meta property="og:image"
     content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="NEON Plant Phenology — Desert Data Labs" />
+  <meta name="twitter:title" content="NEON Plant Phenology, by Desert Data Labs" />
   <meta name="twitter:description"
-    content="A seasonal notebook of real NEON plant-phenology data across ~46 field sites. Honest timing stats, instant loads." />
+    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States. Free, pick a site and start." />
   <meta name="twitter:image"
     content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image.png" />
 
@@ -309,12 +309,15 @@
         <b>Desert Data Labs</b>
       </span>
 
-      <div class="eyebrow">The NEON Explorer Suite · The timing hinge</div>
+      <div class="eyebrow">The NEON Explorer Suite · Plant timing</div>
       <h1>NEON Plant Phenology</h1>
-      <p class="lead">Repeat phenophase observations as a <b>seasonal notebook</b>: when
-        <b>green-up</b>, <b>flowering</b>, and <b>fruiting</b> switch on at each NEON site, and how that
-        timing shifts year to year. A fixed roster of tagged plants, watched week by week — read as one
-        honest, interval-censored view of the year across the network.</p>
+      <p class="lead">See when plants wake up in spring and wind down in fall, across the United States.
+        NEON (the National Ecological Observatory Network) is a set of research sites funded by the
+        National Science Foundation that measure plants, animals, water, and climate the same way
+        everywhere, year after year. At each site, crews track tagged plants and note the stages of their
+        year (these stages are called <b>phenophases</b>): when <b>leaves come out</b>, when <b>flowers
+        and fruit</b> appear, and when <b>leaves drop</b>. This free tool lets you watch that timing.
+        Pick a site and start. No account needed.</p>
 
       <div class="cta-row">
         <a id="launch" class="launch" href="https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/">
@@ -350,41 +353,44 @@
   <!-- how the notebook reads: observe -> yes-share -> timing -> compare -->
   <section class="cascade-band">
     <div class="wrap">
-      <span class="kick">How the notebook reads</span>
-      <h2>One phenophase status, read four ways.</h2>
-      <p>Phenology is a timing signal, not an abundance count. The notebook walks the same observation from
-        a single field check up to a cross-site comparison, with the statistics shown at every step.</p>
+      <span class="kick">What this shows you</span>
+      <h2>From one plant check to the whole country.</h2>
+      <p>This is about timing, not how many plants there are. Each step below builds on the one before it,
+        starting with a single visit to a tagged plant and ending with a comparison across the whole
+        network. The numbers behind each step are shown as you go.</p>
       <div class="flow" data-flow>
-        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Observe phenophase</b> &middot; <span>green-up, flowering, fruiting — a yes/no per visit</span></span></div>
+        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Check a plant</b> &middot; <span>has it leafed out, flowered, or fruited yet? a yes or no, each visit</span></span></div>
         <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Status yes-share</b> &middot; <span>% of tagged plants in phase, by week of year</span></span></div>
+        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Share saying yes</b> &middot; <span>what percent of tagged plants are in each stage, week by week</span></span></div>
         <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Seasonal timing</b> &middot; <span>onset &amp; peak — interval-censored to the visit gap</span></span></div>
+        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Timing in the year</b> &middot; <span>when each stage starts and peaks at the site</span></span></div>
         <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Compare</b> &middot; <span>across years &amp; sites — the latitudinal green-up gradient</span></span></div>
+        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Compare</b> &middot; <span>across years and sites, including how spring arrives later as you go north</span></span></div>
       </div>
 
       <div class="stats">
         <div class="stat"><div class="n">46</div><div class="l">NEON sites</div></div>
         <div class="stat"><div class="n">9,515</div><div class="l">tagged plants</div></div>
         <div class="stat"><div class="n">499</div><div class="l">species</div></div>
-        <div class="stat"><div class="n">instant</div><div class="l">no API waits</div></div>
+        <div class="stat"><div class="n">instant</div><div class="l">no waiting to load</div></div>
       </div>
 
       <details class="more">
         <summary>How it stays honest</summary>
         <div class="mbody">
-          Phenology is monitored on a <b>fixed roster of tagged plants</b> along transects, so this is a
-          <b>timing</b> signal (when each phenophase happens), not a measure of how common a species is —
-          labelled everywhere. <b>Onset</b> is interval-censored to the midpoint between the last "no" and
-          first "yes" visit, honest about the twice-weekly resolution, with left-censored rows flagged.
-          <b>Growing extent</b> is leaf-active days (distinct leaf-weeks &times; 7), not a green-up-to-leaf-off
-          span, so a drought-deciduous desert plant that flushes twice a year isn't credited a 300-day season.
-          The <b>Phenology Clock pools years</b> by design; year-to-year shifts live in the onset trend, which
-          refuses to fit fewer than 5 years and says "no detectable shift" when the interval spans zero.
-          Sample-size gates everywhere (&ge;5 obs per phenophase-week, &ge;3 plants per species-year) and a
-          colour-vision-deficiency-safe palette. The app loads pre-bundled snapshots — no live-API waits.
-          <b>An educational data-exploration tool, not affiliated with NEON, Battelle, or the NSF.</b>
+          The same group of <b>tagged plants</b> is checked all season, so this tells you <b>when</b> things
+          happen, not how common a plant is. We label that clearly everywhere. Crews visit about twice a
+          week, so we never know the exact day a stage began. We report the start as the midpoint between
+          the last "no" visit and the first "yes" visit, and we flag any plant that was already in the
+          stage at the first check. For how long a plant carries leaves, we count the actual weeks it had
+          leaves rather than the gap from first leaf to last, so a desert plant that leafs out and drops
+          twice in one year is not credited with a 300-day season. The <b>Phenology Clock</b> combines
+          several years to show a typical year, and the year-to-year trend only fits when there are at
+          least 5 years of data and says "no clear shift" when the result could go either way. We only show
+          a number when there is enough data behind it (at least 5 checks per stage and week, at least 3
+          plants per species and year), and the colors are chosen to read clearly for color-blind viewers.
+          Everything is loaded ahead of time, so nothing keeps you waiting.
+          <b>This is an educational tool for exploring data. It is not affiliated with NEON, Battelle, or the NSF.</b>
         </div>
       </details>
     </div>
