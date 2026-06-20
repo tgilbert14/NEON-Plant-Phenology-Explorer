@@ -61,26 +61,26 @@
    with amber/leaf/bloom motes instead of the mammal app's teal/coral. */
 .app-hero {
   position: relative; overflow: hidden;
-  background: radial-gradient(125% 150% at 16% -12%, #1d5e38 0%, #103b22 46%, #07160d 100%) !important;
-  box-shadow: 0 18px 46px rgba(5,18,10,.45), inset 0 0 0 1px rgba(156,207,106,.18) !important;
+  background: radial-gradient(125% 150% at 16% -12%, #1d4528 0%, #112016 46%, #0a140c 100%) !important;
+  box-shadow: 0 18px 46px rgba(5,18,10,.45), inset 0 0 0 1px rgba(150,210,90,.18) !important;
 }
 .app-hero > * { position: relative; z-index: 1; }
 .app-hero::before {            /* drifting starfield (fireflies over the canopy) */
   content:""; position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.5;
   background-repeat: repeat; background-size: 210px 220px,210px 220px,210px 220px,210px 220px;
   background-image:
-    radial-gradient(1.4px 1.4px at 30px 40px, rgba(255,255,255,.55), transparent),
-    radial-gradient(1.2px 1.2px at 150px 90px, rgba(156,207,106,.55), transparent),
-    radial-gradient(1.5px 1.5px at 90px 175px, rgba(217,128,20,.45), transparent),
-    radial-gradient(1.1px 1.1px at 175px 28px, rgba(200,65,122,.40), transparent);
+    radial-gradient(1.4px 1.4px at 30px 40px, rgba(255,255,255,.6), transparent),
+    radial-gradient(1.2px 1.2px at 150px 90px, rgba(180,230,150,.5), transparent),
+    radial-gradient(1.5px 1.5px at 90px 175px, rgba(230,169,46,.4), transparent),
+    radial-gradient(1.1px 1.1px at 175px 28px, rgba(155,210,74,.5), transparent);
   animation: pheStars 120s linear infinite;
 }
 .app-hero::after {             /* leaf/amber/bloom nebula */
   content:""; position:absolute; inset:0; z-index:0; pointer-events:none; opacity:.6;
   background:
-    radial-gradient(48px 48px at 10% 26%, rgba(156,207,106,.18), transparent 70%),
-    radial-gradient(66px 66px at 86% 16%, rgba(217,128,20,.14), transparent 70%),
-    radial-gradient(54px 54px at 64% 94%, rgba(200,65,122,.12), transparent 70%);
+    radial-gradient(48px 48px at 10% 26%, rgba(150,210,90,.18), transparent 70%),
+    radial-gradient(66px 66px at 86% 16%, rgba(230,169,46,.14), transparent 70%),
+    radial-gradient(54px 54px at 64% 94%, rgba(210,105,60,.12), transparent 70%);
 }
 .app-title { color: #ffce7a !important; }   /* warm senescence-amber on the dark band */
 .app-hero .app-subtitle { color: #d8e7d6 !important; }
@@ -92,22 +92,22 @@
  * light text + the per-tone accent rail, in BOTH modes. */
 .hero-stat {
   position: relative; overflow: hidden; isolation: isolate;
-  background: linear-gradient(180deg, #18482c 0%, #103b22 100%) !important;
+  background: linear-gradient(180deg, #1a2e1e 0%, #0a140c 100%) !important;
   border: 1px solid rgba(255,255,255,.10) !important;
   box-shadow: 0 12px 28px -12px rgba(5,18,10,.6) !important;
   transition: transform .2s cubic-bezier(.22,1,.36,1), box-shadow .28s ease, border-color .2s ease;
 }
 .hero-stat .hs-v { color: #ffffff !important; }
-.hero-stat .hs-l { color: #b6c9ba !important; }
+.hero-stat .hs-l { color: #b3c2a0 !important; }
 /* per-tone accent rail + icon read brighter on the dark card */
-.hero-stat.hero-pine  { border-top-color: #9ccf6a !important; }
-.hero-stat.hero-navy  { border-top-color: #5fd089 !important; }
-.hero-stat.hero-terra { border-top-color: #e8895f !important; }
-.hero-stat.hero-gold  { border-top-color: #e8b15a !important; }
-.hero-stat.hero-pine  .hs-icon { color: #9ccf6a !important; opacity: 1; }
-.hero-stat.hero-navy  .hs-icon { color: #5fd089 !important; opacity: 1; }
-.hero-stat.hero-terra .hs-icon { color: #e8895f !important; opacity: 1; }
-.hero-stat.hero-gold  .hs-icon { color: #e8b15a !important; opacity: 1; }
+.hero-stat.hero-pine  { border-top-color: #6abf5a !important; }
+.hero-stat.hero-navy  { border-top-color: #9bd24a !important; }
+.hero-stat.hero-terra { border-top-color: #d2693c !important; }
+.hero-stat.hero-gold  { border-top-color: #e6a92e !important; }
+.hero-stat.hero-pine  .hs-icon { color: #6abf5a !important; opacity: 1; }
+.hero-stat.hero-navy  .hs-icon { color: #9bd24a !important; opacity: 1; }
+.hero-stat.hero-terra .hs-icon { color: #d2693c !important; opacity: 1; }
+.hero-stat.hero-gold  .hs-icon { color: #e6a92e !important; opacity: 1; }
 .hero-stat::before {
   content:""; position:absolute; top:0; left:-65%; width:55%; height:100%; z-index:4;
   background: linear-gradient(100deg, transparent, rgba(255,255,255,.42), transparent);
@@ -116,12 +116,44 @@
 .hero-stat:hover::before { animation: pheSheen .85s ease; }
 .hero-stat:hover {
   transform: translateY(-4px);
-  box-shadow: 0 16px 34px rgba(0,0,0,.4), 0 0 0 1px rgba(156,207,106,.30) !important;
+  box-shadow: 0 16px 34px rgba(0,0,0,.4), 0 0 0 1px rgba(150,210,90,.30) !important;
 }
 .hero-title { color: var(--pine); }
 [data-bs-theme="dark"] .hero-title { color: #8fdca8; }
 
+/* ---- DARK "info-box" SITE BAND on the LIGHT page (effect-7 parity) ------ *
+ * The sidebar site-bio identity strip wears the same dark forest-night
+ * command-band scheme as the hero + KPI cards: dark glass, light ink, a
+ * greenup accent TOP rail (replacing the old --pine LEFT border), plus the
+ * sheen-sweep + hover-lift for full symmetry — in BOTH light and dark modes. */
+.site-bio {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: linear-gradient(180deg, #1a2e1e 0%, #0a140c 100%) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  border-left: none !important;
+  border-top: 3px solid #6abf5a !important;
+  border-radius: 10px !important;
+  color: #eef3e6 !important;
+  box-shadow: 0 12px 28px -12px rgba(5,18,10,.6) !important;
+  transition: transform .2s cubic-bezier(.22,1,.36,1), box-shadow .28s ease, border-color .2s ease;
+}
+.site-bio .bi { color: #6abf5a !important; }
+.site-bio span, .site-bio b, .site-bio em { color: #b3c2a0; }
+.site-bio b { color: #eef3e6; }
+[data-bs-theme="dark"] .site-bio { background: linear-gradient(180deg, #1a2e1e 0%, #0a140c 100%) !important; color: #eef3e6 !important; }
+.site-bio::before {
+  content:""; position:absolute; top:0; left:-65%; width:55%; height:100%; z-index:4;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.34), transparent);
+  transform: skewX(-18deg); pointer-events:none; opacity:0;
+}
+.site-bio:hover::before { animation: pheSheen .85s ease; }
+.site-bio:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 34px rgba(0,0,0,.4), 0 0 0 1px rgba(150,210,90,.30) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .app-hero::before, .brand-mark, .app-emoji, .hero-stat::before { animation: none !important; }
-  .hero-stat:hover { transform: none; }
+  .app-hero::before, .brand-mark, .app-emoji,
+  .hero-stat::before, .site-bio::before { animation: none !important; }
+  .hero-stat:hover, .site-bio:hover { transform: none; }
 }
