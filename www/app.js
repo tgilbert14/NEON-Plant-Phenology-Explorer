@@ -94,6 +94,36 @@ document.addEventListener("DOMContentLoaded", function () {
   Shiny.addCustomMessageHandler("pheSite", function (msg) { window.__pheSite = (msg && msg.site) || ""; });
 });
 
+// ---- mascot celebration: the sprout hops up + fades on a special moment ----
+// This app has no confetti (the mammal-app's rarity confetti was removed), so
+// mascotCheer ships ready-to-wire: call mascotCheer(true) from any future
+// celebration hook and the loader sprout will pop up and fade.
+function mascotCheer(big) {
+  try {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var src = document.querySelector("#loadOverlay .mascot");
+    if (!src) return;
+    var wrap = document.createElement("div");
+    wrap.className = "mascot-cheer";
+    wrap.appendChild(src.cloneNode(true));
+    document.body.appendChild(wrap);
+    setTimeout(function () { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); }, 1700);
+  } catch (e) {}
+}
+
+// ---- first-visit: the splash mascot waves hello once (localStorage-gated) ----
+document.addEventListener("DOMContentLoaded", function () {
+  try {
+    if (localStorage.getItem("smtMascotSeen") === "1") return;
+    var g = document.querySelector(".splash-guide");
+    if (g) {
+      g.classList.add("wave");
+      localStorage.setItem("smtMascotSeen", "1");
+      setTimeout(function () { g.classList.remove("wave"); }, 3300);
+    }
+  } catch (e) {}
+});
+
 // Re-fit any Leaflet map the moment its tab becomes visible (hidden-init blank fix).
 document.addEventListener("shown.bs.tab", function () {
   setTimeout(function () { try { window.dispatchEvent(new Event("resize")); } catch (e) {} }, 60);
