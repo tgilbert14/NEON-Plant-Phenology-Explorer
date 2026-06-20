@@ -1,4 +1,8 @@
-setwd("C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Phenology")
+# Local-dev convenience only: hop to the repo root if run from elsewhere (e.g.
+# RStudio). Skipped where the path doesn't exist (CI / another machine), where the
+# relative paths below already resolve from the repo root.
+.root <- "C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Phenology"
+if (dir.exists(.root)) setwd(.root)
 suppressPackageStartupMessages({ library(dplyr); library(tidyr) })
 source("R/site_metadata.R"); source("R/phe_helpers.R")
 b <- readRDS("data/sites/HARV.rds"); obs <- b$obs; inds <- b$inds
