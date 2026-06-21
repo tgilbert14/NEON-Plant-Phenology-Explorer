@@ -60,7 +60,7 @@ text(70, 290, "tagged plant NEON watches, week by week, across the country.",
 
 # stat chips
 chips <- list(c("46", "field sites"), c("9,515", "tagged plants"),
-              c("499", "species"), c("instant", "no API waits"))
+              c("499", "species"), c("10+", "years of records"))
 x0 <- 70; gap <- 14; w <- 250; h <- 96; y1 <- 64
 for (i in seq_along(chips)) {
   xl <- x0 + (i - 1) * (w + gap)

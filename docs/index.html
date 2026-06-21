@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>NEON Plant Phenology, the Explorer Suite by Desert Data Labs</title>
   <meta name="description"
-    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States, and how that timing shifts year to year. Free, pick a site and start. No account needed." />
+    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States, and how that timing shifts year to year." />
   <meta name="theme-color" content="#0a140c" />
 
   <!-- Open Graph / social card. Absolute URLs = the GitHub Pages domain for this repo. -->
@@ -14,13 +14,13 @@
   <meta property="og:url" content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/" />
   <meta property="og:title" content="NEON Plant Phenology, by Desert Data Labs" />
   <meta property="og:description"
-    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States, and how that timing shifts year to year. Free, pick a site and start." />
+    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States, and how that timing shifts year to year." />
   <meta property="og:image"
     content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="NEON Plant Phenology, by Desert Data Labs" />
   <meta name="twitter:description"
-    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States. Free, pick a site and start." />
+    content="See when plants leaf out, flower, and drop their leaves at NEON research sites across the United States." />
   <meta name="twitter:image"
     content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image.png" />
 
@@ -316,8 +316,8 @@
         National Science Foundation that measure plants, animals, water, and climate the same way
         everywhere, year after year. At each site, crews track tagged plants and note the stages of their
         year (these stages are called <b>phenophases</b>): when <b>leaves come out</b>, when <b>flowers
-        and fruit</b> appear, and when <b>leaves drop</b>. This free tool lets you watch that timing.
-        Pick a site and start. No account needed.</p>
+        and fruit</b> appear, and when <b>leaves drop</b>. This tool lets you watch that timing.
+        Pick a site to see its tagged plants and when each stage of their year happens.</p>
 
       <div class="cta-row">
         <a id="launch" class="launch" href="https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/">
@@ -372,7 +372,7 @@
         <div class="stat"><div class="n">46</div><div class="l">NEON sites</div></div>
         <div class="stat"><div class="n">9,515</div><div class="l">tagged plants</div></div>
         <div class="stat"><div class="n">499</div><div class="l">species</div></div>
-        <div class="stat"><div class="n">instant</div><div class="l">no waiting to load</div></div>
+        <div class="stat"><div class="n">10+</div><div class="l">years of records</div></div>
       </div>
 
       <details class="more">
@@ -389,7 +389,7 @@
           least 5 years of data and says "no clear shift" when the result could go either way. We only show
           a number when there is enough data behind it (at least 5 checks per stage and week, at least 3
           plants per species and year), and the colors are chosen to read clearly for color-blind viewers.
-          Everything is loaded ahead of time, so nothing keeps you waiting.
+          Everything is loaded ahead of time from the published NEON data.
           <b>This is an educational tool for exploring data. It is not affiliated with NEON, Battelle, or the NSF.</b>
         </div>
       </details>
@@ -398,7 +398,7 @@
 
   <footer>
     <div class="wrap">
-      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Phenology%20Explorer">Want a custom data app like these for your project?</a><br>
+      <a class="cta-foot" href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Phenology%20Explorer">Get in touch with Desert Data Labs →</a><br>
       Built on the NEON <a href="https://data.neonscience.org/data-products/DP1.10055.001" target="_blank" rel="noopener">Plant Phenology Observations</a>
       product by <b>Desert Data Labs</b> &middot; Tucson, AZ. Data: National Ecological Observatory Network
       (operated by Battelle, funded by NSF). Educational tools, not affiliated with NEON, Battelle, or the NSF.
@@ -417,7 +417,7 @@
         var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
         var killer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
         fetch(APP_URL, { mode: "no-cors", cache: "no-store", signal: ctrl ? ctrl.signal : undefined })
-          .then(function () { if (warm) warm.textContent = "Ready when you are."; })
+          .then(function () { if (warm) warm.textContent = "The app is ready."; })
           .catch(function () { if (warm) warm.textContent = ""; })
           .finally(function () { if (killer) clearTimeout(killer); });
       } catch (e) {}
