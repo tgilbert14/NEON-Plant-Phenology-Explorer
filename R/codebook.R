@@ -36,7 +36,7 @@ PHE_CODEBOOK_ROWS <- tibble::tribble(
   "onsets", "flower", "numeric", "day-of-year", "1-366; NA if 'Open flowers' never 'yes'", "Flowering onset: interval-censored onset for 'Open flowers'.",
   "onsets", "leaf_off", "numeric", "day-of-year", "1-366; NA if 'Leaves'=='yes' never recorded", "LAST day 'Leaves' was 'yes' that year. WARNING: last leaf-WEEK observed, NOT measured senescence; meaningless for multi-flush/drought-deciduous plants. First 'Colored leaves' deliberately NOT used.",
   "onsets", "leaf_active", "integer", "days", ">=7 in multiples of 7; NA if no 'Leaves' yes", "Days the plant actually carried leaves = (distinct weeks with 'Leaves'=='yes') x 7. A summed presence extent, NOT a green-up-to-leaf-off span; honest for multi-flush plants. Quantized to 7-day units. NOTE: leaf_off MINUS greenup is NOT leaf_active and will not reconcile for multi-flush plants. CADENCE-SENSITIVE: has a hard 7-day floor (one scored leaf-week -> 7 days) and undercounts at sites with sparse visits (a leaf-present week never visited is never credited), so it is honest but not visit-cadence-immune.",
-  "onsets", "left_censored", "logical", "", "TRUE | FALSE", "TRUE if the earliest visit was already 'yes' for a green-up phenophase (no preceding 'no'). Then greenup equals the first 'yes' and TRUE onset is EARLIER than shown; exclude or model as censored for onset-timing analysis. SCOPE is GREEN-UP only; NA when greenup is NA — do NOT filter left_censored==FALSE to clean flower/leaf_off/leaf_active rows (those are uncensored regardless).",
+  "onsets", "left_censored", "logical", "", "TRUE | FALSE", "TRUE if the earliest visit was already 'yes' for a green-up phenophase (no preceding 'no'). Then greenup equals the first 'yes' and TRUE onset is EARLIER than shown; exclude or model as censored for onset-timing analysis. SCOPE is GREEN-UP only; NA when greenup is NA. Do NOT filter left_censored==FALSE to clean flower/leaf_off/leaf_active rows (those are uncensored regardless).",
 
   # 3. individual_summary (one row per individualID; medians across years)
   "individual_summary", "individualID", "character", "", "NEON tag", "Tagged plant individual; primary key.",
@@ -50,7 +50,7 @@ PHE_CODEBOOK_ROWS <- tibble::tribble(
   "individual_summary", "flower", "numeric", "day-of-year", "1-366; NA", "Median across years of flowering onset (rounded).",
   "individual_summary", "leaf_off", "numeric", "day-of-year", "1-366; NA", "Median across years of leaf_off (rounded); same 'last leaf-week, not senescence' caveat.",
   "individual_summary", "leaf_active", "numeric", "days", ">=0; NA", "Median across years of leaf_active days (rounded).",
-  "individual_summary", "n_years", "integer", "count", ">=1", "Number of distinct years with ANY finite key metric (greenup/flower/leaf_off/leaf_active) — i.e. years watched, NOT necessarily the n behind each specific median (a green-up median may rest on fewer years than leaf_active). Small n_years means sparse monitoring.",
+  "individual_summary", "n_years", "integer", "count", ">=1", "Number of distinct years with ANY finite key metric (greenup/flower/leaf_off/leaf_active), i.e. years watched, NOT necessarily the n behind each specific median (a green-up median may rest on fewer years than leaf_active). Small n_years means sparse monitoring.",
 
   # 4. clock / weekly_yesrate (one row per phenophaseName x week; n>=5 gate)
   "clock", "phenophaseName", "character", "", "see PHE_PHENOPHASE_DECODE", "Phenophase whose weekly active-share is summarized.",
@@ -70,11 +70,11 @@ PHE_CODEBOOK_ROWS <- tibble::tribble(
 PHE_PHENOPHASE_DECODE <- c(
   "Breaking leaf buds"   = "Broadleaf green-up onset: leaf buds have broken and a green leaf tip is visible, but leaves have not yet unfolded.",
   "Increasing leaf size" = "Young broadleaf leaves are unfolding and still expanding toward full size.",
-  "Leaves"               = "Fully developed (mature, unfolded) leaves are present — the main leaf-on phenophase used for leaf_off and leaf_active.",
+  "Leaves"               = "Fully developed (mature, unfolded) leaves are present, the main leaf-on phenophase used for leaf_off and leaf_active.",
   "Colored leaves"       = "Leaves have changed to autumn (non-green) color; NEON may log this for a few early-stressed leaves, so first-coloration is not a reliable whole-plant senescence date.",
   "Falling leaves"       = "Leaves are actively dropping from the plant (autumn leaf fall in progress).",
-  "Open flowers"         = "Open, fresh flowers are present with reproductive parts visible — the flowering-onset phenophase.",
-  "Open pollen cones"    = "Conifer pollen (male) cones are open and shedding pollen — the conifer analog of flowering.",
+  "Open flowers"         = "Open, fresh flowers are present with reproductive parts visible, the flowering-onset phenophase.",
+  "Open pollen cones"    = "Conifer pollen (male) cones are open and shedding pollen, the conifer analog of flowering.",
   "Fruits"               = "Fruits or seed cones are present (intensity for this phase uses COUNT bins, not percent-of-canopy).",
   "Emerging needles"     = "Conifer green-up onset: new needles are emerging from breaking needle buds but not yet elongated.",
   "Breaking needle buds" = "Conifer needle buds have broken and new needle growth is just becoming visible.",

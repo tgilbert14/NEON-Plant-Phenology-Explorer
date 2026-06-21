@@ -38,9 +38,9 @@ server <- function(input, output, session) {
         sprintf(" green-up scored for %d%% of plants %s", pct, where)),
       title = "Thin green-up coverage",
       p(HTML(sprintf("Only <b>%d%%</b> of the tagged plants %s ever record a green-up <em>phenophase</em> (“Breaking leaf buds” / “Initial growth”).", pct, where))),
-      p(HTML("In warm deserts, drought-deciduous, cactus and evergreen plants are scored straight into “Leaves” — so this green-up median rests on a <b>small, non-random subset</b>, not a noisy whole-site number.")),
+      p(HTML("In warm deserts, drought-deciduous, cactus and evergreen plants are scored straight into “Leaves”, so this green-up median rests on a <b>small, non-random subset</b>, not a noisy whole-site number.")),
       p(class = "caveat", bsicons::bs_icon("arrow-right-circle"),
-        HTML(" Read <b>leaf-active</b> (days carrying leaves) instead — it survives where green-up collapses. Switch the metric on the Map and Onset Lab.")),
+        HTML(" Read <b>leaf-active</b> (days carrying leaves) instead. It survives where green-up collapses. Switch the metric on the Map and Onset Lab.")),
       placement = "bottom")
   }
 
@@ -100,7 +100,7 @@ server <- function(input, output, session) {
     thin <- is.finite(gs) & gs < 0.5
     mk_stroke <- ifelse(thin, "#9b8f74", "#fff")            # muted vs crisp ring
     mk_opacity <- ifelse(thin, 0.45, 0.9)                   # thin sites recede
-    covtxt <- ifelse(thin, sprintf("<div class='sp-cov-thin'>&#9888; green-up scored for %d%% of plants here — read leaf-active.</div>", round(gs * 100)), "")
+    covtxt <- ifelse(thin, sprintf("<div class='sp-cov-thin'>&#9888; green-up scored for %d%% of plants here. Read leaf-active.</div>", round(gs * 100)), "")
     pop <- sprintf(paste0(
       "<div class='site-pop'><div class='pm-pop-t'>%s <span class='sp-code'>%s</span></div>",
       "<div class='pm-pop-s'>%s · NEON %s · %s</div><div class='sp-bio'>%s</div>",
@@ -119,7 +119,7 @@ server <- function(input, output, session) {
   })
   observe({ updateSelectizeInput(session, "siteSearch", server=TRUE, selected="",
     choices = c("Jump to a site…" = "", stats::setNames(site_table$site,
-      sprintf("%s — %s (%s)", site_table$site, site_table$name, site_table$state)))) })
+      sprintf("%s · %s (%s)", site_table$site, site_table$name, site_table$state)))) })
   observeEvent(input$siteSearch, if (nzchar(input$siteSearch %||% "")) {
     session$sendCustomMessage("smtLoadStart", list(label = input$siteSearch)); load_site(input$siteSearch) }, ignoreInit=TRUE)
 
@@ -149,7 +149,7 @@ server <- function(input, output, session) {
         hero(n_sp, "species", icon="tree", tone="navy"),
         hero(n_pl, "phenology plots", icon="geo", tone="terra"),
         hero(if (is.finite(gu)) round(gu) else 0, "median green-up (day-of-year)", icon="clock-history", tone="gold",
-             ttl="Typical day-of-year the average plant first breaks leaf — a within-site timing signal pooled across years.")),
+             ttl="Typical day-of-year the average plant first breaks leaf, a within-site timing signal pooled across years.")),
       if (!is.null(cov)) div(class="hero-cov-row", cov))
   })
 
@@ -176,7 +176,7 @@ server <- function(input, output, session) {
       length(yrs), paste0(min(yrs),"–",max(yrs)), format(nrow(obs), big.mark=","), nrow(inds)))
     if (is.finite(gu)) pts <- c(pts, sprintf("The typical plant breaks leaf around <b>%s</b> (day %d)%s.",
       doy_to_month(gu), round(gu), if (is.finite(la)) sprintf(" and carries leaves about <b>%d</b> days a year", round(la)) else ""))
-    pts <- c(pts, "Phenology is recorded on a <b>fixed roster of tagged individuals</b> along transects — it captures <b>timing</b> (when each phenophase happens), not abundance. Open the Phenology Clock to see the year unfold.")
+    pts <- c(pts, "Phenology is recorded on a <b>fixed roster of tagged individuals</b> along transects. It captures <b>timing</b> (when each phenophase happens), not abundance. Open the Phenology Clock to see the year unfold.")
     div(class="insight-list", lapply(pts, function(t) div(class="il-item", bs_icon("dot"), HTML(t))))
   })
 
@@ -209,7 +209,7 @@ server <- function(input, output, session) {
     muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
     mo_theta <- (c(1,32,60,91,121,152,182,213,244,274,305,335) - 1)/365*360
     scope <- sprintf("%s · %% of plants in each phenophase, by week · pooled across years%s",
-      rv$ctx %||% "", if (is.null(sci)) " · all species (mixes evergreen, deciduous & forb leaf calendars — pick a species to read timing)" else paste0(" · ", sci))
+      rv$ctx %||% "", if (is.null(sci)) " · all species (mixes evergreen, deciduous & forb leaf calendars; pick a species to read timing)" else paste0(" · ", sci))
     p %>% plotly::layout(
       font = list(color = ink, family = "Rubik"), paper_bgcolor="rgba(0,0,0,0)",
       polar = list(bgcolor = "rgba(0,0,0,0)",
@@ -246,15 +246,15 @@ server <- function(input, output, session) {
     # 3–7 year line to "per decade". Report days/YEAR with a 95% CI; if the CI
     # spans zero, say so instead of printing a directional verdict.
     if (ny < 5) return(insight_banner("hourglass-split", tone = "navy",
-      HTML(sprintf("Only <b>%d</b> year%s of green-up are recorded here — too short to fit a trend. Phenology shifts need ~5+ years before a slope means anything.", ny, if (ny==1) "" else "s"))))
+      HTML(sprintf("Only <b>%d</b> year%s of green-up are recorded here. Too short to fit a trend. Phenology shifts need ~5+ years before a slope means anything.", ny, if (ny==1) "" else "s"))))
     fit <- stats::lm(onset ~ year, data = site_yr); co <- summary(fit)$coefficients
     slope <- co[2,1]; se <- co[2,2]; tcrit <- stats::qt(0.975, df = ny - 2)
     lo <- slope - tcrit*se; hi <- slope + tcrit*se
     if (lo < 0 && hi > 0) return(insight_banner("dash-circle", tone = "navy",
-      HTML(sprintf("Over <b>%d</b> years, green-up shows <b>no statistically detectable shift</b> (%.1f days/yr, 95%% CI %.1f to %.1f — spans zero). More years are needed to tell drift from noise.", ny, slope, lo, hi))))
+      HTML(sprintf("Over <b>%d</b> years, green-up shows <b>no statistically detectable shift</b> (%.1f days/yr, 95%% CI %.1f to %.1f, spans zero). More years are needed to tell drift from noise.", ny, slope, lo, hi))))
     dir <- if (slope < 0) "earlier" else "later"
     insight_banner(if (slope < 0) "arrow-down-right" else "arrow-up-right", tone = if (slope < 0) "pine" else "gold",
-      HTML(sprintf("Over <b>%d</b> years, site-wide green-up has shifted <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series — a signal, not a verdict; partly reflects which species were monitored each year.</em>",
+      HTML(sprintf("Over <b>%d</b> years, site-wide green-up has shifted <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series, a signal, not a verdict; partly reflects which species were monitored each year.</em>",
         ny, abs(slope), dir, lo, hi)))
   })
 
@@ -312,7 +312,7 @@ server <- function(input, output, session) {
     if (!is.null(rv$ind)) { ir <- d[d$individualID == rv$ind, ]
       if (nrow(ir)==1) p <- p %>% plotly::add_trace(x=ir$greenup, y=ir$leaf_active, type="scatter", mode="markers", name="★ viewing", customdata=ir$tip, showlegend=TRUE,
         marker=list(symbol="diamond", size=18, color="#d98014", line=list(color="#fff", width=1.6)), hovertemplate=paste0("viewing ", ir$scientificName, "<extra></extra>")) }
-    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) — earlier ← → later"), yaxis=list(title="Days carrying leaves per year — briefer ↓ ↑ longer"),
+    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) · earlier ← → later"), yaxis=list(title="Days carrying leaves per year · briefer ↓ ↑ longer"),
       shapes=shp, annotations=ann, hovermode="closest")
   })
   output$indCardSlot <- renderUI({
@@ -320,7 +320,7 @@ server <- function(input, output, session) {
       p("Tap a dot above and choose “Open plant profile”, or pick a plant in the sidebar.")))
     r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; if (!nrow(r)) return(NULL)
     div(class="lab-sel", span(class="ls-emoji","\U0001F50E"),
-      div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" — green-up day %s · carries leaves ~%s d/yr",
+      div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" · green-up day %s · carries leaves ~%s d/yr",
         ifelse(is.finite(r$greenup), r$greenup, "—"), ifelse(is.finite(r$leaf_active), r$leaf_active, "—"))),
         div(class="ls-dom", em(sprintf("%s · plot %s", r$growthForm, short_plot(r$plotID))))),
       actionButton("goProfFromCard", tagList(bs_icon("arrows-fullscreen"), " Open full profile"), class="btn-outline-dark btn-sm"))
@@ -370,12 +370,12 @@ server <- function(input, output, session) {
         gtile(r$leaf_off, "last leaf-week"),
         tile(ifelse(is.finite(r$leaf_active), paste0(r$leaf_active,"d"), "—"), "days carrying leaves"),
         tile(n_yr, "years watched"), tile(n_ph, "phenophases")),
-      div(class="qc-section-h", bs_icon("calendar3-range"), " Phenophase calendar — when each phase happens"),
+      div(class="qc-section-h", bs_icon("calendar3-range"), " Phenophase calendar · when each phase happens"),
       plotlyOutput("phenoSpark", height="240px"),
       div(class="qc-section-h", bs_icon("clipboard-check"), " Quality checks"),
       div(class="qc-flags", flag_ui),
       p(class="qc-cap-note", style="margin-top:8px", bs_icon("info-circle"),
-        HTML(" Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years. <b>Last leaf-week</b> is the last week leaves were recorded — not measured senescence (a plant that flushes twice a year carries no single leaf-off date), so read <b>days carrying leaves</b> for growing extent.")))
+        HTML(" Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years. <b>Last leaf-week</b> is the last week leaves were recorded, not measured senescence (a plant that flushes twice a year carries no single leaf-off date), so read <b>days carrying leaves</b> for growing extent.")))
     div(div(class="plot-profile-wrap", body), div(class="qc-toolbar",
       tags$button(class="smt-snap-btn", type="button", onclick="smtSaveQcCard()", bsicons::bs_icon("download"), " Save plant card (PNG)"),
       downloadButton("indCsv", "Download history (CSV)", class="smt-clear-btn")))
@@ -409,7 +409,7 @@ server <- function(input, output, session) {
       w(clk, "phenology_clock_weekly.csv"); w(as.data.frame(rv$trend), "onset_trend_by_species_year.csv")
       w(phe_codebook_csv(site = rv$site, app_version = APP_VERSION), "codebook.csv")
       writeLines(c(
-        sprintf("NEON Plant Phenology Explorer — analysis-ready export for site %s", rv$site %||% ""),
+        sprintf("NEON Plant Phenology Explorer · analysis-ready export for site %s", rv$site %||% ""),
         sprintf("Generated %s · Desert Data Labs · app %s", Sys.Date(), APP_VERSION),
         "Data product: NEON DP1.10055.001 (data.neonscience.org). Not affiliated with NEON/Battelle/NSF.", "",
         "FILES:",
@@ -421,7 +421,7 @@ server <- function(input, output, session) {
         "  codebook.csv                     every column's type/units/definition + _phenophase_decode + _provenance", "",
         "Unit of analysis: tagged plant individual (repeated measures); plotID = spatial block.",
         "TIMING, not abundance. Onset is interval-censored. The clock pools years by design.",
-        "leaf_off is the last leaf-week, NOT senescence (meaningless for multi-flush plants) — read leaf_active.",
+        "leaf_off is the last leaf-week, NOT senescence (meaningless for multi-flush plants). Read leaf_active.",
         "See codebook.csv for the full contract."),
         file.path(td, "README.txt"))
       fs <- list.files(td)
@@ -448,7 +448,7 @@ server <- function(input, output, session) {
     # per-plot green-up coverage — say it on the marker where the number is thin,
     # so a 1/5-of-plants plot can't read like a whole-plot number.
     covtxt <- ifelse(is.finite(ps$gu_share) & ps$gu_share < GU_COVERAGE_FLOOR,
-      sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants — read leaf-active</span>", round(ps$gu_share * 100)), "")
+      sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants. Read leaf-active</span>", round(ps$gu_share * 100)), "")
     latxt <- ifelse(is.finite(ps$leaf_active), paste0(" · carries leaves ~", ps$leaf_active, " d/yr"), "")
     lab <- sprintf("<b>%s</b><br>%d plants · green-up %s%s%s", short_plot(ps$plotID), ps$n_ind, gtxt, latxt, covtxt)
     leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "CartoDB.Positron") %>%
@@ -473,7 +473,7 @@ server <- function(input, output, session) {
     cols <- greenup_pal(d$median_greenup)(d$median_greenup)
     d$n_species <- if ("n_species" %in% names(d)) d$n_species else NA_integer_
     p <- plotly::plot_ly(d, x=~lat, y=~median_greenup, type="scatter", mode="markers",
-      text=~paste0(site, " — ", name), customdata=~n_species,
+      text=~paste0(site, " · ", name), customdata=~n_species,
       marker=list(size=11, color=cols, line=list(color="#fff", width=0.8)),
       hovertemplate="<b>%{text}</b><br>lat %{x:.1f}°N · green-up day %{y} (%{customdata} species)<extra></extra>")
     fit <- stats::lm(median_greenup ~ lat, data=d)
@@ -496,11 +496,11 @@ server <- function(input, output, session) {
     if (!is.null(ws)) {
       sp_short <- sub("^([A-Z][a-z]+ [a-z\\-]+).*$", "\\1", ws$species)
       return(insight_banner(if (ws$slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
-        "Holding the species constant, <b><em>%s</em></b> greens up <b>%.1f days %s per °N</b> across <b>%d</b> sites (95%% CI %.1f to %.1f, R²=%.2f) — the spatial echo of Hopkins' bioclimatic law, with the species-mix confound removed. <em>The across-network slope (all species pooled, ~%.0f d/°N) is a coarser echo of the same temperature signal.</em>",
+        "Holding the species constant, <b><em>%s</em></b> greens up <b>%.1f days %s per °N</b> across <b>%d</b> sites (95%% CI %.1f to %.1f, R²=%.2f), the spatial echo of Hopkins' bioclimatic law, with the species-mix confound removed. <em>The across-network slope (all species pooled, ~%.0f d/°N) is a coarser echo of the same temperature signal.</em>",
         sp_short, abs(ws$slope), if (ws$slope >= 0) "later" else "earlier", ws$n_sites, ws$lo, ws$hi, ws$r2, abs(net_slope)))))
     }
     insight_banner(if (net_slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
-      "Across <b>%d</b> sites, green-up shifts roughly <b>%.0f days %s per degree of latitude north</b> — the spatial echo of Hopkins' bioclimatic law. <em>Each point is a site's median across its species (different species mixes, n as few as 4), so read it as a coarse across-network gradient, not a controlled comparison.</em>",
+      "Across <b>%d</b> sites, green-up shifts roughly <b>%.0f days %s per degree of latitude north</b>, the spatial echo of Hopkins' bioclimatic law. <em>Each point is a site's median across its species (different species mixes, n as few as 4), so read it as a coarse across-network gradient, not a controlled comparison.</em>",
       nrow(d), abs(net_slope), if (net_slope >= 0) "later" else "earlier")))
   })
   observe({ if (is.null(NATIONAL_ONSETS) || !nrow(NATIONAL_ONSETS)) {
@@ -527,10 +527,10 @@ server <- function(input, output, session) {
   output$aboutPanel <- renderUI({
     div(class="about-wrap",
       div(class="about-card", h4("\U0001F33F What this is"),
-        p("An (unofficial) explorer for NEON's ", tags$b("Plant phenology observations"), " (", tags$code("DP1.10055.001"), "). A fixed roster of tagged plants along transects is checked ", tags$b("up to twice a week"), " through the growing season; for each, observers record which ", tags$b("phenophases"), " are active — breaking leaf buds, leaves, open flowers, colored leaves, falling leaves.")),
+        p("An (unofficial) explorer for NEON's ", tags$b("Plant phenology observations"), " (", tags$code("DP1.10055.001"), "). A fixed roster of tagged plants along transects is checked ", tags$b("up to twice a week"), " through the growing season; for each, observers record which ", tags$b("phenophases"), " are active: breaking leaf buds, leaves, open flowers, colored leaves, falling leaves.")),
       div(class="about-card", h4(bs_icon("clock-history"), " Timing, not abundance"),
-        p("Phenology is a ", tags$b("timing signal"), ": when a plant wakes, blooms, and senesces. Because the roster is fixed, it is not a measure of how common a species is — it tracks the ", tags$b("calendar of the canopy"), ", and how that calendar shifts year to year."),
-        p("Onset is ", tags$b("interval-censored"), ": the true first-leaf day lies between the last 'no' and first 'yes' visit, so we use the midpoint — honest about the twice-weekly resolution.")),
+        p("Phenology is a ", tags$b("timing signal"), ": when a plant wakes, blooms, and senesces. Because the roster is fixed, it is not a measure of how common a species is. It tracks the ", tags$b("calendar of the canopy"), ", and how that calendar shifts year to year."),
+        p("Onset is ", tags$b("interval-censored"), ": the true first-leaf day lies between the last 'no' and first 'yes' visit, so we use the midpoint, honest about the twice-weekly resolution.")),
       div(class="about-card", h4(bs_icon("graph-down-arrow"), " Why it matters"),
         p("Shifts in green-up and bloom timing are among the clearest biological fingerprints of a changing climate, and drive mismatches with pollinators and migrating birds."),
         p(bs_icon("envelope"), " ", tags$a(href="mailto:desertdatalabs@gmail.com","desertdatalabs@gmail.com"), " · ",
@@ -539,9 +539,9 @@ server <- function(input, output, session) {
   observeEvent(input$help, showModal(modalDialog(easyClose=TRUE, title=tagList(bs_icon("question-circle"), " How it works"),
     tags$ul(
       tags$li(HTML("Pick a <b>site</b> (or open the Harvard Forest demo).")),
-      tags$li(HTML("<b>Phenology Clock</b> — the typical year, week by week; switch species to compare.")),
-      tags$li(HTML("<b>Onset Lab</b> — every plant by green-up onset × season length; <b>tap one</b> to pin its card, then “Open plant profile”.")),
-      tags$li(HTML("<b>Plant Profile</b> — a plant's phenophase calendar, onset dates, quality checks, and downloads.")),
-      tags$li(HTML("Phenology is a <b>timing</b> signal on a fixed roster — not a measure of abundance."))),
+      tags$li(HTML("<b>Phenology Clock</b> · the typical year, week by week; switch species to compare.")),
+      tags$li(HTML("<b>Onset Lab</b> · every plant by green-up onset × season length; <b>tap one</b> to pin its card, then “Open plant profile”.")),
+      tags$li(HTML("<b>Plant Profile</b> · a plant's phenophase calendar, onset dates, quality checks, and downloads.")),
+      tags$li(HTML("Phenology is a <b>timing</b> signal on a fixed roster, not a measure of abundance."))),
     footer=modalButton("Got it"))))
 }

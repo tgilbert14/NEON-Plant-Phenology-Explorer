@@ -53,7 +53,7 @@ text(68, 394, "Explorer",             col = "white", cex = 3.4, font = 2, adj = 
 points(322, 396, pch = 21, bg = grDevices::adjustcolor(ramp[1], .95), col = NA, cex = 2.4)
 
 # subtitle
-text(70, 320, "When the leaves break, the flowers open, and the canopy turns — every",
+text(70, 320, "When the leaves break, the flowers open, and the canopy turns. Every",
      col = grDevices::adjustcolor("white", .92), cex = 1.12, adj = 0)
 text(70, 290, "tagged plant NEON watches, week by week, across the country.",
      col = grDevices::adjustcolor("white", .92), cex = 1.12, adj = 0)

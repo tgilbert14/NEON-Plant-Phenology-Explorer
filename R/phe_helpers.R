@@ -208,7 +208,7 @@ pheno_qc_flags <- function(hist, growth_form = NULL) {
     fr <- tapply(yy$dayOfYear, yy$phenophaseName, min)
     rk <- VEG_SEQ[names(fr)]; ok <- is.finite(rk) & is.finite(fr); fr <- fr[ok]; rk <- rk[ok]
     if (length(fr) >= 2) { o <- order(fr)
-      if (any(diff(rk[o]) < 0)) { add("high", sprintf("In %s, leaf phenophases were recorded out of sequence (a later leaf stage before an earlier one — e.g. falling/colored leaves before leaf-out). Worth checking the records for that year.", y)); break } }
+      if (any(diff(rk[o]) < 0)) { add("high", sprintf("In %s, leaf phenophases were recorded out of sequence (a later leaf stage before an earlier one, e.g. falling/colored leaves before leaf-out). Worth checking the records for that year.", y)); break } }
   }
 
   # (2) green-up year-outlier: a year whose first leaf-out is >45 days from this
@@ -220,7 +220,7 @@ pheno_qc_flags <- function(hist, growth_form = NULL) {
     per_yr <- tapply(gy$dayOfYear, gy$year, min); per_yr <- per_yr[is.finite(per_yr)]
     if (length(per_yr) >= 3) { med <- stats::median(per_yr); off <- per_yr - med
       i <- which.max(abs(off))
-      if (length(i) == 1 && is.finite(off[i]) && abs(off[i]) > 45) add("warn", sprintf("In %s this plant broke leaf around day %d — %d days %s than its usual day-%d. Could be a real shift, or a date to verify.",
+      if (length(i) == 1 && is.finite(off[i]) && abs(off[i]) > 45) add("warn", sprintf("In %s this plant broke leaf around day %d, %d days %s than its usual day-%d. Could be a real shift, or a date to verify.",
         names(per_yr)[i], round(per_yr[i]), round(abs(off[i])), if (off[i] < 0) "earlier" else "later", round(med))) }
   }
 
@@ -237,7 +237,7 @@ pheno_qc_flags <- function(hist, growth_form = NULL) {
   }
 
   # (4) sparse: only one year of monitoring
-  if (dplyr::n_distinct(hist$year) == 1L) add("info", "Watched in a single year so far — onset dates can't be compared across years yet.")
+  if (dplyr::n_distinct(hist$year) == 1L) add("info", "Watched in a single year so far. Onset dates can't be compared across years yet.")
   flags
 }
 
