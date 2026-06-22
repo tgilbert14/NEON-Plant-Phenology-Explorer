@@ -21,7 +21,7 @@ server <- function(input, output, session) {
       annotations=list(list(text=paste0(icon,"<br>",msg), showarrow=FALSE, font=list(color=if(is_dark())"#9fb0c4" else "#6b7a85", size=15), align="center"))) %>%
     plotly::config(displayModeBar = FALSE)
 
-  rv <- reactiveValues(obs=NULL, inds=NULL, ind_summary=NULL, trend=NULL, label=NULL, site=NULL, ind=NULL, ctx=NULL, is_demo=FALSE)
+  rv <- reactiveValues(obs=NULL, inds=NULL, ind_summary=NULL, trend=NULL, label=NULL, site=NULL, ind=NULL, ctx=NULL, is_demo=FALSE, pendingSite=NULL)
 
   # ---- green-up coverage badge (the desert biome-conditional honesty) ------
   # When < ~half of a site's plants ever resolve a green-up onset, the
@@ -45,7 +45,16 @@ server <- function(input, output, session) {
   }
 
   observe({ ch <- phe_state_choices(); updateSelectInput(session, "stateSel", choices = ch, selected = if ("MA" %in% ch) "MA" else NULL) })
-  observeEvent(input$stateSel, updateSelectInput(session, "site", choices = phe_sites_in_state(input$stateSel)), ignoreInit = FALSE)
+  # When the state changes, refill the site dropdown. If a map/browse pick is
+  # pending, keep THAT site selected (so the sidebar mirrors the dot the user
+  # tapped); otherwise fall back to the first site in the state.
+  observeEvent(input$stateSel, {
+    sites <- phe_sites_in_state(input$stateSel)
+    sel <- if (!is.null(rv$pendingSite) && rv$pendingSite %in% sites) rv$pendingSite
+           else if (length(sites)) sites[[1]] else NULL
+    rv$pendingSite <- NULL
+    updateSelectInput(session, "site", choices = sites, selected = sel)
+  }, ignoreInit = FALSE)
   output$siteBio <- renderUI({ req(input$site); b <- site_bio(input$site); if (is.null(b)) return(NULL); div(class="site-bio", bs_icon("info-circle-fill"), span(b)) })
   shinyjs::hide("mainTabsWrap")
 
@@ -79,7 +88,26 @@ server <- function(input, output, session) {
   load_site <- function(site){ if (is.null(site)||site=="") { session$sendCustomMessage("loadDone", list()); return() }
     b <- load_site_bundle(site); if (is.null(b)) { session$sendCustomMessage("loadDone", list()); showNotification("That site isn't bundled in this demo.", type="error"); return() }
     row <- site_table[site_table$site==site,]; ingest(b, sprintf("%s · %s", site, if (nrow(row)) row$name else site)) }
-  observeEvent(input$loadBtn, load_site(input$site)); observeEvent(input$pickSite, load_site(input$pickSite))
+  # The map popup, the browse list, and the site-search all pick a site OFF the
+  # sidebar. Route them through here so the sidebar's state + site dropdowns end
+  # up reading the site that was picked (not the previous one) before the load.
+  load_site_full <- function(code){ if (is.null(code) || code=="") return()
+    m <- neon_sites[neon_sites$site == code, ]
+    if (nrow(m)) {
+      rv$pendingSite <- code
+      if (identical(input$stateSel, m$state[1])) {
+        # same state already selected — the stateSel cascade won't re-fire, so set
+        # the site dropdown directly and clear the pending flag ourselves.
+        rv$pendingSite <- NULL
+        updateSelectInput(session, "site", selected = code)
+      } else {
+        # different state — change it; the stateSel observer refills the site
+        # dropdown honouring rv$pendingSite, landing on this site.
+        updateSelectInput(session, "stateSel", selected = m$state[1])
+      }
+    }
+    load_site(code) }
+  observeEvent(input$loadBtn, load_site(input$site)); observeEvent(input$pickSite, { removeModal(); load_site_full(input$pickSite) })
   observeEvent(input$demoBtn, ingest(load_demo(), DEMO_META$label, is_demo=TRUE)); observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo=TRUE))
 
   # ---- national site-picker map (the splash landing) --------------------
@@ -105,9 +133,12 @@ server <- function(input, output, session) {
       "<div class='site-pop'><div class='pm-pop-t'>%s <span class='sp-code'>%s</span></div>",
       "<div class='pm-pop-s'>%s · NEON %s · %s</div><div class='sp-bio'>%s</div>",
       "<div class='sp-years'>%s plants · %s species%s</div>%s",
-      "<div class='sp-actions'><button class='sp-btn sp-go' onclick=\"smtLoadStart('%s');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;\">Explore this site &rarr;</button></div></div>"),
+      "<div class='sp-actions'>",
+      "<button class='sp-btn sp-go' onclick=\"smtLoadStart('%s');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;\">Explore this site &rarr;</button>",
+      "<button class='sp-btn sp-info' onclick=\"Shiny.setInputValue('siteInfo','%s',{priority:'event'});return false;\">About this site</button>",
+      "</div></div>"),
       st$name, st$site, ifelse(is.na(state_names[st$state]), st$state, state_names[st$state]), st$domain, elev, st$bio,
-      st$n_individuals, st$n_species, gtxt, covtxt, gsub("'", "", st$name), st$site)
+      st$n_individuals, st$n_species, gtxt, covtxt, gsub("'", "", st$name), st$site, st$site)
     lab <- sprintf("<b>%s</b> · %s<br>%s plants%s · tap for details", st$site, st$name, st$n_individuals,
       ifelse(thin, " · thin green-up coverage", ""))
     leaflet::leaflet(st) %>% leaflet::addProviderTiles("CartoDB.Positron") %>%
@@ -121,7 +152,50 @@ server <- function(input, output, session) {
     choices = c("Jump to a site…" = "", stats::setNames(site_table$site,
       sprintf("%s · %s (%s)", site_table$site, site_table$name, site_table$state)))) })
   observeEvent(input$siteSearch, if (nzchar(input$siteSearch %||% "")) {
-    session$sendCustomMessage("smtLoadStart", list(label = input$siteSearch)); load_site(input$siteSearch) }, ignoreInit=TRUE)
+    session$sendCustomMessage("smtLoadStart", list(label = input$siteSearch)); load_site_full(input$siteSearch) }, ignoreInit=TRUE)
+
+  # ---- "About this site" -> instant info card (no bundle load) -------------
+  # The popup's About button sets input$siteInfo. Show a small details card
+  # (where it is, what's been recorded) with an Explore footer that hands off to
+  # the SAME load path the popup's Explore button uses.
+  site_info_modal <- function(code) {
+    m   <- neon_sites[neon_sites$site == code, ]
+    row <- site_table[site_table$site == code, ]
+    if (!nrow(m))
+      return(modalDialog(title = "Site info", easyClose = TRUE, footer = modalButton("Close"),
+                         p("No details are available for this site.")))
+    dash <- function(x) if (length(x) == 0 || is.na(x) || !nzchar(as.character(x))) "—" else as.character(x)
+    coords <- if (!is.na(m$lat[1]) && !is.na(m$lng[1])) sprintf("%.3f, %.3f", m$lat[1], m$lng[1]) else "—"
+    n_pl <- if (nrow(row)) suppressWarnings(as.integer(row$n_individuals[1])) else NA_integer_
+    n_sp <- if (nrow(row)) suppressWarnings(as.integer(row$n_species[1])) else NA_integer_
+    gv   <- if (nrow(row) && "median_greenup" %in% names(row)) suppressWarnings(as.numeric(row$median_greenup[1])) else NA_real_
+    stat <- function(v, lab) div(class = "si-stat",
+      div(class = "si-stat-n", if (length(v) == 0 || is.na(v)) "—" else format(v, big.mark = ",")),
+      div(class = "si-stat-l", lab))
+    modalDialog(
+      title = HTML(sprintf("\U0001F33F %s <span class='si-code'>(%s)</span>", dash(m$name[1]), code)),
+      easyClose = TRUE, size = "m",
+      footer = tagList(
+        modalButton("Close"),
+        tags$button(type = "button", class = "btn btn-primary",
+          onclick = sprintf("smtLoadStart('%s');Shiny.setInputValue('pickSite','%s',{priority:'event'});",
+                            gsub("'", "", dash(m$name[1])), code),
+          HTML("Explore this site &rarr;"))),
+      div(class = "site-info",
+        div(class = "si-sec",
+          div(class = "si-h", "Where"),
+          div(class = "si-row", dash(m$state[1]), HTML(sprintf(" · NEON %s", dash(m$domain[1])))),
+          if (!is.na(m$bio[1])) div(class = "si-row si-bio", m$bio[1]),
+          div(class = "si-coords", "\U0001F4CD ", coords,
+              if (!is.na(m$elevation_m[1])) sprintf(" · %s m", m$elevation_m[1]) else NULL)),
+        div(class = "si-sec",
+          div(class = "si-h", "What's been recorded"),
+          div(class = "si-stats",
+            stat(n_pl, "tagged plants"),
+            stat(n_sp, "species"),
+            stat(if (is.finite(gv)) round(gv) else NA, "median green-up (day-of-year)")))))
+  }
+  observeEvent(input$siteInfo, if (nzchar(input$siteInfo %||% "")) showModal(site_info_modal(input$siteInfo)))
 
   pick_individual <- function(id, navigate=FALSE){ if (is.null(id)||is.na(id)||id=="") return()
     if (is.null(rv$ind_summary) || !(id %in% rv$ind_summary$individualID)) return()
