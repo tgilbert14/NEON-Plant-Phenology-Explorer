@@ -173,7 +173,7 @@
     .frung + .frung { margin-top:10px }
     .frung::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.0;
       background:linear-gradient(100deg, transparent, rgba(var(--lrgb),.16), transparent); }
-    .frung.pip-on::before { animation: pip 2.4s ease-in-out; }     /* energy pulse sweeps each rung in turn */
+    .frung.pip-on::before { animation: pip 3.2s ease-in-out; }     /* energy pulse sweeps each rung in turn (slowed) */
     @keyframes pip { 0%{opacity:0; transform:translateX(-30%)} 40%{opacity:1} 100%{opacity:0; transform:translateX(30%)} }
     .frung .fmark { width:34px; height:34px; flex:0 0 auto; border-radius:9px; position:relative;
       background:rgba(var(--lrgb),.16); border:1px solid rgba(var(--lrgb),.5) }
@@ -181,10 +181,14 @@
       background:var(--lc); box-shadow:0 0 12px var(--lc) }
     .frung .ftxt b { font-weight:800; font-size:1rem } .frung .ftxt span { color:var(--dim); font-size:.86rem }
     .frung.r1 { --lc:var(--r1c); --lrgb:155,210,74 }
-    .frung.r2 { --lc:var(--r2c); --lrgb:106,191,90; margin-left:14px }
-    .frung.r3 { --lc:var(--r3c); --lrgb:230,169,46; margin-left:28px }
-    .frung.r4 { --lc:var(--r4c); --lrgb:210,105,60; margin-left:42px }
-    .farrow { color:rgba(255,255,255,.32); text-align:center; margin:2px 0 2px 17px; font-size:1.05rem }
+    .frung.r2 { --lc:var(--r2c); --lrgb:106,191,90 }
+    .frung.r3 { --lc:var(--r3c); --lrgb:230,169,46 }
+    .frung.r4 { --lc:var(--r4c); --lrgb:210,105,60 }
+    .frung.r5 { --lc:var(--r1c); --lrgb:155,210,74 }
+    .frung.r6 { --lc:var(--r2c); --lrgb:106,191,90 }
+    .frung.r7 { --lc:var(--r3c); --lrgb:230,169,46 }
+    .cascade-band .hl-head { margin-top:30px }
+    .lead a { color:var(--bright); text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:1px }
 
     /* ---------- stats + about ---------- */
     .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:26px 0 0; position:relative; z-index:2 }
@@ -311,13 +315,7 @@
 
       <div class="eyebrow">The NEON Explorer Suite · Plant timing</div>
       <h1>NEON Plant Phenology</h1>
-      <p class="lead">See when plants wake up in spring and wind down in fall, across the United States.
-        NEON (the National Ecological Observatory Network) is a set of research sites funded by the
-        National Science Foundation that measure plants, animals, water, and climate the same way
-        everywhere, year after year. At each site, crews track tagged plants and note the stages of their
-        year (these stages are called <b>phenophases</b>): when <b>leaves come out</b>, when <b>flowers
-        and fruit</b> appear, and when <b>leaves drop</b>. This tool lets you watch that timing.
-        Pick a site to see its tagged plants and when each stage of their year happens.</p>
+      <p class="lead">A Shiny web app for exploring the <a href="https://www.neonscience.org/" target="_blank" rel="noopener">National Ecological Observatory Network</a>'s plant phenology observations. It follows a fixed roster of tagged plants checked twice a week, and turns 46 field sites of leaf-out, flowering, and leaf-drop dates into a typical-year clock, per-plant timing cards, and a map of how spring arrives later as you head north. It reads timing (when each stage happens), not how many plants there are.</p>
 
       <div class="cta-row">
         <a id="launch" class="launch" href="https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/">
@@ -353,19 +351,19 @@
   <!-- how the notebook reads: observe -> yes-share -> timing -> compare -->
   <section class="cascade-band">
     <div class="wrap">
-      <span class="kick">What this shows you</span>
-      <h2>From one plant check to the whole country.</h2>
-      <p>This is about timing, not how many plants there are. Each step below builds on the one before it,
-        starting with a single visit to a tagged plant and ending with a comparison across the whole
-        network. The numbers behind each step are shown as you go.</p>
+      <span class="kick">What it does</span>
+      <p>The app opens to a national map of NEON sites. Tap one to dive into its tagged plants, and it loads instantly from a per-site data bundle that ships with the app (no network round-trip). From there it shows what is tagged at the site by growth form, draws the typical year as overlapping seasonal petals (each phenophase's share of plants saying "yes" by week), places every plant by when it greens up and how long it carries leaves, and asks whether green-up is shifting year to year.</p>
+      <p>It is built for two audiences: anyone curious about how NEON tracks plant timing, and new field technicians getting to know the plants and phenophases at their site.</p>
+
+      <h2 class="hl-head">Highlights</h2>
       <div class="flow" data-flow>
-        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Check a plant</b> &middot; <span>has it leafed out, flowered, or fruited yet? a yes or no, each visit</span></span></div>
-        <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Share saying yes</b> &middot; <span>what percent of tagged plants are in each stage, week by week</span></span></div>
-        <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Timing in the year</b> &middot; <span>when each stage starts and peaks at the site</span></span></div>
-        <div class="farrow" aria-hidden="true">&darr;</div>
-        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Compare</b> &middot; <span>across years and sites, including how spring arrives later as you go north</span></span></div>
+        <div class="frung r1"><span class="fmark"></span><span class="ftxt"><b>Select-a-site map</b> &middot; <span>A national map of all 46 bundled sites, with phenology plots sized by plants tagged and coloured by median green-up (honest grey where there is none). The demo opens Harvard Forest (red maple, red oak).</span></span></div>
+        <div class="frung r2"><span class="fmark"></span><span class="ftxt"><b>Overview: what is tagged here</b> &middot; <span>The site's tagged plants broken down by growth form, the story so far, and a one-click analysis-ready export (a zip of tidy CSVs plus a codebook).</span></span></div>
+        <div class="frung r3"><span class="fmark"></span><span class="ftxt"><b>Phenology Clock</b> &middot; <span>The typical year as overlapping seasonal petals: each phenophase's share of plants saying "yes" by week, pooled across years. Defaults to the dominant species; switch to compare.</span></span></div>
+        <div class="frung r4"><span class="fmark"></span><span class="ftxt"><b>Is green-up shifting?</b> &middot; <span>Median leaf-out day per year (at least three plants per species-year), with a confidence-honest verdict that says "no clear shift" when the result could go either way.</span></span></div>
+        <div class="frung r5"><span class="fmark"></span><span class="ftxt"><b>Onset Lab</b> &middot; <span>Every plant as a dot: green-up onset (the median day it first breaks leaf) against days carrying leaves, counted week by week. Tap to pin a card; faint plants do not yet have both recorded.</span></span></div>
+        <div class="frung r6"><span class="fmark"></span><span class="ftxt"><b>Plant profile cards</b> &middot; <span>A downloadable card (PNG plus CSV) for any plant: green-up, flowering, last-leaf week, days carrying leaves, the phenophase calendar across years, and low-noise quality checks.</span></span></div>
+        <div class="frung r7"><span class="fmark"></span><span class="ftxt"><b>Across sites</b> &middot; <span>The national gradient the multi-site data unlocks: median green-up against latitude (the spatial echo of Hopkins' bioclimatic law), and the same species followed across all of its sites.</span></span></div>
       </div>
 
       <div class="stats">
@@ -484,7 +482,7 @@
         // force reflow so the animation restarts each cycle
         void el.offsetWidth; el.classList.add("pip-on");
         i++;
-      }, 900);
+      }, 1800);
     })();
   </script>
   <script>
