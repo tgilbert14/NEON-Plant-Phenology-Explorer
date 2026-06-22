@@ -94,6 +94,10 @@ site_index$elevation_m <- neon_sites$elevation_m[match(site_index$site, neon_sit
 # bundle reload. Backfill NA if an older summary in `summ` predates the column, so
 # the column always exists and the app read never errors.
 if (!("gu_share" %in% names(site_index))) site_index$gu_share <- NA_real_
+# median_visit_interval = effective visit cadence (days) per site (site_phe_summary
+# emits it). Carried for the cadence badge + the coarse-cadence grey/footnote on the
+# cross-site gradient. Backfill NA if an older summary predates the column.
+if (!("median_visit_interval" %in% names(site_index))) site_index$median_visit_interval <- NA_real_
 saveRDS(site_index, "data/site_index.rds", compress="xz")
 
 # ---- national_onsets: one row per (site × species) for the cross-site tab --

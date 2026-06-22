@@ -11,9 +11,14 @@
 # deploy lean (no wasm build; live-pull-on-cold-worker is a hang risk). The
 # deployed app is bundle-only; the optional live-fetch still works in local dev.
 #
-# Run with an R that has the app's runtime packages (R 4.3.1 here has them all):
-#   "C:\Program Files\R\R-4.3.1\bin\Rscript.exe" scripts/write_manifest.R
+# Run with an R that has the app's runtime packages (R 4.5.2 here has them all):
+#   "C:\Program Files\R\R-4.5.2\bin\Rscript.exe" scripts/write_manifest.R
 # Re-run whenever runtime dependencies change, then commit manifest.json.
+#
+# HARD GATE: after writing, this parses manifest.json and stop()s with a non-zero
+# error if neonUtilities / arrow / data.table leaked in as a package key. A leaked
+# manifest pins a heavy (wasm-hostile) dependency the deployed bundle never needs,
+# so it must NEVER commit silently — the gate fails the build instead.
 # ===========================================================================
 suppressMessages(library(rsconnect))
 
@@ -31,10 +36,34 @@ cat(sprintf("Writing manifest for %d files (%d site bundles)...\n",
             length(appFiles), length(list.files("data/sites", pattern = "\\.rds$"))))
 rsconnect::writeManifest(appDir = ".", appFiles = appFiles)
 
-# quick self-check
-m <- readLines("manifest.json", warn = FALSE)
-pkgs <- gsub('.*"([^"]+)": \\{', "\\1",
-             grep('^\\s*"[A-Za-z0-9.]+": \\{\\s*$', m, value = TRUE))
-cat(sprintf("manifest.json written: %d packages.\n", sum(grepl('"Source"', m))))
-if (any(grepl("neonUtilities", m))) cat("WARNING: neonUtilities leaked into the manifest!\n") else
-  cat("OK: neonUtilities is NOT in the manifest (lean bundle-only build).\n")
+# ---- prune the heavy, wasm-hostile keys, then HARD GATE ----------------------
+# data.table is pulled in ONLY as a transitive Import of plotly; the read-only
+# deployed app never calls it directly, and Connect re-resolves it when it
+# restores plotly, so dropping the explicit pin keeps the manifest lean without
+# breaking the restore. neonUtilities / arrow are never legitimate here (the live
+# fetch is local-dev only, referenced by a computed name) so they are pruned too.
+# After pruning, the gate stop()s if any of the three survived as a package key.
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
+BANNED <- c("neonUtilities", "arrow", "data.table")
+
+mj   <- jsonlite::fromJSON("manifest.json", simplifyVector = FALSE)
+pkgs <- names(mj$packages %||% list())
+pruned <- intersect(BANNED, pkgs)
+if (length(pruned)) {
+  mj$packages[pruned] <- NULL
+  jsonlite::write_json(mj, "manifest.json", auto_unbox = TRUE, pretty = TRUE, digits = NA)
+  cat(sprintf("Pruned transitive/banned key(s) from manifest: %s\n", paste(pruned, collapse = ", ")))
+}
+
+# re-read and gate
+mj2  <- jsonlite::fromJSON("manifest.json", simplifyVector = FALSE)
+pkgs <- names(mj2$packages %||% list())
+cat(sprintf("manifest.json written: %d packages.\n", length(pkgs)))
+leaked <- intersect(BANNED, pkgs)
+if (length(leaked)) {
+  stop(sprintf(
+    "MANIFEST GATE FAILED: banned package(s) still present in manifest.json: %s.\nThese must never commit (heavy / wasm-hostile / live-fetch-only). Fix and re-run; do NOT commit this manifest.",
+    paste(leaked, collapse = ", ")), call. = FALSE)
+}
+cat(sprintf("OK: none of {%s} are in the manifest (lean bundle-only build).\n",
+            paste(BANNED, collapse = ", ")))

@@ -75,19 +75,34 @@ jobs:
           NEON_TOKEN: ${{ secrets.NEON_TOKEN }}
         run: Rscript scripts/fetch_all_phe.R
 
-      - name: Rebuild per-site bundles + indexes + national table
+      - name: Rebuild per-site bundles + indexes + national table (full)
         if: ${{ github.event.inputs.skip_download != 'true' }}
         run: Rscript scripts/bundle_phe_data.R
 
-      - name: Commit refreshed bundles to master (auto-redeploys Connect Cloud)
+      # skip_download fast path: NO NEON pull. Rebuild ONLY the derived indexes
+      # (site_index + national_onsets) from the committed data/sites/*.rds bundles.
+      # This is the deploy-safe pipeline self-test — if it pushes nothing, the
+      # committed bundles are already current; it never dies on a missing raw.
+      - name: Rebuild derived indexes from committed bundles (skip_download fast path)
+        if: ${{ github.event.inputs.skip_download == 'true' }}
+        run: Rscript scripts/rebuild_indexes.R
+
+      - name: Commit refreshed data to master (auto-redeploys Connect Cloud)
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # a prior bot run (or another session) may have pushed; rebase local
+          # onto the remote first or the push below is rejected.
+          git fetch origin master
+          git pull --rebase --autostash origin master || true
+          # commit ONLY the data artifacts by EXPLICIT path — never a blanket add
+          # that could sweep in a gitignored sibling or another job's half-written
+          # file. Skip cleanly if nothing changed.
           git add data/sites data/site_index.rds data/national_onsets.rds data-sample/demo.rds
-          if git diff --staged --quiet; then
-            echo "No data changes this run."
+          if git diff --cached --quiet; then
+            echo "No data changes this run — nothing to commit."
           else
-            git commit -m "data: monthly NEON phenology refresh (DP1.10055.001)"
-            git push
-            echo "Pushed refreshed bundles — Connect Cloud will auto-redeploy."
+            git commit -m "data: monthly NEON phenology refresh (DP1.10055.001) [bot]"
+            git push origin HEAD:master
+            echo "Pushed refreshed data — Connect Cloud will auto-redeploy."
           fi

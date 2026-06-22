@@ -39,7 +39,7 @@ APP_VERSION <- "2.0 (Field Notebook)"
 BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
 site_table <- if (length(BUNDLED)) {
   m <- neon_sites[match(BUNDLED, neon_sites$site), ]
-  want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots","gu_share"), names(SITE_INDEX))
+  want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots","gu_share","median_visit_interval"), names(SITE_INDEX))
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), want, drop = FALSE])
 } else neon_sites[0, ]
 
@@ -94,6 +94,30 @@ doy_to_month <- function(d) format(as.Date(d - 1, origin = "2021-01-01"), "%b %d
 # leafy sprout in the Field Notebook canopy-green + senescence-amber. Used as
 # the loading spinner, the splash guide, and the celebration hop. Parts are
 # classed so the CSS can wiggle leaves / blink eyes.
+# --- the suite registry (in-app "Explore the NEON series" block) ----------
+# Mirrors the constellation in docs/index.html. Each sibling links to its live
+# github.io landing (which fronts the Connect Cloud app). Kept here so the About
+# modal + sidebar footer cross-promote the WHOLE suite (suite-cohesion standard).
+SIBLINGS <- list(
+  list(name = "Driver Cascade",   icon = "diagram-3-fill",   url = "https://tgilbert14.github.io/NEON-Driver-Cascade/"),
+  list(name = "Small Mammals",    icon = "bug-fill",          url = "https://tgilbert14.github.io/NEON-Small-Mammal-Tracker-App/"),
+  list(name = "Breeding Birds",   icon = "feather",           url = "https://tgilbert14.github.io/NEON-Breeding-Birds/"),
+  list(name = "Ground Beetles",   icon = "bug",               url = "https://tgilbert14.github.io/NEON-Ground-Beetle-Tracker/"),
+  list(name = "Plant Diversity",  icon = "flower2",           url = "https://tgilbert14.github.io/NEON-Plant-Diversity/"),
+  list(name = "Veg Structure",    icon = "tree-fill",         url = "https://tgilbert14.github.io/NEON-Vegetation-Structure-Explorer/"),
+  list(name = "Water Chemistry",  icon = "droplet-fill",      url = "https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/"),
+  list(name = "Mosquito Pulse",   icon = "bug-fill",          url = "https://tgilbert14.github.io/NEON-Mosquito-Pulse/")
+)
+series_block <- function(footer = TRUE) {
+  div(class = "series-block",
+    div(class = "series-h", bsicons::bs_icon("grid-3x3-gap-fill"), "Explore the NEON series"),
+    div(class = "series-grid",
+      lapply(SIBLINGS, function(s) tags$a(class = "series-link", href = s$url, target = "_blank", rel = "noopener",
+        bsicons::bs_icon(s$icon), tags$span(s$name)))),
+    if (footer) div(class = "series-foot",
+      "Sibling explorers by Desert Data Labs, each on a different NEON data product."))
+}
+
 MASCOT_CRITTER <- htmltools::HTML(paste0(
   '<svg class="mascot" viewBox="0 0 120 120" aria-hidden="true">',
   '<path d="M60,98 L60,64" stroke="#5a9a3a" stroke-width="4" stroke-linecap="round"/>',

@@ -29,6 +29,11 @@ server <- function(input, output, session) {
   # straight into "Leaves"). Surface a small CLICKABLE badge — clean by default,
   # the why behind a tap (a bslib popover, the app's existing disclosure chrome).
   GU_COVERAGE_FLOOR <- 0.5
+  # a site whose median in-season visit interval exceeds this is "coarse cadence":
+  # onset is interval-censored to the visit gap, so its onset carries wide censoring
+  # uncertainty and it is greyed + dropped from the cross-site fit. 10 days ≈ 1.5x
+  # the ~7-day twice-weekly target; bundled sites run 3-15d (one site at 15).
+  CADENCE_COARSE <- 10
   gu_badge <- function(share, where = "here") {
     if (!is.finite(share) || share >= GU_COVERAGE_FLOOR) return(NULL)
     pct <- round(share * 100)
@@ -116,7 +121,12 @@ server <- function(input, output, session) {
     st <- site_table[is.finite(site_table$lat) & is.finite(site_table$lng), , drop=FALSE]
     if (!nrow(st)) return(leaflet::leaflet() %>% leaflet::addProviderTiles("CartoDB.Positron") %>% leaflet::setView(-96, 38, 3))
     gv <- if ("median_greenup" %in% names(st)) suppressWarnings(as.numeric(st$median_greenup)) else rep(NA_real_, nrow(st))
-    pal <- greenup_pal(gv)
+    gs0 <- if ("gu_share" %in% names(st)) suppressWarnings(as.numeric(st$gu_share)) else rep(NA_real_, nrow(st))
+    # robust [p5,p95] colour domain from WELL-COVERED sites only, then clamp every
+    # site's value to it — so KONA (day 226, 3% coverage) / LAJA (day 5) pin to the
+    # late/early endpoint instead of stretching the ramp flat (suite colour standard).
+    pal <- greenup_pal(gv, gu_share = gs0)
+    gv_col <- gp_clamp(pal, gv)
     mx <- max(st$n_individuals, 1, na.rm=TRUE); st$radius <- 6 + 12 * sqrt(pmax(st$n_individuals, 1)) / sqrt(mx)
     elev <- ifelse(is.finite(st$elevation_m), paste0(st$elevation_m, " m"), "—")
     gtxt <- ifelse(is.finite(gv), paste0(" · green-up day ", gv, " (", doy_to_month(gv), ")"), "")
@@ -143,10 +153,10 @@ server <- function(input, output, session) {
       ifelse(thin, " · thin green-up coverage", ""))
     leaflet::leaflet(st) %>% leaflet::addProviderTiles("CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng=~lng, lat=~lat, radius=~radius, layerId=~site,
-        fillColor=pal(gv), color=mk_stroke, weight=1, fillOpacity=mk_opacity,
+        fillColor=pal(gv_col), color=mk_stroke, weight=1, fillOpacity=mk_opacity,
         label=lapply(lab, htmltools::HTML), popup=pop,
         popupOptions=leaflet::popupOptions(className="pm-pop-card")) %>%
-      leaflet::addLegend("bottomright", pal=pal, values=gv[is.finite(gv)], title="median green-up DOY", na.label="—")
+      leaflet::addLegend("bottomright", pal=pal, values=gp_clamp(pal, gv[is.finite(gv)]), title="median green-up DOY", na.label="—")
   })
   observe({ updateSelectizeInput(session, "siteSearch", server=TRUE, selected="",
     choices = c("Jump to a site…" = "", stats::setNames(site_table$site,
@@ -301,11 +311,11 @@ server <- function(input, output, session) {
     n_all <- dplyr::n_distinct(tr$scientificName)
     top <- names(sort(table(tr$scientificName), decreasing=TRUE)); top <- head(top, 8)
     tr <- tr[tr$scientificName %in% top,]
-    pal <- make_species_pal(tr)
+    pal <- make_species_pal(tr); col_of <- function(s) pal[[s]] %||% OTHER_GREY
     p <- plotly::plot_ly()
     for (s in unique(tr$scientificName)) { d <- tr[tr$scientificName==s,]; d <- d[order(d$year),]
       p <- p %>% plotly::add_trace(data=d, x=~year, y=~onset, type="scatter", mode="lines+markers", name=s,
-        line=list(color=pal[[s]], width=2), marker=list(color=pal[[s]], size=7),
+        line=list(color=col_of(s), width=2), marker=list(color=col_of(s), size=7),
         hovertemplate=paste0("<b>",s,"</b><br>%{x}: green-up day %{y}<extra></extra>")) }
     note <- if (n_all > 8) list(list(text=sprintf("showing the 8 most-monitored of %d species (the banner above pools all %d)", n_all, n_all),
       x=0, y=1.06, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))) else list()
@@ -348,8 +358,14 @@ server <- function(input, output, session) {
     d <- is_[is.finite(is_$greenup) & is.finite(is_$leaf_active), , drop=FALSE]
     n_total <- nrow(is_); n_placed <- nrow(d)
     if (!n_placed) return(note_plot("No plants yet have both leaf-out and leaf-active days recorded"))
-    cby <- input$onsetColor %||% "growthForm"; d$grp <- as.character(d[[cby]]); d$grp[is.na(d$grp)] <- "—"
-    grps <- sort(unique(d$grp)); pal <- stats::setNames(grDevices::colorRampPalette(RColorBrewer::brewer.pal(8,"Dark2"))(length(grps)), grps)
+    # Colour-by capped to the 8 most-monitored categories + an explicit grey
+    # "Other" — interpolating Dark2 across ~20 species made muddy, look-alike
+    # olives. Growth form (<=8 categories) is the default and is unaffected.
+    cby <- input$onsetColor %||% "growthForm"
+    lv <- ordered_levels(d, cby)
+    d$grp <- cap_groups(d[[cby]], lv, cap = 8L)
+    pal <- capped_pal(lv, cap = 8L)
+    grps <- intersect(c(utils::head(lv, 8L), "Other"), unique(d$grp))   # keep frequency order; Other last
     d$tip <- paste0("<span class='smt-pin-emoji'>\U0001F33F</span> <b>", d$scientificName, "</b><br/>",
       "<em>", d$growthForm, " · plot ", short_plot(d$plotID), "</em><br/>",
       "<span class='smt-pin-stats'>green-up day ", d$greenup, " (", vapply(d$greenup, doy_to_month, ""), ")<br/>",
@@ -362,7 +378,7 @@ server <- function(input, output, session) {
     p <- plotly::plot_ly()
     for (g in grps) { sub <- d[d$grp==g,]
       p <- p %>% plotly::add_trace(data=sub, x=~greenup, y=~leaf_active, type="scatter", mode="markers", name=g,
-        customdata=~tip, marker=list(color=pal[[g]], size=11, opacity=0.82, line=list(color="#fff", width=0.5)),
+        customdata=~tip, marker=list(color=pal[[g]] %||% OTHER_GREY, size=11, opacity=0.82, line=list(color="#fff", width=0.5)),
         text=~scientificName, hovertemplate="%{text}<br>green-up day %{x} · leaf-active ~%{y} d/yr<extra></extra>") }
     xr <- range(d$greenup); yr <- range(d$leaf_active)
     capt <- sprintf("each dot is a plant · green-up onset × days carrying leaves · %d of %d plants placeable (both recorded)", n_placed, n_total)
@@ -422,17 +438,30 @@ server <- function(input, output, session) {
     if (is.null(rv$ind)) return(div(class="qc-empty", div(class="qc-empty-icon","\U0001F33F"), h4("Pick a plant to open its profile"),
       p("Use the Onset Lab (tap a dot → “Open plant profile”) or the sidebar picker.")))
     r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; req(nrow(r)==1)
-    h <- indiv_history(rv$obs, rv$ind); flags <- pheno_qc_flags(h, r$growthForm)
+    h <- indiv_history(rv$obs, rv$ind); q <- pheno_qc_flags(h, r$growthForm); flags <- q$flags
     n_ph <- if (!is.null(h)) dplyr::n_distinct(h$phenophaseName[h$status=="yes"]) else 0
     n_yr <- if (!is.null(h)) dplyr::n_distinct(h$year) else 0
     tile <- function(v,l) div(class="qc-tile", div(class="qc-tile-v", v), div(class="qc-tile-l", l))
     # day-of-year tile that shows the calendar date in its label (no bare DOY)
     gtile <- function(v,l) tile(ifelse(is.finite(v), v, "—"), if (is.finite(v)) paste0(l, " · ", doy_to_month(v)) else l)
-    has_problem <- any(vapply(flags, function(f) f$level %in% c("high","warn"), logical(1)))
-    flag_items <- lapply(flags, function(f) div(class=paste0("qc-flag qc-flag-", f$level),
-      bs_icon(switch(f$level, high="exclamation-octagon-fill", warn="exclamation-triangle-fill", "info-circle-fill")), span(HTML(f$text))))
+    # only flags whose offending rows were actually found are clickable; a 0-row
+    # flag (e.g. the "no yes recorded" info note) is shown but not a link.
+    has_problem <- any(vapply(flags, function(f) f$level %in% c("high","warn") && f$n > 0, logical(1)))
+    qc_icon <- function(lvl) switch(lvl, high="exclamation-octagon-fill", warn="exclamation-triangle-fill", "info-circle-fill")
+    flag_items <- lapply(flags, function(f) {
+      clickable <- isTRUE(f$n > 0) && f$key %in% names(q$sets)
+      div(class = paste0("qc-flag qc-flag-", f$level, if (clickable) " qc-flag-click" else ""),
+        role = if (clickable) "button" else NULL, tabindex = if (clickable) "0" else NULL,
+        onclick = if (clickable) sprintf("Shiny.setInputValue('pheQcInspect','%s',{priority:'event'})", f$key) else NULL,
+        bs_icon(qc_icon(f$level)),
+        div(class="qcf-body",
+          div(class="qcf-title", f$title, if (clickable) tags$span(class="qcf-n", f$n)),
+          div(class="qcf-detail", HTML(f$text))),
+        if (clickable) tags$span(class="qcf-go", bs_icon("chevron-right")))
+    })
     flag_ui <- if (!has_problem) c(list(div(class="qc-flag qc-flag-ok", bs_icon("check-circle-fill"),
-      span("No phenophase-ordering issues detected for this plant."))), flag_items) else flag_items
+      div(class="qcf-body", div(class="qcf-title","No phenophase-ordering issues detected for this plant"),
+        div(class="qcf-detail","Leaf-stage order, green-up consistency, and censoring all look fine, nothing to verify.")))), flag_items) else flag_items
     body <- div(id="qcCardNode", class="qc-card", `data-short`=gsub("[^A-Za-z]","",substr(r$scientificName,1,20)),
       div(class="qc-head", span(class="qc-emoji","\U0001F33F"),
         div(div(class="qc-id", r$scientificName), div(class="qc-sci", em(sprintf("%s · %s · plot %s",
@@ -446,14 +475,54 @@ server <- function(input, output, session) {
         tile(n_yr, "years watched"), tile(n_ph, "phenophases")),
       div(class="qc-section-h", bs_icon("calendar3-range"), " Phenophase calendar · when each phase happens"),
       plotlyOutput("phenoSpark", height="240px"),
-      div(class="qc-section-h", bs_icon("clipboard-check"), " Quality checks"),
+      div(class="qc-section-h", bs_icon("clipboard-check"), " Quality checks ",
+        tags$span(class="qcf-sub", "· verify, not errors")),
       div(class="qc-flags", flag_ui),
+      if (has_problem) div(class="qcf-hint", bs_icon("hand-index-thumb"), " tap a flag to list the exact records behind it"),
       p(class="qc-cap-note", style="margin-top:8px", bs_icon("info-circle"),
         HTML(" Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years. <b>Last leaf-week</b> is the last week leaves were recorded, not measured senescence (a plant that flushes twice a year carries no single leaf-off date), so read <b>days carrying leaves</b> for growing extent.")))
     div(div(class="plot-profile-wrap", body), div(class="qc-toolbar",
       tags$button(class="smt-snap-btn", type="button", onclick="smtSaveQcCard()", bsicons::bs_icon("download"), " Save plant card (PNG)"),
-      downloadButton("indCsv", "Download history (CSV)", class="smt-clear-btn")))
+      downloadButton("indCsv", "Download history (CSV)", class="smt-clear-btn"),
+      if (length(q$sets)) downloadButton("qcReportCsv", "Download QC report (CSV)", class="smt-clear-btn")),
+      uiOutput("pheQcInspector"))
   })
+
+  # ---- clickable QC inspector: the exact rows behind a tapped flag --------
+  pheQc <- reactive({ req(rv$ind); h <- indiv_history(rv$obs, rv$ind)
+    r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind, ]
+    gf <- if (nrow(r)) r$growthForm[1] else NULL
+    list(hist = h, gf = gf, q = pheno_qc_flags(h, gf)) })
+  output$pheQcInspector <- renderUI({
+    key <- input$pheQcInspect; pq <- pheQc(); q <- pq$q
+    req(!is.null(key), key %in% names(q$sets))
+    st <- q$sets[[key]]; req(!is.null(st), nrow(st))
+    f <- Filter(function(x) identical(x$key, key), q$flags)[[1]]
+    show <- intersect(c("date","year","dayOfYear","phenophaseName","status","intensity","flag"), names(st))
+    head_n <- min(nrow(st), 200L); sv <- st[seq_len(head_n), show, drop=FALSE]
+    div(class="qc-inspector",
+      div(class="qci-head", bs_icon(switch(f$level, high="exclamation-octagon-fill", warn="exclamation-triangle-fill", "info-circle-fill")),
+        tags$b(sprintf(" %s · %d record%s", f$title, f$n, if (f$n==1) "" else "s")),
+        downloadButton("pheQcSubsetCsv", "Download these", class="btn-outline-dark btn-sm qci-dl")),
+      div(class="qc-cap-scroll", tags$table(class="inspect-tbl",
+        tags$thead(tags$tr(lapply(show, tags$th))),
+        tags$tbody(lapply(seq_len(nrow(sv)), function(i)
+          tags$tr(lapply(show, function(cc) tags$td(format(sv[[cc]][i])))))))),
+      if (nrow(st) > head_n) p(class="qc-cap-note", sprintf("Showing first %d of %d. Download for the full list.", head_n, nrow(st))))
+  })
+  output$pheQcSubsetCsv <- downloadHandler(
+    filename = function() sprintf("NEON-Phenology_QC-%s_%s_%s.csv", input$pheQcInspect %||% "flag",
+      gsub("[^A-Za-z0-9]","",short_ind(rv$ind %||% "plant")), format(Sys.Date(),"%Y%m%d")),
+    content = function(file){ q <- pheQc()$q; st <- q$sets[[input$pheQcInspect]]; req(!is.null(st))
+      st <- cbind(site = rv$site %||% NA_character_, individualID = rv$ind %||% NA_character_, st)
+      utils::write.csv(st, file, row.names=FALSE, na="") }, contentType="text/csv")
+  output$qcReportCsv <- downloadHandler(
+    filename = function() sprintf("NEON-Phenology_QC-report_%s_%s_%s.csv", rv$site %||% "site",
+      gsub("[^A-Za-z0-9]","",short_ind(rv$ind %||% "plant")), format(Sys.Date(),"%Y%m%d")),
+    content = function(file){ pq <- pheQc(); rep <- phe_qc_report(pq$hist, pq$gf)
+      if (is.null(rep)) rep <- data.frame(note="No data-quality flags for this plant.")
+      rep <- cbind(site = rv$site %||% NA_character_, individualID = rv$ind %||% NA_character_, rep)
+      utils::write.csv(rep, file, row.names=FALSE, na="") }, contentType="text/csv")
   output$indCsv <- downloadHandler(
     filename = function() sprintf("NEON-Phenology_%s_%s.csv", gsub("[^A-Za-z0-9]","",short_ind(rv$ind %||% "plant")), format(Sys.Date(),"%Y%m%d")),
     content = function(file){ id <- rv$ind; req(id); h <- indiv_history(rv$obs, id); req(!is.null(h))
@@ -477,9 +546,20 @@ server <- function(input, output, session) {
                                "greenup","flower","leaf_off","leaf_active","left_censored"), names(ko)), drop=FALSE]
       }
       clk <- weekly_yesrate(rv$obs, NULL)
+      # individual_summary: the codebook documents taxonRank/is_species + the three
+      # *_n_years companion columns. A bundle built before those columns existed
+      # lacks them, which would make the export drift from the codebook — so
+      # backfill from a fresh individual_summary() (re-derives all five) when any
+      # are missing. A rebuilt bundle already carries them and this is a no-op.
+      ind_s <- as.data.frame(rv$ind_summary)
+      need <- c("taxonRank","is_species","greenup_n_years","flower_n_years","leaf_active_n_years")
+      if (!all(need %in% names(ind_s))) {
+        fresh <- individual_summary(rv$obs, rv$inds)
+        if (!is.null(fresh)) ind_s <- as.data.frame(fresh)
+      }
       w <- function(df, nm) if (!is.null(df) && nrow(df)) utils::write.csv(df, file.path(td, nm), row.names=FALSE, na="")
       w(obs, "obs_long.csv"); w(ko, "onsets_by_individual_year.csv")
-      w(as.data.frame(rv$ind_summary), "individual_summary.csv")
+      w(ind_s, "individual_summary.csv")
       w(clk, "phenology_clock_weekly.csv"); w(as.data.frame(rv$trend), "onset_trend_by_species_year.csv")
       w(phe_codebook_csv(site = rv$site, app_version = APP_VERSION), "codebook.csv")
       writeLines(c(
@@ -510,7 +590,10 @@ server <- function(input, output, session) {
     req(nrow(ps) > 0)
     metric <- input$mapMetric %||% "greenup"
     val <- ps[[metric]]; has <- is.finite(val)         # NA stays NA — never median-filled (honest gaps)
-    if (metric == "greenup") { pal <- greenup_pal(val[has]); legtitle <- "median green-up DOY (earlier = green)"; nalab <- "no green-up scored" }
+    if (metric == "greenup") {
+      pal <- greenup_pal(val[has], gu_share = ps$gu_share[has])   # robust domain from well-covered plots, clamp outliers
+      val <- gp_clamp(pal, val)
+      legtitle <- "median green-up DOY (earlier = green)"; nalab <- "no green-up scored" }
     else if (metric == "leaf_active") {
       dom <- if (sum(has) && diff(range(val[has])) > 0) range(val[has]) else c(0, max(val[has], 1))
       pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "median leaf-active days/yr"; nalab <- "no leaf record" }
@@ -544,24 +627,60 @@ server <- function(input, output, session) {
     if (!("median_greenup" %in% names(st))) return(note_plot("Rebuild the data bundle to enable cross-site views", "\U0001F30E"))
     d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
     if (nrow(d) < 4) return(note_plot("Need more bundled sites for a latitude gradient", "\U0001F30E"))
-    cols <- greenup_pal(d$median_greenup)(d$median_greenup)
+    # green-up coverage gate: a site whose green-up median rests on < half its
+    # roster (warm deserts) is biased, so it is GREYED and EXCLUDED from the fit —
+    # the latitude line is estimated on well-covered sites only.
+    d$gu_share <- if ("gu_share" %in% names(d)) suppressWarnings(as.numeric(d$gu_share)) else rep(NA_real_, nrow(d))
+    # coarse-cadence gate: onset is interval-censored to the visit gap, so a site
+    # visited far apart carries wide censoring uncertainty on its onset. Sites with
+    # a median visit interval > CADENCE_COARSE days are greyed + excluded from the
+    # fit alongside thin-coverage sites (both bias the cross-site onset read).
+    d$mvi <- if ("median_visit_interval" %in% names(d)) suppressWarnings(as.numeric(d$median_visit_interval)) else rep(NA_real_, nrow(d))
+    cov_ok  <- !is.finite(d$gu_share) | d$gu_share >= 0.5
+    cad_ok  <- !is.finite(d$mvi) | d$mvi <= CADENCE_COARSE
+    d$well <- cov_ok & cad_ok
+    pal <- greenup_pal(d$median_greenup, gu_share = d$gu_share)
+    cols <- ifelse(d$well, pal(gp_clamp(pal, d$median_greenup)), "#c4c0b2")   # thin/coarse sites greyed
     d$n_species <- if ("n_species" %in% names(d)) d$n_species else NA_integer_
+    cov_lab <- ifelse(!cov_ok, " · thin green-up coverage", "")
+    cad_lab <- ifelse(!cad_ok, sprintf(" · coarse visit cadence (~%.0fd)", d$mvi), "")
+    excl_lab <- ifelse(d$well, "", paste0(cov_lab, cad_lab, " (excluded from fit)"))
     p <- plotly::plot_ly(d, x=~lat, y=~median_greenup, type="scatter", mode="markers",
-      text=~paste0(site, " · ", name), customdata=~n_species,
+      text=paste0(d$site, " · ", d$name, excl_lab), customdata=~n_species,
       marker=list(size=11, color=cols, line=list(color="#fff", width=0.8)),
       hovertemplate="<b>%{text}</b><br>lat %{x:.1f}°N · green-up day %{y} (%{customdata} species)<extra></extra>")
-    fit <- stats::lm(median_greenup ~ lat, data=d)
-    xs <- range(d$lat); ys <- as.numeric(stats::predict(fit, newdata=data.frame(lat=xs)))
-    p <- p %>% plotly::add_trace(x=xs, y=ys, type="scatter", mode="lines", inherit=FALSE,
-      line=list(color="#b5481f", width=2, dash="dash"), hoverinfo="skip", showlegend=FALSE)
-    p %>% plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE,
+    well <- d[d$well, , drop=FALSE]
+    if (nrow(well) >= 4 && diff(range(well$lat)) > 0) {
+      fit <- stats::lm(median_greenup ~ lat, data=well)
+      xs <- range(well$lat); ys <- as.numeric(stats::predict(fit, newdata=data.frame(lat=xs)))
+      p <- p %>% plotly::add_trace(x=xs, y=ys, type="scatter", mode="lines", inherit=FALSE,
+        line=list(color="#b5481f", width=2, dash="dash"), hoverinfo="skip", showlegend=FALSE)
+    }
+    n_grey <- sum(!d$well)
+    ann <- if (n_grey > 0) list(list(text=sprintf("grey = thin green-up coverage (<50%% of plants) or coarse visit cadence (>%dd); %d site%s excluded from the fit", CADENCE_COARSE, n_grey, if (n_grey==1) "" else "s"),
+      x=0, y=1.05, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))) else list()
+    p %>% plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE, annotations=ann,
       xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median green-up (day-of-year)"))
   })
   output$gradientInsight <- renderUI({
     st <- site_table; if (!("median_greenup" %in% names(st))) return(NULL)
     d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
     if (nrow(d) < 4) return(NULL)
-    co <- summary(stats::lm(median_greenup ~ lat, data=d))$coefficients; net_slope <- co[2,1]
+    # net slope is fit on WELL-COVERED + ADEQUATE-CADENCE sites only (same gate as
+    # the plot), so the banner number matches the line drawn and isn't dragged by
+    # thin-coverage or coarse-cadence sites.
+    gs <- if ("gu_share" %in% names(d)) suppressWarnings(as.numeric(d$gu_share)) else rep(NA_real_, nrow(d))
+    mvi <- if ("median_visit_interval" %in% names(d)) suppressWarnings(as.numeric(d$median_visit_interval)) else rep(NA_real_, nrow(d))
+    well <- d[(!is.finite(gs) | gs >= 0.5) & (!is.finite(mvi) | mvi <= CADENCE_COARSE), , drop=FALSE]
+    if (nrow(well) < 4) well <- d
+    co <- summary(stats::lm(median_greenup ~ lat, data=well))$coefficients; net_slope <- co[2,1]
+    # cadence badge: the typical visit interval across the bundled sites + the
+    # coarse-cadence count, so the reader knows the gradient's censoring resolution.
+    med_cad <- suppressWarnings(stats::median(mvi, na.rm=TRUE)); n_coarse <- sum(mvi > CADENCE_COARSE, na.rm=TRUE)
+    cad_badge <- if (is.finite(med_cad)) div(class="cadence-badge",
+      bs_icon("calendar-week"),
+      HTML(sprintf(" sites are visited about every <b>%.0f days</b> on average%s. Onset is interval-censored to that gap, so cross-site onset gaps are approximate.",
+        med_cad, if (n_coarse > 0) sprintf("; %d coarse-cadence site%s (&gt;%dd) are greyed out below", n_coarse, if (n_coarse==1) "" else "s", CADENCE_COARSE) else ""))) else NULL
     # LEAD with the within-species slope (the confound-controlled read the app
     # already computes in the secondary panel); demote the network slope to the
     # coarse echo it is. Falls back to the network read if no species spans enough
@@ -569,13 +688,13 @@ server <- function(input, output, session) {
     ws <- within_species_gradient(NATIONAL_ONSETS, min_sites = 4)
     if (!is.null(ws)) {
       sp_short <- sub("^([A-Z][a-z]+ [a-z\\-]+).*$", "\\1", ws$species)
-      return(insight_banner(if (ws$slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
+      return(tagList(insight_banner(if (ws$slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
         "Holding the species constant, <b><em>%s</em></b> greens up <b>%.1f days %s per °N</b> across <b>%d</b> sites (95%% CI %.1f to %.1f, R²=%.2f), the spatial echo of Hopkins' bioclimatic law, with the species-mix confound removed. <em>The across-network slope (all species pooled, ~%.0f d/°N) is a coarser echo of the same temperature signal.</em>",
-        sp_short, abs(ws$slope), if (ws$slope >= 0) "later" else "earlier", ws$n_sites, ws$lo, ws$hi, ws$r2, abs(net_slope)))))
+        sp_short, abs(ws$slope), if (ws$slope >= 0) "later" else "earlier", ws$n_sites, ws$lo, ws$hi, ws$r2, abs(net_slope)))), cad_badge))
     }
-    insight_banner(if (net_slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
+    tagList(insight_banner(if (net_slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
       "Across <b>%d</b> sites, green-up shifts roughly <b>%.0f days %s per degree of latitude north</b>, the spatial echo of Hopkins' bioclimatic law. <em>Each point is a site's median across its species (different species mixes, n as few as 4), so read it as a coarse across-network gradient, not a controlled comparison.</em>",
-      nrow(d), abs(net_slope), if (net_slope >= 0) "later" else "earlier")))
+      nrow(d), abs(net_slope), if (net_slope >= 0) "later" else "earlier"))), cad_badge)
   })
   observe({ if (is.null(NATIONAL_ONSETS) || !nrow(NATIONAL_ONSETS)) {
       updateSelectInput(session, "xsSpecies", choices = c("(rebuild data bundle)" = "")); return() }
@@ -608,7 +727,10 @@ server <- function(input, output, session) {
       div(class="about-card", h4(bs_icon("graph-down-arrow"), " Why it matters"),
         p("Shifts in green-up and bloom timing are among the clearest biological fingerprints of a changing climate, and drive mismatches with pollinators and migrating birds."),
         p(bs_icon("envelope"), " ", tags$a(href="mailto:desertdatalabs@gmail.com","desertdatalabs@gmail.com"), " · ",
-          tags$a(href="https://data.neonscience.org/data-products/DP1.10055.001", target="_blank", "NEON data product"))))
+          tags$a(href="https://data.neonscience.org/data-products/DP1.10055.001", target="_blank", "NEON data product"))),
+      div(class="about-card", h4(bs_icon("grid-3x3-gap-fill"), " The NEON series"),
+        p("This is one of a family of explorers, each built on a different NEON data product, that share the same look and the same honest-stats approach."),
+        series_block(footer = FALSE)))
   })
   observeEvent(input$help, showModal(modalDialog(easyClose=TRUE, title=tagList(bs_icon("question-circle"), " How it works"),
     tags$ul(

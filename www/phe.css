@@ -211,3 +211,46 @@
 .pll-meta { color: var(--muted); font-size: 11.5px; }
 @media (max-width: 900px) { .picker-list-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .picker-list-grid { grid-template-columns: 1fr; } }
+
+/* ---- cross-site cadence badge (visit-interval honesty) ----------------- */
+.cadence-badge {
+  display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 2px;
+  padding: 8px 12px; border-radius: 9px; font-size: 12.5px; line-height: 1.4;
+  background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--sky);
+  color: var(--ink);
+}
+.cadence-badge .bi { flex: 0 0 auto; margin-top: 1px; color: var(--sky); }
+[data-bs-theme="dark"] .cadence-badge { background: rgba(255,255,255,.03); }
+
+/* ---- clickable QC-flag inspector (ported from the suite QC standard) ---- */
+.qc-flag-click { cursor: pointer; transition: transform .1s ease, box-shadow .1s ease; }
+.qc-flag-click:hover { transform: translateY(-1px); box-shadow: 0 5px 16px var(--shadow); }
+.qc-flag-click:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.qcf-body { flex: 1 1 auto; min-width: 0; }
+.qcf-title { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 7px; }
+.qcf-n { font-size: 11px; font-weight: 800; color: #fff; background: rgba(0,0,0,.45);
+  border-radius: 20px; padding: 0 7px; line-height: 17px; min-width: 17px; text-align: center; }
+.qcf-detail { font-size: 12px; line-height: 1.4; margin-top: 2px; opacity: .92; }
+.qcf-go { flex: 0 0 auto; opacity: .5; align-self: center; }
+.qcf-sub { font-weight: 500; font-size: 12px; color: var(--muted); }
+.qcf-hint { font-size: 11.5px; color: var(--muted); margin: 6px 2px 0; display: flex; align-items: center; gap: 5px; }
+.qc-inspector { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 12px 14px; }
+.qci-head { display: flex; align-items: center; gap: 8px; font-size: 13.5px; margin-bottom: 8px; flex-wrap: wrap; }
+.qci-dl { margin-left: auto; }
+.qc-cap-scroll { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.inspect-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.inspect-tbl th { text-align: left; font-weight: 700; color: var(--muted); padding: 5px 11px; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
+.inspect-tbl td { padding: 5px 11px; border-top: 1px solid var(--line); white-space: nowrap; }
+.inspect-tbl tbody tr:hover { background: rgba(127,127,127,.05); }
+[data-bs-theme="dark"] .qc-inspector { background: rgba(255,255,255,0.03); }
+
+/* ---- in-app "Explore the NEON series" sibling block -------------------- */
+.series-block { margin-top: 8px; }
+.series-h { font-weight: 700; font-size: 13px; color: var(--green); display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.series-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 7px; }
+.series-link { display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 9px;
+  background: var(--paper); border: 1px solid var(--line); color: var(--ink); text-decoration: none; font-size: 12.5px; }
+.series-link:hover { border-color: var(--green); color: var(--green); transform: translateY(-1px); }
+.series-link .bi { color: var(--green); flex: 0 0 auto; }
+.series-foot { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+.sidebar .series-grid { grid-template-columns: 1fr; }

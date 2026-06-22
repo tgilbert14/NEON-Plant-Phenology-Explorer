@@ -26,8 +26,9 @@ if (!is.null(tr)) ok("  species-years", paste(head(sort(unique(tr$scientificName
 
 id <- is_$individualID[which(is.finite(is_$greenup) & is.finite(is_$leaf_active))[1]]
 h <- indiv_history(obs, id); ok("indiv_history rows", nrow(h)); ok("  for", id)
-fl <- pheno_qc_flags(h); ok("qc flags", length(fl))
-if (length(fl)) for (f in fl) ok(paste0("  [",f$level,"]"), substr(f$text,1,60))
+q <- pheno_qc_flags(h); fl <- q$flags; ok("qc flags", length(fl)); ok("  qc sets (with rows)", length(q$sets))
+if (length(fl)) for (f in fl) ok(paste0("  [",f$level,"] n=",f$n), substr(f$text,1,55))
+rep <- phe_qc_report(h); ok("phe_qc_report rows", if (is.null(rep)) 0 else nrow(rep))
 
 ps <- plot_summary_phe(obs, inds); ok("plot_summary_phe rows", nrow(ps))
 ok("  cols", paste(names(ps), collapse=","))

@@ -37,6 +37,8 @@ ui <- bslib::page_sidebar(
     actionButton("help", tagList(bs_icon("question-circle"), " How it works"), class = "btn-outline-dark btn-sm w-100"),
     div(class = "theme-toggle-row", tags$span(class = "theme-toggle-lab", bs_icon("circle-half"), " Theme"),
       input_dark_mode(id = "colorMode", mode = "light")),
+    hr(class = "deck-hr"),
+    series_block(footer = FALSE),
     div(class = "deck-foot", bs_icon("database"), " NEON ", tags$code("DP1.10055.001"),
       br(), tags$a(href = "https://desertdatalabs.com", target = "_blank", bs_icon("box-arrow-up-right"), " Desert Data Labs"))
   ),

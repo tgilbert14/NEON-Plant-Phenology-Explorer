@@ -14,8 +14,34 @@ short_plot <- function(p) sub("^[A-Z]{4}_", "", as.character(p))
 species_level_only <- function(d){ if (is.null(d)||!nrow(d)) return(d)
   if ("is_species" %in% names(d)) return(d[d$is_species %in% TRUE, , drop=FALSE])
   ok <- is.na(d$taxonRank)|d$taxonRank %in% c("species","subspecies","variety","speciesGroup"); d[ok,,drop=FALSE] }
-make_species_pal <- function(d){ sp <- sort(unique(d$scientificName[!is.na(d$scientificName)])); if(!length(sp)) return(character(0))
-  stats::setNames(grDevices::colorRampPalette(RColorBrewer::brewer.pal(8,"Dark2"))(length(sp)), sp) }
+# A categorical palette that NEVER interpolates Dark2 past its 8 discrete hues
+# (interpolating across ~20 categories produces muddy, indistinguishable olives).
+# Returns up to `cap` distinct Dark2 colours; an explicit grey "Other" bucket
+# catches everything past the cap. `groups` should already be ordered so the most
+# important (e.g. most-monitored) categories take the distinct colours.
+OTHER_GREY <- "#9aa6b2"
+capped_pal <- function(groups, cap = 8L) {
+  g <- groups[!is.na(groups) & nzchar(groups)]
+  if (!length(g)) return(stats::setNames(character(0), character(0)))
+  keep <- utils::head(g, cap)
+  cols <- RColorBrewer::brewer.pal(max(3L, min(8L, length(keep))), "Dark2")[seq_along(keep)]
+  pal <- stats::setNames(cols, keep)
+  c(pal, stats::setNames(OTHER_GREY, "Other"))
+}
+# ordered category vector for a frame `d` on column `col`, most-frequent first
+# (so capped_pal hands the distinct hues to the categories that matter most).
+ordered_levels <- function(d, col) {
+  v <- as.character(d[[col]]); v <- v[!is.na(v) & nzchar(v)]
+  if (!length(v)) return(character(0))
+  names(sort(table(v), decreasing = TRUE))
+}
+# bucket a category vector to the cap: anything past the top `cap` -> "Other".
+cap_groups <- function(x, levels_ordered, cap = 8L) {
+  keep <- utils::head(levels_ordered, cap)
+  x <- as.character(x); x[is.na(x) | !nzchar(x)] <- "Other"
+  ifelse(x %in% keep, x, "Other")
+}
+make_species_pal <- function(d){ capped_pal(ordered_levels(d, "scientificName"), cap = 8L) }
 
 # ordered phenophase sequence (for the clock rings + out-of-order QC). Higher rank
 # = later in the season. Growth-form-specific phenophases share this ordering.
@@ -127,6 +153,14 @@ individual_summary <- function(obs, inds) {
                      flower = round(stats::median(.data$flower, na.rm=TRUE)),
                      leaf_off = round(stats::median(.data$leaf_off, na.rm=TRUE)),
                      leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
+                     # per-metric companion n: how many years actually contributed
+                     # to EACH median, so a NA can be read as "never scored that
+                     # phenophase" (structural, n=0) vs "scored, just not this plant".
+                     # A green-up NA at a desert evergreen is structural; pairing the
+                     # median with its own n separates that from a missing record.
+                     greenup_n_years     = sum(is.finite(.data$greenup)),
+                     flower_n_years      = sum(is.finite(.data$flower)),
+                     leaf_active_n_years = sum(is.finite(.data$leaf_active)),
                      # count a year if ANY key metric is finite, so leaf-only
                      # evergreens (no green-up/flower onset) aren't undercounted to 0
                      n_years = dplyr::n_distinct(.data$year[is.finite(.data$greenup) | is.finite(.data$flower) |
@@ -191,54 +225,92 @@ VEG_SEQ <- c("Breaking leaf buds"=1, "Initial growth"=1, "Emerging needles"=1, "
 # growth_form gates the ordering check: drought-deciduous / forb / semi-evergreen
 # plants legitimately flush and drop leaves MULTIPLE times a year (rain-driven),
 # so leaf-stage "out of order" within a year is normal for them, not an error.
+# Returns list(flags = list(level,text,key,n), sets = named list of the exact
+# offending rows behind each flag). The UI lists each flag clickable -> a DT
+# inspector of its `sets[[key]]` + a per-flag CSV downloadHandler, and
+# phe_qc_report() rolls every set into one ranked report CSV. Flagged rows are
+# always RETAINED, never dropped. (Ported to the suite QC-inspector standard;
+# see docs/neonize-playbook.md, memory neonize-qc-flag-pattern.)
+QC_COLS <- c("date","year","dayOfYear","phenophaseName","status","intensity")
 pheno_qc_flags <- function(hist, growth_form = NULL) {
-  flags <- list(); add <- function(level,text) flags[[length(flags)+1L]] <<- list(level=level,text=text)
-  if (is.null(hist) || !nrow(hist)) return(flags)
-  yes <- hist[hist$status == "yes", , drop=FALSE]
-  if (!nrow(yes)) { add("info","No phenophase has been recorded 'yes' yet for this plant."); return(flags) }
+  out <- list(flags = list(), sets = list())
+  if (is.null(hist) || !nrow(hist)) return(out)
+  cols <- intersect(QC_COLS, names(hist))
+  tidy <- function(rows, label) { rows <- rows[!is.na(rows)]; if (!length(rows)) return(NULL)
+    x <- hist[rows, cols, drop=FALSE]; if (!nrow(x)) return(NULL); x$flag <- label; x[order(x$year, x$dayOfYear), , drop=FALSE] }
+  # add a flag ONLY when it has offending rows (a 0-row check is a no-op, never a
+  # phantom flag); allow_empty=TRUE keeps a genuine no-row note (e.g. "no yes yet").
+  add <- function(level, title, key, rows, text, allow_empty = FALSE) {
+    rows <- unique(rows[!is.na(rows)]); n <- length(rows)
+    if (!n && !allow_empty) return(invisible())
+    out$flags[[length(out$flags)+1L]] <<- list(level=level, title=title, key=key, n=n, text=text)
+    if (n) out$sets[[key]] <<- tidy(rows, title) }
 
-  # (1) out-of-order VEGETATIVE phenophases within a year: leaf-out → leaves →
-  # colored → falling should be monotonic. Falling/colored leaves before leaf-out
-  # is biologically impossible for a SINGLE-CYCLE plant and points to a data issue.
-  # Only applied to growth forms with one orderly leaf cycle per year.
+  yes_idx <- which(hist$status == "yes")
+  if (!length(yes_idx)) { add("info", "No phenophase recorded 'yes' yet", "noyes", integer(0),
+    "No phenophase has been recorded 'yes' yet for this plant.", allow_empty = TRUE); return(out) }
+
+  # (1) out-of-order VEGETATIVE phenophases within a year (single-cycle plants only).
   single_cycle <- is.null(growth_form) || grepl("^Deciduous|conifer|^Pine", growth_form)
-  if (single_cycle) for (y in unique(yes$year)) {
-    yy <- yes[yes$year == y & yes$phenophaseName %in% names(VEG_SEQ), ]
-    if (!nrow(yy)) next
-    fr <- tapply(yy$dayOfYear, yy$phenophaseName, min)
+  oo_rows <- integer(0); oo_years <- integer(0)
+  if (single_cycle) for (y in unique(hist$year[yes_idx])) {
+    yidx <- which(hist$status == "yes" & hist$year == y & hist$phenophaseName %in% names(VEG_SEQ) & is.finite(hist$dayOfYear))
+    if (!length(yidx)) next
+    fr <- tapply(hist$dayOfYear[yidx], as.character(hist$phenophaseName[yidx]), min)
     rk <- VEG_SEQ[names(fr)]; ok <- is.finite(rk) & is.finite(fr); fr <- fr[ok]; rk <- rk[ok]
     if (length(fr) >= 2) { o <- order(fr)
-      if (any(diff(rk[o]) < 0)) { add("high", sprintf("In %s, leaf phenophases were recorded out of sequence (a later leaf stage before an earlier one, e.g. falling/colored leaves before leaf-out). Worth checking the records for that year.", y)); break } }
+      if (any(diff(rk[o]) < 0)) { oo_rows <- c(oo_rows, yidx); oo_years <- c(oo_years, y) } }
   }
+  add("high", "Leaf phenophases out of sequence", "outoforder", oo_rows,
+    sprintf("In %s, leaf phenophases were recorded out of sequence (a later leaf stage before an earlier one, e.g. falling/colored leaves before leaf-out). Worth checking the records for %s.",
+      paste(sort(unique(oo_years)), collapse=", "), if (length(unique(oo_years))==1) "that year" else "those years"))
 
-  # (2) green-up year-outlier: a year whose first leaf-out is >45 days from this
-  # plant's own median across years — a real climate shift, or a slipped date.
-  # (45d, not 30d: desert drought-deciduous green-up legitimately swings ~6 weeks
-  # year to year with the rains, so a tighter bar would cry wolf at sites like SRER.)
-  gy <- yes[yes$phenophaseName %in% GREENUP & is.finite(yes$dayOfYear), ]
-  if (nrow(gy)) {
-    per_yr <- tapply(gy$dayOfYear, gy$year, min); per_yr <- per_yr[is.finite(per_yr)]
+  # (2) green-up year-outlier: a year >45 d from this plant's own median.
+  gy_idx <- which(hist$status == "yes" & hist$phenophaseName %in% GREENUP & is.finite(hist$dayOfYear))
+  if (length(gy_idx)) {
+    gyy <- hist$year[gy_idx]; gyd <- hist$dayOfYear[gy_idx]
+    per_yr <- tapply(gyd, gyy, min); per_yr <- per_yr[is.finite(per_yr)]
     if (length(per_yr) >= 3) { med <- stats::median(per_yr); off <- per_yr - med
       i <- which.max(abs(off))
-      if (length(i) == 1 && is.finite(off[i]) && abs(off[i]) > 45) add("warn", sprintf("In %s this plant broke leaf around day %d, %d days %s than its usual day-%d. Could be a real shift, or a date to verify.",
-        names(per_yr)[i], round(per_yr[i]), round(abs(off[i])), if (off[i] < 0) "earlier" else "later", round(med))) }
+      if (length(i)==1 && is.finite(off[i]) && abs(off[i]) > 45) {
+        oy <- names(per_yr)[i]
+        out_rows <- gy_idx[as.character(gyy) == oy]
+        add("warn", "Green-up year well off the plant's norm", "outlier", out_rows,
+          sprintf("In %s this plant broke leaf around day %d, %d days %s than its usual day-%d. Could be a real shift, or a date to verify.",
+            oy, round(per_yr[i]), round(abs(off[i])), if (off[i] < 0) "earlier" else "later", round(med)))
+      }
+    }
   }
 
-  # (3) left-censored onset: in some year the earliest visit was already 'yes' for
-  # a leaf-out phenophase, so true onset is earlier than recorded.
-  if (nrow(gy)) {
-    lc <- FALSE
-    for (y in unique(gy$year)) {
-      gall <- hist[hist$year == y & hist$phenophaseName %in% GREENUP & hist$status %in% c("yes","no") & is.finite(hist$dayOfYear), ]
-      yd <- gall$dayOfYear[gall$status == "yes"]; nd <- gall$dayOfYear[gall$status == "no"]
-      if (length(yd) && (!length(nd) || min(yd) <= min(nd))) { lc <- TRUE; break }
+  # (3) left-censored onset: a year whose earliest visit was already 'yes' for a
+  # leaf-out phenophase, so true onset is earlier than recorded.
+  if (length(gy_idx)) {
+    lc_rows <- integer(0)
+    for (y in unique(hist$year[gy_idx])) {
+      gall <- which(hist$year == y & hist$phenophaseName %in% GREENUP & hist$status %in% c("yes","no") & is.finite(hist$dayOfYear))
+      if (!length(gall)) next
+      yd <- hist$dayOfYear[gall][hist$status[gall] == "yes"]; nd <- hist$dayOfYear[gall][hist$status[gall] == "no"]
+      if (length(yd) && (!length(nd) || min(yd) <= min(nd)))
+        lc_rows <- c(lc_rows, gall[hist$status[gall] == "yes" & hist$dayOfYear[gall] == min(yd)])
     }
-    if (lc) add("info", "Some years' leaf-out was already underway at the first visit, so the true onset may be a little earlier than shown.")
+    add("info", "Leaf-out already underway at first visit", "leftcensored", lc_rows,
+      "Some years' leaf-out was already underway at the first visit, so the true onset may be a little earlier than shown.")
   }
 
   # (4) sparse: only one year of monitoring
-  if (dplyr::n_distinct(hist$year) == 1L) add("info", "Watched in a single year so far. Onset dates can't be compared across years yet.")
-  flags
+  if (dplyr::n_distinct(hist$year) == 1L)
+    add("info", "Watched in a single year so far", "single_year", yes_idx,
+      "Watched in a single year so far. Onset dates can't be compared across years yet.")
+  out
+}
+# roll every flag's offending rows into one ranked report data.frame for CSV
+# download (high -> warn -> info), or NULL if the plant is clean.
+phe_qc_report <- function(hist, growth_form = NULL) {
+  q <- pheno_qc_flags(hist, growth_form); if (!length(q$sets)) return(NULL)
+  lvl <- vapply(q$flags, function(f) f$level, ""); names(lvl) <- vapply(q$flags, function(f) f$key, "")
+  ord <- c("high"=1,"warn"=2,"info"=3)
+  keys <- names(q$sets)[order(ord[lvl[names(q$sets)]])]
+  do.call(rbind, c(lapply(keys, function(k) { x <- q$sets[[k]]; x$level <- lvl[[k]]; x }), list(make.row.names = FALSE)))
 }
 
 # growth-form / species composition (Overview)
@@ -267,10 +339,70 @@ plot_summary_phe <- function(obs, inds, ind_s = NULL) {
 # the single-site and national maps so "earlier" reads the same on both:
 # early green-up = fresh green, late = senescence amber (on-theme + intuitive).
 # ---------------------------------------------------------------------------
-greenup_pal <- function(domain) {
-  v <- domain[is.finite(domain)]; d <- if (length(v)) range(v) else c(100, 200)
-  if (diff(d) == 0) d <- c(d[1] - 1, d[1] + 1)
-  leaflet::colorNumeric(c("#15502f","#3f8f3a","#9ccf6a","#e0b341","#d98014"), domain = d, na.color = "#c4c0b2")
+GREENUP_RAMP <- c("#15502f","#3f8f3a","#9ccf6a","#e0b341","#d98014")
+# Robust green-up colour domain: a handful of THIN-COVERAGE sites carry wild
+# median_greenup values (KONA day 226 at gu_share 0.03; LAJA day 5) that, on a raw
+# range(), wash every well-covered site into one flat mid-band. So clamp the colour
+# domain to the 5th/95th percentile of the WELL-COVERED sites (gu_share >= floor)
+# and PIN out-of-range values to the endpoints. Pass gu_share to use the coverage
+# filter; omit it (legacy callers / per-plot maps) to fall back to robust quantiles
+# of the values themselves. Returns a palette FUNCTION that clamps before mapping,
+# so an outlier reads as "off the deep/late end", never as a fabricated NA gap.
+# The robust [p5,p95] colour domain for green-up DOY, computed from well-covered
+# sites only (gu_share >= floor) when a coverage vector is supplied. Returned so
+# the legend, the markers, and the value-clamp all share ONE domain.
+greenup_domain <- function(domain, gu_share = NULL, floor = 0.5) {
+  v <- suppressWarnings(as.numeric(domain))
+  base <- if (!is.null(gu_share)) {
+    gs <- suppressWarnings(as.numeric(gu_share))
+    well <- v[is.finite(v) & is.finite(gs) & gs >= floor]
+    if (length(well) >= 3) well else v[is.finite(v)]
+  } else v[is.finite(v)]
+  d <- if (length(base)) stats::quantile(base, c(.05, .95), names = FALSE, na.rm = TRUE) else c(100, 200)
+  if (!all(is.finite(d)) || diff(d) == 0) { m <- if (length(base)) stats::median(base, na.rm = TRUE) else 150; d <- c(m - 1, m + 1) }
+  d
+}
+# Green-up palette on the ROBUST domain (p5/p95 of well-covered sites). A handful
+# of THIN-COVERAGE sites carry wild median_greenup values (KONA day 226 at
+# gu_share 0.03; LAJA day 5) that on a raw range() wash every well-covered site
+# into one flat mid-band. Build the palette on the robust domain instead; callers
+# clamp the values they map with gp_clamp() so an outlier pins to the deep/late
+# endpoint rather than reading as a fabricated NA gap. Returns a leaflet
+# colorNumeric object so addLegend() still draws a continuous legend.
+greenup_pal <- function(domain, gu_share = NULL, floor = 0.5) {
+  d <- greenup_domain(domain, gu_share = gu_share, floor = floor)
+  pal <- leaflet::colorNumeric(GREENUP_RAMP, domain = d, na.color = "#c4c0b2")
+  attr(pal, "gp_domain") <- d   # so callers can clamp values + legend ticks to it
+  pal
+}
+# clamp a value vector to a palette's robust domain (so out-of-range outliers pin
+# to the endpoint colour instead of falling outside the leaflet domain -> NA).
+gp_clamp <- function(pal, x) {
+  d <- attr(pal, "gp_domain"); x <- suppressWarnings(as.numeric(x))
+  if (is.null(d)) return(x)
+  pmin(pmax(x, d[1]), d[2])
+}
+
+# Effective VISIT CADENCE: the median gap (in days) between consecutive distinct
+# visit dates within a growing season, per plant, pooled across the site. Onset is
+# interval-censored to the gap between visits, so a site visited every ~7 days
+# resolves onset far more tightly than one visited monthly — part of a cross-site
+# onset difference can be censoring geometry, not biology (the phenology analog of
+# detection probability). This is the number behind the cadence badge + the
+# coarse-cadence grey on the gradient. Restricted to in-season gaps (<= 60 d) so a
+# winter dormancy gap between seasons doesn't inflate it. Returns NA if a site has
+# too few visits to estimate a gap.
+visit_interval_days <- function(obs) {
+  d <- obs[!is.na(obs$date) & is.finite(obs$year), c("individualID","year","date"), drop=FALSE]
+  if (!nrow(d)) return(NA_real_)
+  d <- d[!duplicated(d[c("individualID","year","date")]), , drop=FALSE]
+  d <- d[order(d$individualID, d$year, d$date), , drop=FALSE]
+  key <- paste(d$individualID, d$year)
+  gap <- as.numeric(diff(as.Date(d$date)))
+  same <- key[-1] == key[-length(key)]                 # only gaps within one plant-year
+  g <- gap[same & is.finite(gap) & gap > 0 & gap <= 60] # in-season gaps only
+  if (length(g) < 5) return(NA_real_)
+  round(stats::median(g), 1)
 }
 
 # one row per site: the picker-map + cross-site numbers (computed in the bundler)
@@ -290,6 +422,10 @@ site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
     # flags when median_greenup rests on a biased subsample. Carried to
     # site_index for the national-map coverage badge (next bundle rebuild).
     gu_share = if (!is.null(ind_s)) round(greenup_coverage(ind_s), 3) else NA_real_,
+    # median in-season visit interval (days). Cross-site onset comparisons aren't
+    # cadence-controlled, so a coarse-cadence site's onset carries wide censoring
+    # uncertainty; carried to site_index for the cadence badge + gradient footnote.
+    median_visit_interval = visit_interval_days(obs),
     year_min = suppressWarnings(min(obs$year, na.rm=TRUE)),
     year_max = suppressWarnings(max(obs$year, na.rm=TRUE)),
     lat = meta$lat, lng = meta$lng)

@@ -24,7 +24,7 @@ Connect Cloud deploys an R app straight from this public GitHub repo using `mani
 
 The manifest is **lean and bundle-only**: `global/ui/server.R`, `R/`, `www/`, the precomputed
 `data/*.rds` indexes + `data/national_onsets.rds`, the `data/sites/*.rds` bundles, and the demo
-sample — **92 CRAN packages, NOT `neonUtilities`.** `neonUtilities` is referenced by a *computed*
+sample — **91 CRAN packages, NOT `neonUtilities` / `arrow` / `data.table`.** `neonUtilities` is referenced by a *computed*
 name in `global.R` (`.NEON_PKG`) so the dependency scanner never pins it (no wasm build; a live
 NEON pull on a cold worker is a hang risk). The deployed app runs entirely from the bundled
 `.rds` files; the optional live-fetch toggle only appears where `neonUtilities` is installed
@@ -40,7 +40,7 @@ NEON pull on a cold worker is a hang risk). The deployed app runs entirely from 
 Regenerate the manifest only when **runtime dependencies** change (not on a data refresh):
 ```r
 # R with the app's runtime packages:
-Rscript scripts/write_manifest.R   # writes manifest.json + self-checks neonUtilities is absent
+Rscript scripts/write_manifest.R   # writes manifest.json, prunes + HARD-GATES neonUtilities/arrow/data.table (stop()s if any leaked)
 ```
 
 **Cold start:** the free tier sleeps. The landing page's pre-warm `fetch(APP_URL)` on load wakes
