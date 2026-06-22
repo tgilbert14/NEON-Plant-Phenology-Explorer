@@ -37,14 +37,15 @@ cat(sprintf("Writing manifest for %d files (%d site bundles)...\n",
 rsconnect::writeManifest(appDir = ".", appFiles = appFiles)
 
 # ---- prune the heavy, wasm-hostile keys, then HARD GATE ----------------------
-# data.table is pulled in ONLY as a transitive Import of plotly; the read-only
-# deployed app never calls it directly, and Connect re-resolves it when it
-# restores plotly, so dropping the explicit pin keeps the manifest lean without
-# breaking the restore. neonUtilities / arrow are never legitimate here (the live
-# fetch is local-dev only, referenced by a computed name) so they are pruned too.
-# After pruning, the gate stop()s if any of the three survived as a package key.
+# neonUtilities / arrow are never legitimate here (the live fetch is local-dev
+# only, referenced by a computed name), so they are pruned and the gate fails
+# loud if either reappears.
+# IMPORTANT: data.table is NOT banned. plotly *Imports* data.table as a hard
+# dependency and Connect Cloud's base image does NOT provide it — Connect does
+# NOT re-resolve transitive deps that are absent from the manifest, so pruning
+# data.table breaks the plotly install and the whole deploy. It must stay.
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
-BANNED <- c("neonUtilities", "arrow", "data.table")
+BANNED <- c("neonUtilities", "arrow")
 
 mj   <- jsonlite::fromJSON("manifest.json", simplifyVector = FALSE)
 pkgs <- names(mj$packages %||% list())
