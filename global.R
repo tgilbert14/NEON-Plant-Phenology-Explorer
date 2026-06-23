@@ -116,7 +116,8 @@ SIBLINGS <- list(
   list(name = "Plant Diversity",  icon = "flower2",           url = "https://tgilbert14.github.io/NEON-Plant-Diversity/"),
   list(name = "Veg Structure",    icon = "tree-fill",         url = "https://tgilbert14.github.io/NEON-Vegetation-Structure-Explorer/"),
   list(name = "Water Chemistry",  icon = "droplet-fill",      url = "https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/"),
-  list(name = "Mosquito Pulse",   icon = "bug-fill",          url = "https://tgilbert14.github.io/NEON-Mosquito-Pulse/")
+  list(name = "Mosquito Pulse",   icon = "bug-fill",          url = "https://tgilbert14.github.io/NEON-Mosquito-Pulse/"),
+  list(name = "Little Inverts",   icon = "water",             url = "https://tgilbert14.github.io/NEON-My-Little-Inverts/")
 )
 series_block <- function(footer = TRUE) {
   div(class = "series-block",
