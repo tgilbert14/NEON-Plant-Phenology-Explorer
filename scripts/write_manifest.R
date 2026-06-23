@@ -36,35 +36,24 @@ cat(sprintf("Writing manifest for %d files (%d site bundles)...\n",
             length(appFiles), length(list.files("data/sites", pattern = "\\.rds$"))))
 rsconnect::writeManifest(appDir = ".", appFiles = appFiles)
 
-# ---- prune the heavy, wasm-hostile keys, then HARD GATE ----------------------
-# neonUtilities / arrow are never legitimate here (the live fetch is local-dev
-# only, referenced by a computed name), so they are pruned and the gate fails
-# loud if either reappears.
-# IMPORTANT: data.table is NOT banned. plotly *Imports* data.table as a hard
-# dependency and Connect Cloud's base image does NOT provide it — Connect does
-# NOT re-resolve transitive deps that are absent from the manifest, so pruning
-# data.table breaks the plotly install and the whole deploy. It must stay.
+# ---- HARD GATE (CHECK-ONLY — never re-serialize the manifest) ----------------
+# neonUtilities is kept out by the dynamic computed-name reference (the scanner
+# never sees it); arrow is a live-fetch-only over-capture. writeManifest() does
+# not capture either, so there is nothing to prune — we only VERIFY.
+# CRITICAL: do NOT rewrite manifest.json here. rsconnect emits a canonical
+# format (file checksums, metadata) that Connect Cloud validates; re-serializing
+# it with jsonlite mangles that format and Connect rejects the deploy as
+# "invalid manifest." data.table is a legitimate plotly hard dependency (Connect's
+# base image lacks it) and MUST stay.
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 BANNED <- c("neonUtilities", "arrow")
-
 mj   <- jsonlite::fromJSON("manifest.json", simplifyVector = FALSE)
 pkgs <- names(mj$packages %||% list())
-pruned <- intersect(BANNED, pkgs)
-if (length(pruned)) {
-  mj$packages[pruned] <- NULL
-  jsonlite::write_json(mj, "manifest.json", auto_unbox = TRUE, pretty = TRUE, digits = NA)
-  cat(sprintf("Pruned transitive/banned key(s) from manifest: %s\n", paste(pruned, collapse = ", ")))
-}
-
-# re-read and gate
-mj2  <- jsonlite::fromJSON("manifest.json", simplifyVector = FALSE)
-pkgs <- names(mj2$packages %||% list())
 cat(sprintf("manifest.json written: %d packages.\n", length(pkgs)))
 leaked <- intersect(BANNED, pkgs)
-if (length(leaked)) {
-  stop(sprintf(
-    "MANIFEST GATE FAILED: banned package(s) still present in manifest.json: %s.\nThese must never commit (heavy / wasm-hostile / live-fetch-only). Fix and re-run; do NOT commit this manifest.",
-    paste(leaked, collapse = ", ")), call. = FALSE)
-}
-cat(sprintf("OK: none of {%s} are in the manifest (lean bundle-only build).\n",
-            paste(BANNED, collapse = ", ")))
+if (length(leaked))
+  stop(sprintf("MANIFEST GATE FAILED: banned package(s) present: %s. Investigate the computed-name dodge / appFiles scope and regenerate — do NOT hand-edit the manifest.",
+               paste(leaked, collapse = ", ")), call. = FALSE)
+if ("plotly" %in% pkgs && !"data.table" %in% pkgs)
+  stop("data.table is MISSING while plotly is present. Connect's base image lacks data.table, so the deploy will fail. Regenerate with writeManifest; never prune data.table.", call. = FALSE)
+cat("OK: lean manifest (no neonUtilities/arrow); data.table present for plotly.\n")
