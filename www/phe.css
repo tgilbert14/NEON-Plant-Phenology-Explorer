@@ -254,3 +254,96 @@
 .series-link .bi { color: var(--green); flex: 0 0 auto; }
 .series-foot { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
 .sidebar .series-grid { grid-template-columns: 1fr; }
+
+/* =========================================================================
+   v2 flow: top bar + relocated select panel + hero change-site/report
+   (the sidebar is gone; the picker map is the primary site selector). All
+   tokens are the Field-Notebook ones from styles.css :root, so this reads
+   right in BOTH light and dark mode. 44px touch targets, stacks on mobile.
+   ========================================================================= */
+
+/* ---- persistent top bar (theme + help) -------------------------------- */
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  padding: 8px 14px; margin: 2px 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+.top-bar-brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.top-bar-brand .tb-mark { font-size: 22px; line-height: 1; flex: none; }
+.top-bar-brand .tb-title { font-weight: 800; font-size: 15px; color: var(--pine);
+  letter-spacing: .2px; white-space: nowrap; font-family: "Fraunces", Georgia, serif; }
+[data-bs-theme="dark"] .top-bar-brand .tb-title { color: #8fdca8; }
+.top-bar-actions { display: flex; align-items: center; gap: 12px; }
+.top-bar-actions .tb-help { min-height: 44px; display: inline-flex; align-items: center;
+  font-weight: 700; }
+.top-bar-actions .tb-help:hover { background: var(--pine); color: #fff; border-color: var(--pine); }
+.tb-theme { display: flex; align-items: center; gap: 6px; }
+.tb-theme-lab { color: var(--muted); font-size: 15px; display: inline-flex; align-items: center; }
+.tb-theme .form-check, .tb-theme bslib-input-dark-mode { min-height: 44px; display: inline-flex; align-items: center; }
+@media (max-width: 560px) {
+  .top-bar { padding: 7px 10px; }
+  .top-bar-brand .tb-title { font-size: 14px; }
+  .top-bar-actions .tb-help .bi + * { display: none; } /* icon-only help on tiny screens */
+}
+
+/* ---- relocated site-select panel (was the sidebar) -------------------- */
+.select-panel {
+  max-width: 880px; margin: 14px auto 4px; text-align: left;
+  background: var(--bg); border: 1px solid var(--line);
+  border-left: 4px solid var(--pine); border-radius: 14px;
+  padding: 16px 18px; box-shadow: 0 4px 16px var(--shadow);
+}
+[data-bs-theme="dark"] .select-panel {
+  background: linear-gradient(180deg, #16261d 0%, #0f1c16 100%);
+}
+.select-panel .sp-head { font-weight: 700; color: var(--pine); font-size: 13.5px;
+  display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+[data-bs-theme="dark"] .select-panel .sp-head { color: #8fdca8; }
+.select-panel .sp-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+.select-panel .sp-field { flex: 1 1 180px; min-width: 160px; }
+.select-panel .sp-field-wide { flex: 1 1 260px; min-width: 220px; }
+.select-panel .sp-field .form-group,
+.select-panel .sp-field .shiny-input-container { margin-bottom: 0; width: 100%; }
+.select-panel label, .select-panel .control-label {
+  color: var(--ink); font-weight: 600; font-size: 13px; }
+.select-panel .sp-field .form-control,
+.select-panel .sp-field .form-select,
+.select-panel .sp-field .selectize-input { min-height: 44px; }
+.select-panel .sp-load { width: 100%; min-height: 48px; margin-top: 14px; }
+.select-panel .site-bio { margin: 12px 0 4px; }
+@media (max-width: 560px) {
+  .select-panel { padding: 14px 13px; }
+  .select-panel .sp-row { gap: 10px; }
+  .select-panel .sp-field, .select-panel .sp-field-wide { flex: 1 1 100%; min-width: 0; }
+}
+
+/* ---- "Open a plant's profile" body block (was in the sidebar) --------- */
+.indiv-picker-wrap {
+  max-width: 1040px; margin: 8px auto 0; padding: 12px 16px;
+  background: var(--paper); border: 1px solid var(--line);
+  border-left: 4px solid var(--gold); border-radius: 12px;
+}
+.indiv-picker-wrap .ipw-row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.indiv-picker-wrap .ipw-sel { flex: 1 1 320px; min-width: 220px; }
+.indiv-picker-wrap .ipw-sel .form-group,
+.indiv-picker-wrap .ipw-sel .shiny-input-container { margin-bottom: 0; width: 100%; }
+.indiv-picker-wrap label, .indiv-picker-wrap .control-label {
+  color: var(--ink); font-weight: 600; font-size: 13px; }
+.indiv-picker-wrap .ipw-sel .selectize-input { min-height: 44px; }
+.indiv-picker-wrap .ipw-surprise { min-height: 44px; white-space: nowrap; font-weight: 700; }
+@media (max-width: 560px) {
+  .indiv-picker-wrap .ipw-sel, .indiv-picker-wrap .ipw-surprise { flex: 1 1 100%; min-width: 0; }
+  .indiv-picker-wrap .ipw-surprise { width: 100%; }
+}
+
+/* ---- hero band: change-site + report-card links ----------------------- */
+.hero-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hero-change { font-size: 12.5px; font-weight: 700; color: var(--terra); text-decoration: none;
+  min-height: 44px; display: inline-flex; align-items: center; gap: 4px; }
+.hero-change:hover { color: var(--pine); text-decoration: underline; }
+[data-bs-theme="dark"] .hero-change { color: #f0a07a; }
+.hero-report { font-size: 12.5px; font-weight: 700; color: var(--sky); text-decoration: none;
+  min-height: 44px; display: inline-flex; align-items: center; gap: 4px; }
+.hero-report:hover { color: var(--pine); text-decoration: underline; }
+[data-bs-theme="dark"] .hero-report { color: #6fcfc5; }

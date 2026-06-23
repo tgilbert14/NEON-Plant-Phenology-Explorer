@@ -1,7 +1,7 @@
 # ===========================================================================
 # NEON Plant Phenology Explorer — ui.R
 # ===========================================================================
-ui <- bslib::page_sidebar(
+ui <- bslib::page_fillable(
   theme = app_theme, title = NULL,
   window_title = "NEON Plant Phenology Explorer", fillable = FALSE,
   tags$head(
@@ -18,30 +18,36 @@ ui <- bslib::page_sidebar(
     tags$script(src = asset_url("pincards.js"))
   ),
   useShinyjs(),
-  sidebar = sidebar(
-    width = 320, class = "control-deck",
-    div(class = "brand", div(class = "brand-mark", "\U0001F33F"),
-      div(div(class = "brand-title", "Plant Phenology Explorer"), div(class = "brand-sub", "NEON field observatory"))),
-    selectInput("stateSel", label = tagList(bs_icon("geo-alt-fill"), " 1 · Pick a state"), choices = NULL, width = "100%"),
-    selectInput("site", label = tagList(bs_icon("pin-map-fill"), " 2 · Pick a site"), choices = NULL, width = "100%"),
-    uiOutput("siteBio"),
-    actionButton("loadBtn", tagList(bs_icon("globe-americas"), " Explore this site"),
-                 class = "btn-primary btn-lg w-100 load-btn", onclick = "smtLoadStart()"),
-    actionButton("demoBtn", tagList(bs_icon("stars"), " or open the Harvard Forest demo"),
-                 class = "btn-link btn-sm w-100 reset-demo", onclick = "smtLoadStart('Harvard Forest · demo dataset')"),
-    hidden(div(id = "spPickerWrap", hr(class = "deck-hr"),
-      selectizeInput("indSel", label = tagList(bs_icon("search"), " Open a plant's profile"), choices = NULL,
-                     options = list(placeholder = "Pick a tagged plant…")),
-      actionButton("surpriseBtn", tagList(bs_icon("dice-5-fill"), " Surprise me"), class = "btn-outline-dark btn-sm w-100"))),
-    hr(class = "deck-hr"),
-    actionButton("help", tagList(bs_icon("question-circle"), " How it works"), class = "btn-outline-dark btn-sm w-100"),
-    div(class = "theme-toggle-row", tags$span(class = "theme-toggle-lab", bs_icon("circle-half"), " Theme"),
-      input_dark_mode(id = "colorMode", mode = "light")),
-    hr(class = "deck-hr"),
-    series_block(footer = FALSE),
-    div(class = "deck-foot", bs_icon("database"), " NEON ", tags$code("DP1.10055.001"),
-      br(), tags$a(href = "https://desertdatalabs.com", target = "_blank", bs_icon("box-arrow-up-right"), " Desert Data Labs"))
+
+  # ---- persistent top bar (theme + help) ---------------------------------
+  # v2 flow: the sidebar is gone. The picker map IS the site selector (its
+  # by-name fallback + Browse list live on the splash). The two controls that
+  # must stay reachable everywhere — the theme toggle and the How-it-works
+  # dialog — live in this slim top-right bar above the hero.
+  div(class = "top-bar",
+    div(class = "top-bar-brand",
+      tags$span(class = "tb-mark", "\U0001F33F"),
+      tags$span(class = "tb-title", "Plant Phenology Explorer")),
+    div(class = "top-bar-actions",
+      actionButton("help", tagList(bs_icon("question-circle"), " How it works"),
+                   class = "btn-outline-dark btn-sm tb-help"),
+      div(class = "tb-theme",
+        tags$span(class = "tb-theme-lab", bs_icon("circle-half")),
+        input_dark_mode(id = "colorMode", mode = "light")))
   ),
+
+  # "Open a plant's profile" picker — was in the sidebar, now a hidden body
+  # block revealed on site load (server: shinyjs::show("spPickerWrap")). Same
+  # ids (indSel, surpriseBtn) so the server logic is untouched.
+  hidden(div(id = "spPickerWrap", class = "indiv-picker-wrap",
+    div(class = "ipw-row",
+      div(class = "ipw-sel",
+        selectizeInput("indSel", label = tagList(bs_icon("search"), " Open a plant's profile"),
+                       choices = NULL, width = "100%",
+                       options = list(placeholder = "Pick a tagged plant…"))),
+      actionButton("surpriseBtn", tagList(bs_icon("dice-5-fill"), " Surprise me"),
+                   class = "btn-outline-dark ipw-surprise")))),
+
   div(id = "loadOverlay", class = "load-overlay", div(class = "load-card",
     div(class = "load-spin mascot-spin", MASCOT_CRITTER), div(class = "load-title", "Loading site data"),
     div(id = "loadSite", class = "load-site"), div(class = "load-bar"),
@@ -55,13 +61,33 @@ ui <- bslib::page_sidebar(
     div(class = "app-hero app-hero-splash",
       h1(class = "app-title", "NEON Plant Phenology Explorer", span(class = "title-tag", "unofficial")),
       p(class = "app-subtitle", "When the leaves break, the flowers open, and the canopy turns, every tagged plant NEON watches at a site, week by week, year after year. Built on twice-weekly phenophase observations (DP1.10055.001).")),
-    p("Tap a site on the map. ", tags$b("Bigger dots"), " carry more tagged plants, ", tags$b("color"), " is median green-up (green = early spring, amber = late). Or jump straight to one, or open the demo."),
-    div(class = "picker-actions", style = "margin:6px 0 12px",
-      div(style = "min-width:260px; flex:1 1 380px; max-width:440px",
-        selectizeInput("siteSearch", NULL, choices = NULL, width = "100%",
-          options = list(placeholder = "Jump to a site by code, name, or state…")))),
+    p("Tap a site on the map. ", tags$b("Bigger dots"), " carry more tagged plants, ", tags$b("color"), " is median green-up (green = early spring, amber = late). Or pick one by name below."),
     div(class = "picker-map-wrap", leafletOutput("nationalMap", height = "460px")),
-    div(class = "picker-map-hint", bs_icon("hand-index-thumb"), " tap a dot, then ", tags$b("Explore this site"), ", or pick by state in the sidebar"),
+    div(class = "picker-map-hint", bs_icon("hand-index-thumb"), " tap a dot, then ", tags$b("Explore this site"), ", or pick a site by name below"),
+
+    # ---- relocated select panel (was the sidebar) ----------------------
+    # Same input ids the server's cascade + load path depend on (stateSel,
+    # site, loadBtn) plus the by-name siteSearch. Tapping a dot is the primary
+    # path; this panel is the accessible by-name fallback. Same ids, so the
+    # server is untouched.
+    div(class = "select-panel",
+      div(class = "sp-head", bs_icon("sliders"),
+          " Or pick a site by name"),
+      div(class = "sp-row",
+        div(class = "sp-field sp-field-wide",
+          selectizeInput("siteSearch", label = tagList(bs_icon("search"), " Jump to a site"),
+            choices = NULL, width = "100%",
+            options = list(placeholder = "By code, name, or state…"))),
+        div(class = "sp-field",
+          selectInput("stateSel", label = tagList(bs_icon("geo-alt-fill"), " State"),
+                      choices = NULL, width = "100%")),
+        div(class = "sp-field",
+          selectInput("site", label = tagList(bs_icon("pin-map-fill"), " Site"),
+                      choices = NULL, width = "100%"))),
+      uiOutput("siteBio"),
+      actionButton("loadBtn", tagList(bs_icon("globe-americas"), " Explore this site"),
+                   class = "btn-primary btn-lg load-btn sp-load", onclick = "smtLoadStart()")),
+
     local({
       ord <- site_table[order(site_table$name), , drop = FALSE]
       n_plants <- suppressWarnings(as.integer(ord$n_individuals))
@@ -79,9 +105,7 @@ ui <- bslib::page_sidebar(
               tags$span(class = "pll-meta",
                 if (!is.na(n_plants[i]))
                   sprintf("%s · %s plants", ord$state[i], format(n_plants[i], big.mark = ","))
-                else ord$state[i]))))) }),
-    div(class = "picker-actions", actionButton("demoBtn2", tagList(bs_icon("stars"), " Open the Harvard Forest demo"),
-      class = "btn-primary btn-lg", onclick = "smtLoadStart('Harvard Forest · demo dataset')")))),
+                else ord$state[i]))))) }))),
   div(id = "mainTabsWrap", class = "main-tabs-wrap",
     navset_card_tab(id = "tabs",
       nav_panel(title = tagList(bs_icon("compass"), " Overview"), value = "overview",

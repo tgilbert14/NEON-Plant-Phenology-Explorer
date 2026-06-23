@@ -113,7 +113,20 @@ server <- function(input, output, session) {
     }
     load_site(code) }
   observeEvent(input$loadBtn, load_site(input$site)); observeEvent(input$pickSite, { removeModal(); load_site_full(input$pickSite) })
-  observeEvent(input$demoBtn, ingest(load_demo(), DEMO_META$label, is_demo=TRUE)); observeEvent(input$demoBtn2, ingest(load_demo(), DEMO_META$label, is_demo=TRUE))
+  # v2 flow: the Harvard Forest demo path is gone — users pick a real site on
+  # the map, the Browse-all-sites list, or the by-name select panel. The demoBtn
+  # / demoBtn2 inputs and their observers were removed with the demo CTAs.
+
+  # "Change site" (in the hero band) -> back to the picker-map landing.
+  observeEvent(input$changeSite, {
+    rv$obs <- NULL; rv$inds <- NULL; rv$ind_summary <- NULL; rv$trend <- NULL
+    rv$label <- NULL; rv$site <- NULL; rv$ind <- NULL; rv$ctx <- NULL; rv$is_demo <- FALSE
+    shinyjs::hide("mainTabsWrap"); shinyjs::hide("spPickerWrap"); shinyjs::show("splash")
+    # the picker map was hidden while a site was loaded; nudge it across several
+    # frames to re-measure now that it's visible again, so it never paints blank
+    # / half-width on return (page_fillable settles its width a beat late).
+    session$sendCustomMessage("kickMaps", list())
+  })
 
   # ---- national site-picker map (the splash landing) --------------------
   # STATIC leafletOutput in ui (never inside renderUI — avoids the re-bind race).
@@ -227,7 +240,13 @@ server <- function(input, output, session) {
     hero <- function(v,l,suf="",icon,tone,ttl=NULL) div(class=paste0("hero-stat hero-",tone), title=ttl,
       div(class="hs-icon", bs_icon(icon)), div(div(class="hs-v count-up", `data-target`=v, `data-suffix`=suf, "0"), div(class="hs-l", l)))
     cov <- gu_badge(gu_share, where = "here")
-    div(class="hero-band", div(class="hero-title", bs_icon("flower3"), tags$b(rv$label)),
+    div(class="hero-band",
+      div(class="hero-title",
+        bs_icon("flower3"), tags$b(rv$label),
+        actionLink("changeSite", tagList(bs_icon("arrow-left-circle"), " change site"),
+                   class = "hero-change"),
+        downloadLink("reportCard", tagList(bs_icon("file-earmark-arrow-down"), " report card"),
+                     class = "hero-report")),
       div(class="hero-grid",
         hero(nrow(inds), "tagged plants", icon="flower1", tone="pine"),
         hero(n_sp, "species", icon="tree", tone="navy"),
@@ -407,7 +426,7 @@ server <- function(input, output, session) {
   })
   output$indCardSlot <- renderUI({
     if (is.null(rv$ind)) return(div(class="qc-empty", div(class="qc-empty-icon","\U0001F33F"), h4("Tap a plant to see its card"),
-      p("Tap a dot above and choose “Open plant profile”, or pick a plant in the sidebar.")))
+      p("Tap a dot above and choose “Open plant profile”, or pick a plant from “Open a plant's profile” above the tabs.")))
     r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; if (!nrow(r)) return(NULL)
     div(class="lab-sel", span(class="ls-emoji","\U0001F50E"),
       div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" · green-up day %s · carries leaves ~%s d/yr",
@@ -436,7 +455,7 @@ server <- function(input, output, session) {
   })
   output$plantProfile <- renderUI({
     if (is.null(rv$ind)) return(div(class="qc-empty", div(class="qc-empty-icon","\U0001F33F"), h4("Pick a plant to open its profile"),
-      p("Use the Onset Lab (tap a dot → “Open plant profile”) or the sidebar picker.")))
+      p("Use the Onset Lab (tap a dot → “Open plant profile”) or the “Open a plant's profile” picker above the tabs.")))
     r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; req(nrow(r)==1)
     h <- indiv_history(rv$obs, rv$ind); q <- pheno_qc_flags(h, r$growthForm); flags <- q$flags
     n_ph <- if (!is.null(h)) dplyr::n_distinct(h$phenophaseName[h$status=="yes"]) else 0
@@ -523,6 +542,45 @@ server <- function(input, output, session) {
       if (is.null(rep)) rep <- data.frame(note="No data-quality flags for this plant.")
       rep <- cbind(site = rv$site %||% NA_character_, individualID = rv$ind %||% NA_character_, rep)
       utils::write.csv(rep, file, row.names=FALSE, na="") }, contentType="text/csv")
+  # ---- site report card (hero band downloadLink) --------------------------
+  # Every v2 app ships a Report from the top bar / hero. This app has no PDF
+  # render path, so the report is a tidy, well-formed site-summary CSV: one
+  # block of headline metrics for the loaded site (and date span), plus a
+  # growth-form roster, generated from the same reactives the rest of the app
+  # reads. Self-describing filename so a folder of them stays legible.
+  output$reportCard <- downloadHandler(
+    filename = function() sprintf("NEON-Phenology_ReportCard_%s_%s.csv",
+      rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      inds <- rv$inds; obs <- rv$obs; req(inds, obs)
+      yrs <- range(obs$year, na.rm = TRUE)
+      n_sp <- dplyr::n_distinct(species_level_only(inds)$scientificName)
+      n_pl <- dplyr::n_distinct(inds$plotID)
+      gu   <- suppressWarnings(stats::median(rv$ind_summary$greenup, na.rm = TRUE))
+      la   <- suppressWarnings(stats::median(rv$ind_summary$leaf_active, na.rm = TRUE))
+      gu_share <- greenup_coverage(rv$ind_summary)
+      cb <- comp_by(inds, "growthForm"); cb <- cb[!is.na(cb$growthForm), , drop = FALSE]
+      hdr <- data.frame(
+        metric = c("site", "site_name", "label", "year_first", "year_last",
+                   "tagged_plants", "species", "phenology_plots",
+                   "median_greenup_doy", "median_leaf_active_days",
+                   "greenup_coverage_share", "phenophase_records",
+                   "data_product", "generated", "app_version", "source"),
+        value = c(rv$site %||% "", { r <- site_table[site_table$site == (rv$site %||% ""), ]
+                    if (nrow(r)) r$name[1] else "" }, rv$label %||% "",
+                  yrs[1], yrs[2], nrow(inds), n_sp, n_pl,
+                  if (is.finite(gu)) round(gu) else NA, if (is.finite(la)) round(la) else NA,
+                  if (is.finite(gu_share)) round(gu_share, 3) else NA,
+                  nrow(obs), NEON_DPID, as.character(Sys.Date()), APP_VERSION,
+                  "Desert Data Labs · not affiliated with NEON/Battelle/NSF"),
+        stringsAsFactors = FALSE)
+      roster <- if (nrow(cb)) data.frame(metric = paste0("growth_form: ", cb$growthForm),
+                                         value = paste0(cb$n, " plants"), stringsAsFactors = FALSE) else NULL
+      out <- rbind(hdr, roster)
+      utils::write.csv(out, file, row.names = FALSE, na = "")
+    },
+    contentType = "text/csv")
+
   output$indCsv <- downloadHandler(
     filename = function() sprintf("NEON-Phenology_%s_%s.csv", gsub("[^A-Za-z0-9]","",short_ind(rv$ind %||% "plant")), format(Sys.Date(),"%Y%m%d")),
     content = function(file){ id <- rv$ind; req(id); h <- indiv_history(rv$obs, id); req(!is.null(h))
@@ -734,7 +792,7 @@ server <- function(input, output, session) {
   })
   observeEvent(input$help, showModal(modalDialog(easyClose=TRUE, title=tagList(bs_icon("question-circle"), " How it works"),
     tags$ul(
-      tags$li(HTML("Pick a <b>site</b> (or open the Harvard Forest demo).")),
+      tags$li(HTML("Pick a <b>site</b> on the map, or by name in the panel below it.")),
       tags$li(HTML("<b>Phenology Clock</b> · the typical year, week by week; switch species to compare.")),
       tags$li(HTML("<b>Onset Lab</b> · every plant by green-up onset × season length; <b>tap one</b> to pin its card, then “Open plant profile”.")),
       tags$li(HTML("<b>Plant Profile</b> · a plant's phenophase calendar, onset dates, quality checks, and downloads.")),

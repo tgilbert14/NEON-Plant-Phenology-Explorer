@@ -92,6 +92,15 @@ document.addEventListener("DOMContentLoaded", function () {
   Shiny.addCustomMessageHandler("smtLoadStart", function (msg) { smtLoadStart(msg && msg.label); });
   // current site code, used to stamp export filenames (pincards.js)
   Shiny.addCustomMessageHandler("pheSite", function (msg) { window.__pheSite = (msg && msg.site) || ""; });
+  // "Change site" re-shows the picker-map splash. The page_fillable layout (and
+  // the relocated select panel) needs a moment to settle its width before
+  // Leaflet measures, or the national map captures a half-width and paints
+  // narrow. Dispatch resize across several frames to catch the settled layout.
+  Shiny.addCustomMessageHandler("kickMaps", function () {
+    var kick = function () { try { window.dispatchEvent(new Event("resize")); } catch (e) {} };
+    requestAnimationFrame(kick);
+    [80, 250, 500, 900].forEach(function (t) { setTimeout(kick, t); });
+  });
 });
 
 // ---- mascot celebration: the sprout hops up + fades on a special moment ----
