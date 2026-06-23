@@ -49,6 +49,13 @@ saveRDS(national_onsets, "data/national_onsets.rds", compress = "xz")
 cat(sprintf("\nrebuilt site_index: %d sites | national_onsets: %d rows, %d species\n",
             nrow(site_index), nrow(national_onsets), dplyr::n_distinct(national_onsets$scientificName)))
 
+# rebuild the "Search the network" index too — it derives from these same
+# committed bundles + indexes, so it must stay in lockstep on every refresh.
+if (file.exists("scripts/build_search_index.R")) {
+  cat("Rebuilding search_index.rds...\n")
+  source("scripts/build_search_index.R", local = new.env())
+}
+
 # refresh the lean manifest too (so a code/helper change deploys with the right
 # package set). write_manifest.R hard-gates neonUtilities/arrow/data.table.
 # Only when rsconnect is installed (it isn't in the slim refresh CI image); the

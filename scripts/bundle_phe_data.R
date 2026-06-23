@@ -111,4 +111,11 @@ saveRDS(national_onsets, "data/national_onsets.rds", compress="xz")
 cat("\nsite_index:\n"); print(as.data.frame(site_index)); cat("\n")
 cat(sprintf("national_onsets: %d site×species rows, %d species, %d sites\n",
     nrow(national_onsets), dplyr::n_distinct(national_onsets$scientificName), length(summ)))
+
+# build the "Search the network" index (data/search_index.rds) from the bundles
+# + indexes just written, so a full re-pull keeps the network search current too.
+if (file.exists("scripts/build_search_index.R")) {
+  cat("\nBuilding search_index.rds...\n")
+  source("scripts/build_search_index.R", local = new.env())
+}
 cat("DONE\n")

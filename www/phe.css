@@ -347,3 +347,34 @@
   min-height: 44px; display: inline-flex; align-items: center; gap: 4px; }
 .hero-report:hover { color: var(--pine); text-decoration: underline; }
 [data-bs-theme="dark"] .hero-report { color: #6fcfc5; }
+
+/* ---- Search the network tab ------------------------------------------ */
+.search-mode-wrap { margin: 4px 0 14px; }
+.search-mode-wrap .radio-inline, .search-mode-wrap .form-check-inline { margin-right: 18px; }
+.search-controls { margin-bottom: 10px; }
+.search-controls label, .search-controls .control-label {
+  color: var(--ink); font-weight: 600; font-size: 13px; }
+.search-controls .selectize-input,
+.search-controls .form-control, .search-controls .form-select { min-height: 44px; }
+/* the result table must NOT collapse to 0 width inside the fill card: a plain
+   full-width div wrapper (suite DTOutput-in-fill-card gotcha), no spinner. */
+.search-table-wrap { width: 100%; margin-top: 4px; }
+.search-table-wrap table.dataTable { width: 100% !important; }
+.search-table-wrap .dataTables_wrapper { width: 100%; }
+.search-cap { margin: 2px 0 10px; font-size: 14px; color: var(--ink); }
+.search-cap.muted, .search-cap .muted { color: var(--muted, #5f6f64); font-weight: 500; }
+.search-foot { margin-top: 12px; }
+.thr-readout, .thr-day-readout { display: flex; align-items: center;
+  min-height: 44px; font-weight: 600; font-size: 13px; color: var(--terra); }
+.search-go-btn { white-space: nowrap; padding: 5px 11px; font-size: 12.5px; font-weight: 700; }
+table.dataTable td .search-go-btn { margin: 0; }
+[data-bs-theme="dark"] .search-cap { color: #e8eef2; }
+[data-bs-theme="dark"] .search-cap.muted, [data-bs-theme="dark"] .search-cap .muted { color: #9fb0c4; }
+[data-bs-theme="dark"] .thr-readout, [data-bs-theme="dark"] .thr-day-readout { color: #f0a07a; }
+[data-bs-theme="dark"] .search-table-wrap table.dataTable,
+[data-bs-theme="dark"] .search-table-wrap .dataTables_wrapper { color: #e8eef2; }
+[data-bs-theme="dark"] .search-table-wrap table.dataTable tbody tr { background: transparent; }
+@media (max-width: 560px) {
+  .search-mode-wrap .radio-inline, .search-mode-wrap .form-check-inline {
+    display: block; margin: 6px 0; }
+}

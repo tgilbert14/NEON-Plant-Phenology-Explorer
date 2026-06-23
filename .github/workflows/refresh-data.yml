@@ -98,7 +98,7 @@ jobs:
           # commit ONLY the data artifacts by EXPLICIT path — never a blanket add
           # that could sweep in a gitignored sibling or another job's half-written
           # file. Skip cleanly if nothing changed.
-          git add data/sites data/site_index.rds data/national_onsets.rds data-sample/demo.rds
+          git add data/sites data/site_index.rds data/national_onsets.rds data/search_index.rds data-sample/demo.rds
           if git diff --cached --quiet; then
             echo "No data changes this run — nothing to commit."
           else

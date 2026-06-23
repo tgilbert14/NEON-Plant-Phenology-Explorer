@@ -798,4 +798,116 @@ server <- function(input, output, session) {
       tags$li(HTML("<b>Plant Profile</b> · a plant's phenophase calendar, onset dates, quality checks, and downloads.")),
       tags$li(HTML("Phenology is a <b>timing</b> signal on a fixed roster, not a measure of abundance."))),
     footer=modalButton("Got it"))))
+
+  # =========================================================================
+  # SEARCH THE NETWORK — instant in-memory search over the bundled index.
+  # Reads SEARCH_TAXA / SEARCH_SITES loaded once at boot in global.R (no fetch).
+  # Both result tables carry a "Go to site" button that routes through the SAME
+  # pickSite -> load_site_full() path the picker-map popup uses, so the jump is
+  # instant (loads from the bundle) and lands the user on the Overview tab.
+  # =========================================================================
+  doy_lab <- function(d) ifelse(is.finite(d), sprintf("%s (%s)", d, doy_to_month(d)), "—")
+  # a per-row "Go to site →" button: sets input$searchGo to the site code.
+  go_btn <- function(codes) vapply(codes, function(cd) as.character(
+    tags$button(class = "sp-btn sp-go search-go-btn", type = "button",
+      onclick = sprintf("smtLoadStart('%s');Shiny.setInputValue('searchGo','%s',{priority:'event'});return false;", cd, cd),
+      HTML(paste0("Go to ", cd, " &rarr;")))), character(1))
+
+  # one selectize fed from the boot-time species roster (server-side so 499
+  # options never bloat the page); placeholder seeds a desert example.
+  observe({
+    updateSelectizeInput(session, "searchTaxon", server = TRUE,
+      choices = c("" , stats::setNames(SEARCH_SPECIES, SEARCH_SPECIES)), selected = "")
+  })
+
+  # the wired jump: identical behaviour to the map popup's Explore button.
+  observeEvent(input$searchGo, if (nzchar(input$searchGo %||% "")) {
+    session$sendCustomMessage("smtLoadStart", list(label = input$searchGo))
+    load_site_full(input$searchGo)
+  }, ignoreInit = TRUE)
+
+  # ---- (a) FIND A TAXON ---------------------------------------------------
+  taxon_rows <- reactive({
+    sp <- input$searchTaxon %||% ""
+    if (!nzchar(sp) || is.null(SEARCH_TAXA)) return(SEARCH_TAXA[0, , drop = FALSE])
+    d <- SEARCH_TAXA[SEARCH_TAXA$scientificName == sp, , drop = FALSE]
+    d[order(d$greenup, d$site), , drop = FALSE]
+  })
+  output$searchTaxonCaption <- renderUI({
+    sp <- input$searchTaxon %||% ""
+    if (!nzchar(sp)) return(div(class = "search-cap muted",
+      bs_icon("arrow-up"), " Pick a species to see every site that monitors it."))
+    d <- taxon_rows(); n <- nrow(d)
+    if (!n) return(div(class = "search-cap muted", bs_icon("emoji-frown"),
+      sprintf(" No bundled site monitors %s yet.", sp)))
+    ng <- sum(is.finite(d$greenup))
+    div(class = "search-cap",
+      glow_badge(sprintf("%d %s", n, if (n == 1) "site" else "sites"), DDL$primary),
+      tags$em(sprintf(" monitor %s. ", sp)),
+      tags$span(class = "muted", sprintf("Green-up day shown for %d; the rest are scored straight into leaves.", ng)))
+  })
+  output$searchTaxonTbl <- DT::renderDT({
+    d <- taxon_rows(); if (!nrow(d)) return(NULL)
+    out <- data.frame(
+      Site = sprintf("<b>%s</b> · %s", d$site, d$name %||% d$site),
+      State = d$state,
+      `Green-up day` = vapply(d$greenup, doy_lab, character(1)),
+      `Leaf-active day` = vapply(d$leaf_active, doy_lab, character(1)),
+      Plants = d$n_ind,
+      Years = ifelse(is.na(d$year_min), "—", ifelse(d$year_min == d$year_max,
+        as.character(d$year_min), sprintf("%s–%s", d$year_min, d$year_max))),
+      ` ` = go_btn(d$site),
+      check.names = FALSE, stringsAsFactors = FALSE)
+    DT::datatable(out, escape = FALSE, rownames = FALSE, selection = "none",
+      options = list(pageLength = 12, dom = "tip", autoWidth = FALSE,
+        columnDefs = list(list(orderable = FALSE, targets = ncol(out) - 1))),
+      class = "compact stripe hover")
+  }, server = FALSE)
+
+  # ---- (b) THRESHOLD QUERY (sites by median green-up day) ------------------
+  output$thrDayLabel <- renderUI({
+    dir <- input$thrDir %||% "before"
+    if (dir %in% c("earliest", "latest")) return(NULL)
+    div(class = "thr-day-readout", bs_icon("calendar-event"),
+      sprintf(" day %d = %s", input$thrDay %||% 120, doy_to_month(input$thrDay %||% 120)))
+  })
+  threshold_rows <- reactive({
+    if (is.null(SEARCH_SITES)) return(NULL)
+    d <- SEARCH_SITES; dir <- input$thrDir %||% "before"; day <- input$thrDay %||% 120
+    if (dir == "before")        d <- d[d$median_greenup <  day, , drop = FALSE]
+    else if (dir == "after")    d <- d[d$median_greenup >= day, , drop = FALSE]
+    if (dir == "latest") d <- d[order(-d$median_greenup), , drop = FALSE]
+    else                 d <- d[order(d$median_greenup), , drop = FALSE]
+    d
+  })
+  output$searchThresholdCaption <- renderUI({
+    d <- threshold_rows(); tot <- if (!is.null(SEARCH_SITES)) nrow(SEARCH_SITES) else 0
+    dir <- input$thrDir %||% "before"; day <- input$thrDay %||% 120
+    if (is.null(d) || !nrow(d)) return(div(class = "search-cap muted", bs_icon("emoji-frown"),
+      " No bundled site matches. Try a later day."))
+    phrase <- switch(dir,
+      before   = sprintf("green up before day %d (%s)", day, doy_to_month(day)),
+      after    = sprintf("green up on or after day %d (%s)", day, doy_to_month(day)),
+      earliest = "ranked earliest green-up first",
+      latest   = "ranked latest green-up first")
+    div(class = "search-cap",
+      glow_badge(sprintf("%d of %d sites", nrow(d), tot), DDL$primary),
+      tags$em(sprintf(" %s.", phrase)))
+  })
+  output$searchThresholdTbl <- DT::renderDT({
+    d <- threshold_rows(); if (is.null(d) || !nrow(d)) return(NULL)
+    out <- data.frame(
+      Site = sprintf("<b>%s</b> · %s", d$site, d$name %||% d$site),
+      State = d$state,
+      `Median green-up day` = vapply(d$median_greenup, doy_lab, character(1)),
+      Species = d$n_species,
+      Plants = d$n_individuals,
+      Years = ifelse(is.na(d$year_min), "—", sprintf("%s–%s", d$year_min, d$year_max)),
+      ` ` = go_btn(d$site),
+      check.names = FALSE, stringsAsFactors = FALSE)
+    DT::datatable(out, escape = FALSE, rownames = FALSE, selection = "none",
+      options = list(pageLength = 15, dom = "tip", autoWidth = FALSE,
+        columnDefs = list(list(orderable = FALSE, targets = ncol(out) - 1))),
+      class = "compact stripe hover")
+  }, server = FALSE)
 }

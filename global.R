@@ -35,6 +35,16 @@ load_demo <- function() { b <- load_site_bundle(DEMO_META$site); if (!is.null(b)
 
 SITE_INDEX <- tryCatch(readRDS("data/site_index.rds"), error = function(e) NULL)
 NATIONAL_ONSETS <- tryCatch(readRDS("data/national_onsets.rds"), error = function(e) NULL)
+# "Search the network" index: one small .rds, loaded ONCE here (like site_index),
+# searched in-memory so the network search is instant and never live-fetches.
+# $taxa = species×site occurrence rows (measure = median green-up DOY);
+# $sites = site-level table for the threshold query. Built by
+# scripts/build_search_index.R from the committed bundles.
+SEARCH_INDEX <- tryCatch(readRDS("data/search_index.rds"), error = function(e) NULL)
+SEARCH_TAXA  <- if (!is.null(SEARCH_INDEX)) SEARCH_INDEX$taxa  else NULL
+SEARCH_SITES <- if (!is.null(SEARCH_INDEX)) SEARCH_INDEX$sites else NULL
+# distinct species roster for the autocomplete (sorted; only species the network monitors)
+SEARCH_SPECIES <- if (!is.null(SEARCH_TAXA)) sort(unique(SEARCH_TAXA$scientificName)) else character(0)
 APP_VERSION <- "2.0 (Field Notebook)"
 BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
 site_table <- if (length(BUNDLED)) {

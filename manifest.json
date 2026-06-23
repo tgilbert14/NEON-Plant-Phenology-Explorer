@@ -3111,6 +3111,9 @@
     "data/national_onsets.rds": {
       "checksum": "489d9216803f978df3b7bf2495d99e9c"
     },
+    "data/search_index.rds": {
+      "checksum": "2f64eb93e4f3c66c6dee186819facca4"
+    },
     "data/site_index.rds": {
       "checksum": "2ed5167443bf6055587c31595b125656"
     },
@@ -3253,7 +3256,7 @@
       "checksum": "e654d4c461f178083807f65a1d026050"
     },
     "global.R": {
-      "checksum": "d9faaa0cca052cd88dde406eaa8e64ec"
+      "checksum": "06e8e1671344e96bd0a39a23f4f9c3c2"
     },
     "R/codebook.R": {
       "checksum": "205ddadf00f26574992a2587f102ba50"
@@ -3265,16 +3268,16 @@
       "checksum": "d7afa82e8a17f1f906184eee2b6b927e"
     },
     "server.R": {
-      "checksum": "e27c76749edfbca29ffc12d0bb9829f9"
+      "checksum": "44fdc4d266ce52dea626ff93d3b119a0"
     },
     "ui.R": {
-      "checksum": "e43ee905ceb751514a5178fa202c5404"
+      "checksum": "06c4a1d18dbb7bcaad1195eedbd9b690"
     },
     "www/app.js": {
       "checksum": "fdc823f39870e6a62da69085f5073d79"
     },
     "www/phe.css": {
-      "checksum": "a34bf8dfd09c9a44cc1f4fbf21d7c111"
+      "checksum": "a65ff56c13e5416068d411b7829287c8"
     },
     "www/pincards.js": {
       "checksum": "9bf7203d0dd6135dd3be49b8d7f5f785"
