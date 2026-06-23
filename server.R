@@ -658,14 +658,23 @@ server <- function(input, output, session) {
     else { dom <- if (sum(has) && diff(range(val[has])) > 0) range(val[has]) else c(0, max(val[has], 1))
            pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "plants tagged"; nalab <- "—" }
     mx <- max(ps$n_ind, 1); ps$radius <- 8 + 13 * sqrt(pmax(ps$n_ind, 1)) / sqrt(mx)   # area ∝ plants
-    mon <- doy_to_month(ps$greenup)
-    gtxt <- ifelse(is.finite(ps$greenup), paste0("day ", ps$greenup, " (", mon, ")"), "no green-up scored")
-    # per-plot green-up coverage — say it on the marker where the number is thin,
-    # so a 1/5-of-plants plot can't read like a whole-plot number.
-    covtxt <- ifelse(is.finite(ps$gu_share) & ps$gu_share < GU_COVERAGE_FLOOR,
-      sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants. Read leaf-active</span>", round(ps$gu_share * 100)), "")
-    latxt <- ifelse(is.finite(ps$leaf_active), paste0(" · carries leaves ~", ps$leaf_active, " d/yr"), "")
-    lab <- sprintf("<b>%s</b><br>%d plants · green-up %s%s%s", short_plot(ps$plotID), ps$n_ind, gtxt, latxt, covtxt)
+    # The popup LEADS WITH the selected metric, so it matches the dot colour (at
+    # desert sites green-up is scored for ~0-19% of plants, so leaf-active is the
+    # honest lead). Each stat is rendered once; the off-metric stat is a secondary line.
+    thin    <- is.finite(ps$gu_share) & ps$gu_share < GU_COVERAGE_FLOOR
+    gu_str  <- ifelse(is.finite(ps$greenup),
+                 paste0("day ", ps$greenup, " (", doy_to_month(ps$greenup), ")"), "not yet scored")
+    la_str  <- ifelse(is.finite(ps$leaf_active), paste0("~", ps$leaf_active, " d/yr"), "not yet recorded")
+    # per-plot green-up coverage caveat — only shown when green-up actually leads
+    # or is the secondary line, so a 1/5-of-plants plot can't read like a whole-plot number.
+    covtxt <- ifelse(thin,
+      sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants here. Read leaf-active.</span>", round(ps$gu_share * 100)), "")
+    lead_la <- sprintf("<b>leaf-active %s</b><br><span class='pm-pop-sub'>green-up %s</span>%s", la_str, gu_str, covtxt)
+    lead_gu <- sprintf("<b>green-up %s</b>%s<br><span class='pm-pop-sub'>carries leaves %s</span>", gu_str, covtxt, la_str)
+    lead_n  <- sprintf("<span class='pm-pop-sub'>green-up %s%s · leaf-active %s</span>", gu_str,
+                 ifelse(thin, sprintf(" (scored for %d%% of plants)", round(ps$gu_share * 100)), ""), la_str)
+    metric_line <- if (metric == "leaf_active") lead_la else if (metric == "greenup") lead_gu else lead_n
+    lab <- sprintf("<b>%s</b> · %d plants<br>%s", short_plot(ps$plotID), ps$n_ind, metric_line)
     leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng = ~lng, lat = ~lat, radius = ~radius, fillColor = pal(val), color = "#fff", weight = 1, fillOpacity = 0.85,
         label = lapply(lab, htmltools::HTML), popup = lapply(lab, htmltools::HTML)) %>%
