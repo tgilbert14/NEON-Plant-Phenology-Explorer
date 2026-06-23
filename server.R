@@ -284,9 +284,16 @@ server <- function(input, output, session) {
   })
 
   # ---- Phenology Clock (flagship) ----
+  # COVERAGE-CONDITIONAL EMPHASIS. At thin-coverage desert sites (gu_share <
+  # GU_COVERAGE_FLOOR) the green-up petals (Breaking leaf buds / Initial growth)
+  # rest on a small, non-random subset, so we visually DE-EMPHASIZE them (dashed,
+  # thin, faint fill) and lead with the leaf-presence ring, which spans the whole
+  # roster. Pure caption + emphasis over the existing weekly_yesrate output — NO
+  # new computation, and every petal still draws (nothing is dropped).
   output$clockPlot <- renderPlotly({
     obs <- rv$obs; req(obs); sci <- if (nzchar(input$clockSp %||% "")) input$clockSp else NULL
     wk <- weekly_yesrate(obs, sci); if (is.null(wk) || !nrow(wk)) return(note_plot("No phenophase records for that selection"))
+    leaf_lead <- { gs <- greenup_coverage(rv$ind_summary); is.finite(gs) && gs < GU_COVERAGE_FLOOR }
     phs <- names(sort(PHENO_RANK[intersect(names(PHENO_RANK), unique(wk$phenophaseName))]))
     phs <- c(phs, setdiff(unique(wk$phenophaseName), phs))   # any unranked appended
     full <- data.frame(week = 1:52)
@@ -302,9 +309,16 @@ server <- function(input, output, session) {
       th <- theta_of(m$week); r <- m$rate; nn <- m$n
       th <- c(th, th[1] + 360); r <- c(r, r[1]); nn <- c(nn, nn[1])   # close the ring at +360, not back to 0
       col <- COL_OF_PHENO(pn)
-      p <- p %>% plotly::add_trace(type="scatterpolar", mode="lines", name=pn,
+      # at thin coverage, mute the green-up petals (dashed/thin/faint) and bring the
+      # leaf-presence ring forward (solid, bolder, brighter fill).
+      is_gu   <- pn %in% GREENUP
+      is_leaf <- identical(pn, "Leaves")
+      if (leaf_lead && is_gu) { ln <- list(color = col, width = 1, dash = "dot"); fa <- 0.06; nm <- paste0(pn, " (thin coverage)") }
+      else if (leaf_lead && is_leaf) { ln <- list(color = col, width = 3.4); fa <- 0.34; nm <- paste0(pn, " — desert-safe read") }
+      else { ln <- list(color = col, width = 2); fa <- 0.22; nm <- pn }
+      p <- p %>% plotly::add_trace(type="scatterpolar", mode="lines", name=nm,
         r = r, theta = th, fill = "toself",
-        fillcolor = grDevices::adjustcolor(col, alpha.f = 0.22), line = list(color = col, width = 2),
+        fillcolor = grDevices::adjustcolor(col, alpha.f = fa), line = ln,
         customdata = nn,
         hovertemplate = paste0(pn, "<br>%{r:.0f}% of plants 'yes'<br>%{customdata} plants that week<extra></extra>"))
     }
@@ -313,6 +327,15 @@ server <- function(input, output, session) {
     mo_theta <- (c(1,32,60,91,121,152,182,213,244,274,305,335) - 1)/365*360
     scope <- sprintf("%s · %% of plants in each phenophase, by week · pooled across years%s",
       rv$ctx %||% "", if (is.null(sci)) " · all species (mixes evergreen, deciduous & forb leaf calendars; pick a species to read timing)" else paste0(" · ", sci))
+    anns <- list(list(text = scope, x = 0, y = 1.10, xref = "paper", yref = "paper",
+        showarrow = FALSE, xanchor = "left", font = list(color = muted, size = 10.5)))
+    if (leaf_lead) {
+      gpct <- round(greenup_coverage(rv$ind_summary) * 100)
+      anns <- c(anns, list(list(
+        text = sprintf("green-up scored for %d%% of plants here — the leaf-presence ring is the desert-safe read (the dotted green-up petals rest on a small subset)", gpct),
+        x = 0, y = 1.045, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
+        font = list(color = "#b5481f", size = 10.5))))
+    }
     p %>% plotly::layout(
       font = list(color = ink, family = "Rubik"), paper_bgcolor="rgba(0,0,0,0)",
       polar = list(bgcolor = "rgba(0,0,0,0)",
@@ -320,10 +343,16 @@ server <- function(input, output, session) {
         angularaxis = list(rotation = 90, direction = "clockwise", gridcolor = grid,
           tickmode = "array", tickvals = mo_theta, ticktext = month.abb, tickfont = list(size = 10, color = ink))),
       legend = list(orientation = "h", y = -0.12, font = list(color = ink)),
-      annotations = list(list(text = scope, x = 0, y = 1.10, xref = "paper", yref = "paper",
-        showarrow = FALSE, xanchor = "left", font = list(color = muted, size = 10.5))),
-      margin = list(l = 30, r = 30, t = 42, b = 30)) %>%
+      annotations = anns,
+      margin = list(l = 30, r = 30, t = if (leaf_lead) 52 else 42, b = 30)) %>%
       plotly::config(displayModeBar = FALSE, responsive = TRUE)
+  })
+  # clickable green-up-coverage disclosure beside the clock — reuses gu_badge, so
+  # it is clean (absent) at forest sites and only appears at thin-coverage deserts.
+  output$clockCoverage <- renderUI({
+    req(rv$ind_summary); cov <- gu_badge(greenup_coverage(rv$ind_summary), where = "here")
+    if (is.null(cov)) return(NULL)
+    div(class = "map-cov-row", cov)
   })
   output$trendPlot <- renderPlotly({
     tr <- rv$trend; if (is.null(tr) || !nrow(tr)) return(note_plot("Not enough plants per year for an onset trend"))
@@ -372,11 +401,36 @@ server <- function(input, output, session) {
   })
 
   # ---- Onset Lab (flagship pinnable board) ----
+  # COVERAGE-CONDITIONAL X axis. Green-up onset is only scored for a fraction of a
+  # warm-desert roster (SRER ~19%), so the old hard `is.finite(greenup) &
+  # is.finite(leaf_active)` gate silently dropped ~80% of tagged plants and broke
+  # the badge's "switch the metric on the Onset Lab" promise. When the site's
+  # green-up coverage is thin (gu_share < GU_COVERAGE_FLOOR) we place every plant
+  # with a finite leaf_active and put DAYS CARRYING LEAVES (leaf_active, already
+  # computed by key_onsets — NOT a new estimator) on the X axis, so the whole
+  # desert roster shows. Where green-up coverage is good (forests), the existing
+  # green-up × leaf-active board is unchanged.
   output$onsetBoard <- renderPlotly({
     is_ <- rv$ind_summary; req(is_)
-    d <- is_[is.finite(is_$greenup) & is.finite(is_$leaf_active), , drop=FALSE]
+    gu_share <- greenup_coverage(is_)
+    leaf_mode <- is.finite(gu_share) && gu_share < GU_COVERAGE_FLOOR
+    if (leaf_mode) {
+      d <- is_[is.finite(is_$leaf_active), , drop=FALSE]
+      xcol <- "leaf_active"; xttl <- "Days carrying leaves per year · briefer ← → longer"
+    } else {
+      d <- is_[is.finite(is_$greenup) & is.finite(is_$leaf_active), , drop=FALSE]
+      xcol <- "greenup"; xttl <- "Green-up onset (day-of-year) · earlier ← → later"
+    }
     n_total <- nrow(is_); n_placed <- nrow(d)
-    if (!n_placed) return(note_plot("No plants yet have both leaf-out and leaf-active days recorded"))
+    if (!n_placed) return(note_plot(if (leaf_mode) "No plants yet have any leaf-active days recorded"
+                                    else "No plants yet have both leaf-out and leaf-active days recorded"))
+    # generic placement vars so all the downstream machinery (colour-by, pins,
+    # quadrants, viewing diamond) is metric-agnostic. In leaf mode Y is years
+    # watched (n_years, already computed), so the desert board still has a real
+    # second axis instead of a single leaf-active column on a flat line.
+    d$xv <- d[[xcol]]
+    if (leaf_mode) { d$yv <- d$n_years; yttl <- "Years watched · fewer ↓ ↑ more" }
+    else           { d$yv <- d$leaf_active; yttl <- "Days carrying leaves per year · briefer ↓ ↑ longer" }
     # Colour-by capped to the 8 most-monitored categories + an explicit grey
     # "Other" — interpolating Dark2 across ~20 species made muddy, look-alike
     # olives. Growth form (<=8 categories) is the default and is unaffected.
@@ -385,43 +439,54 @@ server <- function(input, output, session) {
     d$grp <- cap_groups(d[[cby]], lv, cap = 8L)
     pal <- capped_pal(lv, cap = 8L)
     grps <- intersect(c(utils::head(lv, 8L), "Other"), unique(d$grp))   # keep frequency order; Other last
+    gu_tip <- ifelse(is.finite(d$greenup), paste0("green-up day ", d$greenup, " (", vapply(d$greenup, doy_to_month, ""), ")"),
+                     "<span style='color:#b5481f'>no green-up scored (logged straight into Leaves)</span>")
     d$tip <- paste0("<span class='smt-pin-emoji'>\U0001F33F</span> <b>", d$scientificName, "</b><br/>",
       "<em>", d$growthForm, " · plot ", short_plot(d$plotID), "</em><br/>",
-      "<span class='smt-pin-stats'>green-up day ", d$greenup, " (", vapply(d$greenup, doy_to_month, ""), ")<br/>",
+      "<span class='smt-pin-stats'>", gu_tip, "<br/>",
       "carries leaves ~", d$leaf_active, " days/yr",
       ifelse(is.finite(d$flower), paste0(" · flowers day ", d$flower), ""), "<br/>",
       d$n_years, " yr watched (any metric)</span>",
       "<br/><span class='smt-open' role='button' tabindex='0' data-tag='", d$individualID, "'>\U0001F50E Open plant profile &rarr;</span>",
       "<br/><em class='smt-pin-hint'>Tap the dot to pin this card</em>")
     qcol <- if (is_dark()) "#7e8da0" else "#9aa6b2"; muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
+    htmpl <- if (leaf_mode) "%{text}<br>carries leaves ~%{x} d/yr · %{y} yr watched<extra></extra>"
+             else "%{text}<br>green-up day %{x} · leaf-active ~%{y} d/yr<extra></extra>"
     p <- plotly::plot_ly()
     for (g in grps) { sub <- d[d$grp==g,]
-      p <- p %>% plotly::add_trace(data=sub, x=~greenup, y=~leaf_active, type="scatter", mode="markers", name=g,
+      p <- p %>% plotly::add_trace(data=sub, x=~xv, y=~yv, type="scatter", mode="markers", name=g,
         customdata=~tip, marker=list(color=pal[[g]] %||% OTHER_GREY, size=11, opacity=0.82, line=list(color="#fff", width=0.5)),
-        text=~scientificName, hovertemplate="%{text}<br>green-up day %{x} · leaf-active ~%{y} d/yr<extra></extra>") }
-    xr <- range(d$greenup); yr <- range(d$leaf_active)
-    capt <- sprintf("each dot is a plant · green-up onset × days carrying leaves · %d of %d plants placeable (both recorded)", n_placed, n_total)
+        text=~scientificName, hovertemplate=htmpl) }
+    xr <- range(d$xv); yr <- range(d$yv)
+    capt <- if (leaf_mode)
+      sprintf("green-up scored for only %d%% of plants here, so this board places by DAYS CARRYING LEAVES · each dot is a plant · %d of %d plants placeable (any leaf-active days)", round(gu_share*100), n_placed, n_total)
+    else
+      sprintf("each dot is a plant · green-up onset × days carrying leaves · %d of %d plants placeable (both recorded)", n_placed, n_total)
     ann <- list(list(text=capt, x=0, y=1.07, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(color=muted, size=11)))
     shp <- list()
     # only draw quadrant labels + median crosshair when there are enough plants
     # AND real spread on both axes — otherwise a 1-3 plant site stacks all four
     # labels on one point and the crosshair is meaningless.
     if (n_placed >= 4 && diff(xr) > 0 && diff(yr) > 0) {
-      mx <- stats::median(d$greenup); my <- stats::median(d$leaf_active)
+      mx <- stats::median(d$xv); my <- stats::median(d$yv)
       px <- diff(xr)*0.02; py <- diff(yr)*0.02
       qlab <- function(x,y,t,xa,ya) list(text=t, x=x, y=y, xref="x", yref="y", showarrow=FALSE, xanchor=xa, yanchor=ya, font=list(color=qcol, size=10.5))
+      ql <- if (leaf_mode)
+        list(tl="BRIEF, LONG-WATCHED", tr="LONG-LEAVED, LONG-WATCHED", bl="BRIEF, NEW", br="LONG-LEAVED, NEW")
+      else
+        list(tl="EARLY & LONG-LEAVED", tr="LATE RISER, LONG-LEAVED", bl="EARLY & BRIEF", br="LATE & BRIEF")
       ann <- c(ann, list(
-        qlab(xr[1]+px, yr[2]-py, "EARLY & LONG-LEAVED", "left", "top"),
-        qlab(xr[2]-px, yr[2]-py, "LATE RISER, LONG-LEAVED", "right", "top"),
-        qlab(xr[1]+px, yr[1]+py, "EARLY & BRIEF", "left", "bottom"),
-        qlab(xr[2]-px, yr[1]+py, "LATE & BRIEF", "right", "bottom")))
+        qlab(xr[1]+px, yr[2]-py, ql$tl, "left", "top"),
+        qlab(xr[2]-px, yr[2]-py, ql$tr, "right", "top"),
+        qlab(xr[1]+px, yr[1]+py, ql$bl, "left", "bottom"),
+        qlab(xr[2]-px, yr[1]+py, ql$br, "right", "bottom")))
       shp <- list(list(type="line", xref="x", yref="paper", x0=mx, x1=mx, y0=0, y1=1, line=list(color=qcol, dash="dot", width=1)),
                   list(type="line", xref="paper", yref="y", x0=0, x1=1, y0=my, y1=my, line=list(color=qcol, dash="dot", width=1)))
     }
     if (!is.null(rv$ind)) { ir <- d[d$individualID == rv$ind, ]
-      if (nrow(ir)==1) p <- p %>% plotly::add_trace(x=ir$greenup, y=ir$leaf_active, type="scatter", mode="markers", name="★ viewing", customdata=ir$tip, showlegend=TRUE,
+      if (nrow(ir)==1) p <- p %>% plotly::add_trace(x=ir$xv, y=ir$yv, type="scatter", mode="markers", name="★ viewing", customdata=ir$tip, showlegend=TRUE,
         marker=list(symbol="diamond", size=18, color="#d98014", line=list(color="#fff", width=1.6)), hovertemplate=paste0("viewing ", ir$scientificName, "<extra></extra>")) }
-    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Green-up onset (day-of-year) · earlier ← → later"), yaxis=list(title="Days carrying leaves per year · briefer ↓ ↑ longer"),
+    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title=xttl), yaxis=list(title=yttl),
       shapes=shp, annotations=ann, hovermode="closest")
   })
   output$indCardSlot <- renderUI({

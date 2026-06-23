@@ -147,6 +147,7 @@ ui <- bslib::page_fillable(
           card(full_screen = TRUE,
             card_head("clock-history", "Phenophase clock (share of plants 'yes', by week)",
               info_pop("Reading the clock", p("Angle = week of the year (Jan at the top, moving clockwise). Radius = % of monitored plants recorded in that phenophase that week."))),
+            uiOutput("clockCoverage"),
             spin(plotlyOutput("clockPlot", height = "470px"))),
           card(full_screen = TRUE,
             card_head("graph-down-arrow", "Is green-up shifting?",
