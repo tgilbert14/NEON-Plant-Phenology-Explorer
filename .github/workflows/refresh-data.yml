@@ -79,6 +79,14 @@ jobs:
         if: ${{ github.event.inputs.skip_download != 'true' }}
         run: Rscript scripts/bundle_phe_data.R
 
+      # Rebuild the bundled "Search the network" index from the freshly rebuilt
+      # bundles + indexes so the cross-site search never goes stale. Full path
+      # only — the skip_download fast path already rebuilds it inside
+      # rebuild_indexes.R. Reads committed/just-built .rds only, never NEON.
+      - name: Rebuild the search index
+        if: ${{ github.event.inputs.skip_download != 'true' }}
+        run: Rscript scripts/build_search_index.R
+
       # skip_download fast path: NO NEON pull. Rebuild ONLY the derived indexes
       # (site_index + national_onsets) from the committed data/sites/*.rds bundles.
       # This is the deploy-safe pipeline self-test — if it pushes nothing, the

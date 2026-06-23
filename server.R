@@ -807,6 +807,10 @@ server <- function(input, output, session) {
   # instant (loads from the bundle) and lands the user on the Overview tab.
   # =========================================================================
   doy_lab <- function(d) ifelse(is.finite(d), sprintf("%s (%s)", d, doy_to_month(d)), "—")
+  # leaf_active is a COUNT of days a plant carries leaves per year (distinct
+  # leaf-weeks x 7), NOT a day-of-year. It must read as a duration ("110 days"),
+  # never as a calendar date (doy_to_month would turn 110 into a fake "Apr 20").
+  days_lab <- function(d) ifelse(is.finite(d), sprintf("%s days", round(d)), "—")
   # a per-row "Go to site →" button: sets input$searchGo to the site code.
   go_btn <- function(codes) vapply(codes, function(cd) as.character(
     tags$button(class = "sp-btn sp-go search-go-btn", type = "button",
@@ -852,7 +856,7 @@ server <- function(input, output, session) {
       Site = sprintf("<b>%s</b> · %s", d$site, d$name %||% d$site),
       State = d$state,
       `Green-up day` = vapply(d$greenup, doy_lab, character(1)),
-      `Leaf-active day` = vapply(d$leaf_active, doy_lab, character(1)),
+      `Days carrying leaves` = vapply(d$leaf_active, days_lab, character(1)),
       Plants = d$n_ind,
       Years = ifelse(is.na(d$year_min), "—", ifelse(d$year_min == d$year_max,
         as.character(d$year_min), sprintf("%s–%s", d$year_min, d$year_max))),
