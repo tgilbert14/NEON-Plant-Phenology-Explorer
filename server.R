@@ -21,7 +21,7 @@ server <- function(input, output, session) {
       annotations=list(list(text=paste0(icon,"<br>",msg), showarrow=FALSE, font=list(color=if(is_dark())"#9fb0c4" else "#6b7a85", size=15), align="center"))) %>%
     plotly::config(displayModeBar = FALSE)
 
-  rv <- reactiveValues(obs=NULL, inds=NULL, ind_summary=NULL, trend=NULL, label=NULL, site=NULL, ind=NULL, ctx=NULL, is_demo=FALSE, pendingSite=NULL)
+  rv <- reactiveValues(obs=NULL, inds=NULL, ind_summary=NULL, trend=NULL, la_trend=NULL, label=NULL, site=NULL, ind=NULL, ctx=NULL, is_demo=FALSE, pendingSite=NULL)
 
   # ---- green-up coverage badge (the desert biome-conditional honesty) ------
   # When < ~half of a site's plants ever resolve a green-up onset, the
@@ -45,7 +45,7 @@ server <- function(input, output, session) {
       p(HTML(sprintf("Only <b>%d%%</b> of the tagged plants %s ever record a green-up <em>phenophase</em> (“Breaking leaf buds” / “Initial growth”).", pct, where))),
       p(HTML("In warm deserts, drought-deciduous, cactus and evergreen plants are scored straight into “Leaves”, so this green-up median rests on a <b>small, non-random subset</b>, not a noisy whole-site number.")),
       p(class = "caveat", bsicons::bs_icon("arrow-right-circle"),
-        HTML(" Read <b>leaf-active</b> (days carrying leaves) instead. It survives where green-up collapses. Switch the metric on the Map and Onset Lab.")),
+        HTML(" Read <b>leaf-active</b> (days carrying leaves) instead. It survives where green-up collapses. Switch the metric on the Map, Onset Lab, and Across sites.")),
       placement = "bottom")
   }
 
@@ -70,6 +70,7 @@ server <- function(input, output, session) {
     # for older bundles that predate the precompute.
     rv$ind_summary <- b$ind_summary %||% individual_summary(b$obs, b$inds)
     rv$trend <- b$trend %||% onset_trend(b$obs)
+    rv$la_trend <- leaf_active_trend(b$obs)   # desert-safe year-trend; works where green-up is too thin
     rv$label <- label; rv$site <- b$meta$site; rv$is_demo <- is_demo; rv$ind <- NULL
     yrs <- range(b$obs$year, na.rm=TRUE); rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1]==yrs[2]) yrs[1] else paste0(yrs[1],"–",yrs[2]))
     shinyjs::show("mainTabsWrap"); shinyjs::show("spPickerWrap"); shinyjs::hide("splash")
@@ -119,7 +120,7 @@ server <- function(input, output, session) {
 
   # "Change site" (in the hero band) -> back to the picker-map landing.
   observeEvent(input$changeSite, {
-    rv$obs <- NULL; rv$inds <- NULL; rv$ind_summary <- NULL; rv$trend <- NULL
+    rv$obs <- NULL; rv$inds <- NULL; rv$ind_summary <- NULL; rv$trend <- NULL; rv$la_trend <- NULL
     rv$label <- NULL; rv$site <- NULL; rv$ind <- NULL; rv$ctx <- NULL; rv$is_demo <- FALSE
     shinyjs::hide("mainTabsWrap"); shinyjs::hide("spPickerWrap"); shinyjs::show("splash")
     # the picker map was hidden while a site was loaded; nudge it across several
@@ -355,7 +356,12 @@ server <- function(input, output, session) {
     div(class = "map-cov-row", cov)
   })
   output$trendPlot <- renderPlotly({
-    tr <- rv$trend; if (is.null(tr) || !nrow(tr)) return(note_plot("Not enough plants per year for an onset trend"))
+    metric <- input$trendMetric %||% "greenup"
+    tr <- if (metric == "leaf_active") rv$la_trend else rv$trend
+    if (is.null(tr) || !nrow(tr)) return(note_plot(
+      if (metric == "leaf_active") "Not enough plants per year for a leaf-active trend" else "Not enough plants per year for an onset trend"))
+    yttl <- if (metric == "leaf_active") "Leaf-active days per year" else "Green-up onset (day-of-year)"
+    vlab <- if (metric == "leaf_active") "~%{y} leaf-active days/yr" else "green-up day %{y}"
     n_all <- dplyr::n_distinct(tr$scientificName)
     top <- names(sort(table(tr$scientificName), decreasing=TRUE)); top <- head(top, 8)
     tr <- tr[tr$scientificName %in% top,]
@@ -364,26 +370,43 @@ server <- function(input, output, session) {
     for (s in unique(tr$scientificName)) { d <- tr[tr$scientificName==s,]; d <- d[order(d$year),]
       p <- p %>% plotly::add_trace(data=d, x=~year, y=~onset, type="scatter", mode="lines+markers", name=s,
         line=list(color=col_of(s), width=2), marker=list(color=col_of(s), size=7),
-        hovertemplate=paste0("<b>",s,"</b><br>%{x}: green-up day %{y}<extra></extra>")) }
+        hovertemplate=paste0("<b>",s,"</b><br>%{x}: ", vlab, "<extra></extra>")) }
     note <- if (n_all > 8) list(list(text=sprintf("showing the 8 most-monitored of %d species (the banner above pools all %d)", n_all, n_all),
       x=0, y=1.06, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))) else list()
-    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Year", dtick=1), yaxis=list(title="Green-up onset (day-of-year)"),
+    p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Year", dtick=1), yaxis=list(title=yttl),
       legend=list(font=list(size=9)), annotations=note)
   })
   output$trendInsight <- renderUI({
-    tr <- rv$trend; req(!is.null(tr) && nrow(tr) >= 3)
+    metric <- input$trendMetric %||% "greenup"
+    lf <- metric == "leaf_active"
+    tr <- if (lf) rv$la_trend else rv$trend
+    noun <- if (lf) "leaf-active days" else "green-up"
+    # green-up too-thin nudge: when green-up has no/short series here but the
+    # leaf-active trend does, point the desert user to the metric that works.
+    if (!lf && (is.null(tr) || nrow(tr) < 3) && !is.null(rv$la_trend) && nrow(rv$la_trend) >= 3) {
+      lay <- rv$la_trend %>% dplyr::group_by(.data$year) %>% dplyr::summarise(o = stats::median(.data$onset), .groups="drop")
+      if (nrow(lay) >= 5) return(insight_banner("arrow-right-circle", tone = "gold",
+        HTML("Green-up is scored for too few plants here to fit a trend. Switch <b>Show</b> to <b>Leaf-active days</b> for a longer, desert-safe series.")))
+    }
+    req(!is.null(tr) && nrow(tr) >= 3)
     site_yr <- tr %>% dplyr::group_by(.data$year) %>% dplyr::summarise(onset = stats::median(.data$onset), .groups="drop")
     ny <- nrow(site_yr)
     # never fit a trend to fewer than 5 annual points — and never extrapolate a
     # 3–7 year line to "per decade". Report days/YEAR with a 95% CI; if the CI
     # spans zero, say so instead of printing a directional verdict.
     if (ny < 5) return(insight_banner("hourglass-split", tone = "navy",
-      HTML(sprintf("Only <b>%d</b> year%s of green-up are recorded here. Too short to fit a trend. Phenology shifts need ~5+ years before a slope means anything.", ny, if (ny==1) "" else "s"))))
+      HTML(sprintf("Only <b>%d</b> year%s of %s are recorded here. Too short to fit a trend. Phenology shifts need ~5+ years before a slope means anything.", ny, if (ny==1) "" else "s", noun))))
     fit <- stats::lm(onset ~ year, data = site_yr); co <- summary(fit)$coefficients
     slope <- co[2,1]; se <- co[2,2]; tcrit <- stats::qt(0.975, df = ny - 2)
     lo <- slope - tcrit*se; hi <- slope + tcrit*se
     if (lo < 0 && hi > 0) return(insight_banner("dash-circle", tone = "navy",
-      HTML(sprintf("Over <b>%d</b> years, green-up shows <b>no statistically detectable shift</b> (%.1f days/yr, 95%% CI %.1f to %.1f, spans zero). More years are needed to tell drift from noise.", ny, slope, lo, hi))))
+      HTML(sprintf("Over <b>%d</b> years, %s shows <b>no statistically detectable shift</b> (%.1f days/yr, 95%% CI %.1f to %.1f, spans zero). More years are needed to tell drift from noise.", ny, noun, slope, lo, hi))))
+    if (lf) {
+      dir <- if (slope > 0) "longer" else "shorter"   # +days/yr = season lengthening
+      return(insight_banner(if (slope > 0) "arrow-up-right" else "arrow-down-right", tone = if (slope > 0) "pine" else "gold",
+        HTML(sprintf("Over <b>%d</b> years, the site-wide growing season has grown <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series, a signal, not a verdict; partly reflects which species were monitored each year.</em>",
+          ny, abs(slope), dir, lo, hi))))
+    }
     dir <- if (slope < 0) "earlier" else "later"
     insight_banner(if (slope < 0) "arrow-down-right" else "arrow-up-right", tone = if (slope < 0) "pine" else "gold",
       HTML(sprintf("Over <b>%d</b> years, site-wide green-up has shifted <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series, a signal, not a verdict; partly reflects which species were monitored each year.</em>",
@@ -754,8 +777,50 @@ server <- function(input, output, session) {
   })
 
   # ---- Across sites (the national gradient the 46-site data unlocks) ------
+  # site-aware NUDGE (suggest, don't switch): when the loaded site has thin
+  # green-up coverage, point the desert user to leaf-active — but the network
+  # charts keep a stable green-up default (auto-flipping a network view by the
+  # loaded site would make the same chart show different defaults to two users).
+  output$xsNudge <- renderUI({
+    if (identical(input$xsMetric %||% "greenup", "leaf_active")) return(NULL)
+    is_ <- rv$ind_summary; if (is.null(is_)) return(NULL)
+    share <- greenup_coverage(is_)
+    if (!is.finite(share) || share >= GU_COVERAGE_FLOOR) return(NULL)
+    where <- rv$label %||% rv$site %||% "the site you loaded"
+    div(class = "xs-nudge", style = "margin:4px 0 2px",
+      insight_banner("arrow-right-circle", tone = "gold", HTML(sprintf(
+        "<b>%s</b> scores green-up for only <b>%d%%</b> of its plants &mdash; switch <b>Show</b> to <b>Leaf-active days</b> for the honest season-length read.",
+        where, round(share * 100)))))
+  })
   output$gradientPlot <- renderPlotly({
+    metric <- input$xsMetric %||% "greenup"
     st <- site_table
+    # ---- leaf-active mode: markers-only vs latitude, ALL sites, no fit line ----
+    # leaf-active is growing-season LENGTH (temperature + water), so the network
+    # latitude slope looks Hopkins-strong (~-3.4 d/degN, R2 0.40) but COLLAPSES
+    # within-species (red maple p=0.24) — a biome-sorting artifact, not a law. So
+    # no fit line. And the green-up coverage/cadence grey-out gates do NOT apply
+    # here: leaf-active never uses the green-up phenophase, so greying SRER (the
+    # exact desert site leaf-active exists to rescue) would invert its purpose.
+    if (metric == "leaf_active") {
+      if (!("median_leaf_active" %in% names(st))) return(note_plot("Rebuild the data bundle to enable leaf-active views", "\U0001F30E"))
+      d <- st[is.finite(suppressWarnings(as.numeric(st$median_leaf_active))) & is.finite(st$lat) &
+                suppressWarnings(as.numeric(st$n_individuals)) >= 5, , drop=FALSE]
+      if (nrow(d) < 4) return(note_plot("Need more bundled sites for a leaf-active view", "\U0001F30E"))
+      d$la <- suppressWarnings(as.numeric(d$median_leaf_active))
+      d$n_species <- if ("n_species" %in% names(d)) d$n_species else NA_integer_
+      dom <- range(d$la, na.rm=TRUE); if (!all(is.finite(dom)) || diff(dom) == 0) dom <- c(min(d$la,na.rm=TRUE)-1, max(d$la,na.rm=TRUE)+1)
+      pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2")
+      rim <- if (is_dark()) "#16261d" else "#ffffff"; muted <- if (is_dark()) "#9fb0c4" else "#8a988f"
+      p <- plotly::plot_ly(d, x=~lat, y=~la, type="scatter", mode="markers",
+        text=paste0(d$site, " · ", d$name), customdata=~n_species,
+        marker=list(size=11, color=pal(d$la), line=list(color=rim, width=0.8)),
+        hovertemplate="<b>%{text}</b><br>lat %{x:.1f}°N · ~%{y} leaf-active days/yr (%{customdata} species)<extra></extra>")
+      ann <- list(list(text="markers only, no latitude fit: leaf-active is growing-season length (temperature + water), so it sorts by biome, not a clean poleward law · all 46 sites shown, none excluded",
+        x=0, y=1.06, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", align="left", font=list(size=10.5, color=muted)))
+      return(p %>% plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE, annotations=ann,
+        xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median leaf-active days per year")))
+    }
     if (!("median_greenup" %in% names(st))) return(note_plot("Rebuild the data bundle to enable cross-site views", "\U0001F30E"))
     d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
     if (nrow(d) < 4) return(note_plot("Need more bundled sites for a latitude gradient", "\U0001F30E"))
@@ -795,7 +860,14 @@ server <- function(input, output, session) {
       xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median green-up (day-of-year)"))
   })
   output$gradientInsight <- renderUI({
-    st <- site_table; if (!("median_greenup" %in% names(st))) return(NULL)
+    metric <- input$xsMetric %||% "greenup"
+    st <- site_table
+    if (metric == "leaf_active") {
+      if (!("median_leaf_active" %in% names(st))) return(NULL)
+      return(insight_banner("rulers", tone="pine", HTML(paste0(
+        "<b>Leaf-active days</b> measure growing-season <b>length</b> &mdash; how long a plant actually carries leaves &mdash; driven by temperature <em>and</em> water and sorted by biome. This is <b>not</b> Hopkins' bioclimatic law (that governs green-up <em>onset</em>). Across the 46 sites leaf-active falls about <b>3.4 days per degree north</b>, but that's a biome-sorting echo, not a controlled gradient: held within a single species (red maple, 10 sites) the latitude trend is <b>not significant</b> (R&sup2;=0.17), and arid deserts like <b>SRER carry as many leaf-days (266)</b> as humid Gulf-coast forests by the opposite mechanism. Read it as season length, never as abundance or productivity."))))
+    }
+    if (!("median_greenup" %in% names(st))) return(NULL)
     d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
     if (nrow(d) < 4) return(NULL)
     # net slope is fit on WELL-COVERED + ADEQUATE-CADENCE sites only (same gate as
@@ -837,6 +909,23 @@ server <- function(input, output, session) {
   output$speciesAcrossPlot <- renderPlotly({
     no <- NATIONAL_ONSETS; if (is.null(no) || !nrow(no)) return(note_plot("Rebuild the data bundle to enable this view", "\U0001F33F"))
     sp <- input$xsSpecies %||% ""; if (!nzchar(sp)) return(note_plot("Pick a species monitored at several sites", "\U0001F33F"))
+    metric <- input$xsMetric %||% "greenup"
+    rim <- if (is_dark()) "#16261d" else "#ffffff"
+    # leaf-active mode: species held constant, markers-only. Unlike green-up (a
+    # real within-species latitude law for red maple), within-species leaf-active
+    # shows NO significant latitude trend, so no line and no trend claim.
+    if (metric == "leaf_active") {
+      d <- no[no$scientificName == sp & is.finite(suppressWarnings(as.numeric(no$leaf_active))), , drop=FALSE]
+      if (nrow(d) < 2) return(note_plot("This species has leaf-active recorded at only one site", "\U0001F33F"))
+      d <- d[order(d$lat),]; d$la <- suppressWarnings(as.numeric(d$leaf_active))
+      dom <- range(d$la, na.rm=TRUE); if (!all(is.finite(dom)) || diff(dom) == 0) dom <- c(min(d$la,na.rm=TRUE)-1, max(d$la,na.rm=TRUE)+1)
+      pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2")
+      return(plotly::plot_ly(d, x=~lat, y=~la, type="scatter", mode="markers",
+        text=~site, customdata=~n_ind, marker=list(size=12, color=pal(d$la), line=list(color=rim, width=1)),
+        hovertemplate=paste0("<b>", sp, "</b> @ %{text}<br>lat %{x:.1f}°N · ~%{y} leaf-active days/yr (n=%{customdata} plants)<extra></extra>")) %>%
+        plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE,
+          xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median leaf-active days per year")))
+    }
     d <- no[no$scientificName == sp & is.finite(no$greenup), , drop=FALSE]
     if (nrow(d) < 2) return(note_plot("This species is bundled at only one site", "\U0001F33F"))
     d <- d[order(d$lat),]
@@ -860,6 +949,11 @@ server <- function(input, output, session) {
         p("Shifts in green-up and bloom timing are among the clearest biological fingerprints of a changing climate, and drive mismatches with pollinators and migrating birds."),
         p(bs_icon("envelope"), " ", tags$a(href="mailto:desertdatalabs@gmail.com","desertdatalabs@gmail.com"), " · ",
           tags$a(href="https://data.neonscience.org/data-products/DP1.10055.001", target="_blank", "NEON data product"))),
+      div(class="about-card", h4(bs_icon("award"), " Data attribution & license"),
+        p(class="caveat",
+          "Built with data from the National Ecological Observatory Network (NEON), a U.S. National Science Foundation program operated by Battelle. NEON data are provided under a Creative Commons Attribution 4.0 International (CC BY 4.0) license (",
+          tags$a(href="https://creativecommons.org/licenses/by/4.0/", target="_blank", "creativecommons.org/licenses/by/4.0"),
+          "). This app aggregates and derives summary metrics from the raw NEON data products; the underlying measurements are unaltered. It is an independent, unofficial tool and is not endorsed by NEON, Battelle, or the NSF.")),
       div(class="about-card", h4(bs_icon("grid-3x3-gap-fill"), " The NEON series"),
         p("This is one of a family of explorers, each built on a different NEON data product, that share the same look and the same honest-stats approach."),
         series_block(footer = FALSE)))

@@ -206,6 +206,27 @@ onset_trend <- function(obs, phenophases = GREENUP) {
     dplyr::filter(.data$n >= 3)   # >=3 individuals/species/year before a point is shown
 }
 
+# leaf-active YEAR-trend: median days-carrying-leaves per species per year, the
+# desert-safe companion to onset_trend(). leaf_active never touches the green-up
+# phenophase, so this trend works at warm-desert sites (e.g. SRER: 7 years / 12
+# species) where the green-up trend is too thin to fit. Same de-pseudoreplication
+# as onset_trend (collapse to one leaf_active per individual-year first, then the
+# species-year median); scientificName comes from obs (key_onsets drops it). The
+# value column is named `onset` ON PURPOSE so trendPlot/trendInsight reuse the same
+# machinery — it carries leaf-active DAYS here, not a day-of-year.
+leaf_active_trend <- function(obs) {
+  lv <- obs[obs$phenophaseName == "Leaves" & obs$status == "yes" & is.finite(obs$dayOfYear), , drop=FALSE]
+  if (!nrow(lv)) return(NULL)
+  la <- lv %>% dplyr::mutate(wk = (.data$dayOfYear - 1L) %/% 7L + 1L) %>%
+    dplyr::group_by(.data$individualID, .data$scientificName, .data$year) %>%
+    dplyr::summarise(leaf_active = dplyr::n_distinct(.data$wk) * 7L, .groups="drop")
+  out <- la %>% dplyr::group_by(.data$scientificName, .data$year) %>%
+    dplyr::summarise(onset = round(stats::median(.data$leaf_active)), n = dplyr::n_distinct(.data$individualID), .groups="drop") %>%
+    dplyr::filter(.data$n >= 3)
+  if (!nrow(out)) return(NULL)
+  out
+}
+
 # one individual's full phenophase record (the career timeline + card)
 indiv_history <- function(obs, id) {
   if (is.null(obs) || is.null(id)) return(NULL)
