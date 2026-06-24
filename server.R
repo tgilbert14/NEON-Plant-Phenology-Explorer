@@ -45,7 +45,7 @@ server <- function(input, output, session) {
       p(HTML(sprintf("Only <b>%d%%</b> of the tagged plants %s ever record a green-up <em>phenophase</em> (“Breaking leaf buds” / “Initial growth”).", pct, where))),
       p(HTML("In warm deserts, drought-deciduous, cactus and evergreen plants are scored straight into “Leaves”, so this green-up median rests on a <b>small, non-random subset</b>, not a noisy whole-site number.")),
       p(class = "caveat", bsicons::bs_icon("arrow-right-circle"),
-        HTML(" Read <b>leaf-active</b> (days carrying leaves) instead. It survives where green-up collapses. Switch the metric on the Map, Onset Lab, and Across sites.")),
+        HTML(" So <b>leaf-active</b> (days carrying leaves) is shown <b>by default</b> here &mdash; it survives where green-up collapses. You can switch back to green-up on the Map, the trend, and Across sites.")),
       placement = "bottom")
   }
 
@@ -71,6 +71,15 @@ server <- function(input, output, session) {
     rv$ind_summary <- b$ind_summary %||% individual_summary(b$obs, b$inds)
     rv$trend <- b$trend %||% onset_trend(b$obs)
     rv$la_trend <- leaf_active_trend(b$obs)   # desert-safe year-trend; works where green-up is too thin
+    # SMART DEFAULT: at thin-green-up (desert) sites, default every metric toggle to
+    # leaf-active — the read that survives where green-up collapses. One app-wide
+    # threshold: green-up scored for < GU_COVERAGE_FLOOR (50%) of the roster. Users
+    # can still switch back; the Onset Lab already auto-leads leaf-active by this gate.
+    gu_cov <- greenup_coverage(rv$ind_summary)
+    def_metric <- if (is.finite(gu_cov) && gu_cov < GU_COVERAGE_FLOOR) "leaf_active" else "greenup"
+    updateSelectInput(session, "mapMetric",   selected = def_metric)
+    updateSelectInput(session, "trendMetric", selected = def_metric)
+    updateSelectInput(session, "xsMetric",    selected = def_metric)
     rv$label <- label; rv$site <- b$meta$site; rv$is_demo <- is_demo; rv$ind <- NULL
     yrs <- range(b$obs$year, na.rm=TRUE); rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1]==yrs[2]) yrs[1] else paste0(yrs[1],"–",yrs[2]))
     shinyjs::show("mainTabsWrap"); shinyjs::show("spPickerWrap"); shinyjs::hide("splash")
@@ -328,13 +337,13 @@ server <- function(input, output, session) {
     mo_theta <- (c(1,32,60,91,121,152,182,213,244,274,305,335) - 1)/365*360
     scope <- sprintf("%s · %% of plants in each phenophase, by week · pooled across years%s",
       rv$ctx %||% "", if (is.null(sci)) " · all species (mixes evergreen, deciduous & forb leaf calendars; pick a species to read timing)" else paste0(" · ", sci))
-    anns <- list(list(text = scope, x = 0, y = 1.10, xref = "paper", yref = "paper",
+    anns <- list(list(text = scope, x = 0, y = if (leaf_lead) 1.18 else 1.10, xref = "paper", yref = "paper",
         showarrow = FALSE, xanchor = "left", font = list(color = muted, size = 10.5)))
     if (leaf_lead) {
       gpct <- round(greenup_coverage(rv$ind_summary) * 100)
       anns <- c(anns, list(list(
-        text = sprintf("green-up scored for %d%% of plants here — the leaf-presence ring is the desert-safe read (the dotted green-up petals rest on a small subset)", gpct),
-        x = 0, y = 1.045, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
+        text = sprintf("green-up scored for %d%% of plants here — the bold leaf-presence ring is the desert-safe read", gpct),
+        x = 0, y = 1.07, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
         font = list(color = "#b5481f", size = 10.5))))
     }
     p %>% plotly::layout(
@@ -345,7 +354,7 @@ server <- function(input, output, session) {
           tickmode = "array", tickvals = mo_theta, ticktext = month.abb, tickfont = list(size = 10, color = ink))),
       legend = list(orientation = "h", y = -0.12, font = list(color = ink)),
       annotations = anns,
-      margin = list(l = 30, r = 30, t = if (leaf_lead) 52 else 42, b = 30)) %>%
+      margin = list(l = 30, r = 30, t = if (leaf_lead) 78 else 42, b = 30)) %>%
       plotly::config(displayModeBar = FALSE, responsive = TRUE)
   })
   # clickable green-up-coverage disclosure beside the clock — reuses gu_badge, so
@@ -755,12 +764,16 @@ server <- function(input, output, session) {
     la_str  <- ifelse(is.finite(ps$leaf_active), paste0("~", ps$leaf_active, " d/yr"), "not yet recorded")
     # per-plot green-up coverage caveat — only shown when green-up actually leads
     # or is the secondary line, so a 1/5-of-plants plot can't read like a whole-plot number.
-    covtxt <- ifelse(thin,
-      sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants here. Read leaf-active.</span>", round(ps$gu_share * 100)), "")
+    gp_pct  <- round(ps$gu_share * 100)
+    # at a 0%-coverage desert plot, "scored for 0% of plants" reads like a broken
+    # zero — say "not scored at this plot" instead, and always point to leaf-active.
+    covtxt <- ifelse(thin, ifelse(gp_pct <= 0,
+        "<br><span style='color:#b5481f'>green-up not scored at this plot &mdash; read leaf-active.</span>",
+        sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants here &mdash; read leaf-active.</span>", gp_pct)), "")
     lead_la <- sprintf("<b>leaf-active %s</b><br><span class='pm-pop-sub'>green-up %s</span>%s", la_str, gu_str, covtxt)
     lead_gu <- sprintf("<b>green-up %s</b>%s<br><span class='pm-pop-sub'>carries leaves %s</span>", gu_str, covtxt, la_str)
     lead_n  <- sprintf("<span class='pm-pop-sub'>green-up %s%s · leaf-active %s</span>", gu_str,
-                 ifelse(thin, sprintf(" (scored for %d%% of plants)", round(ps$gu_share * 100)), ""), la_str)
+                 ifelse(thin & gp_pct > 0, sprintf(" (%d%% of plants)", gp_pct), ""), la_str)
     metric_line <- if (metric == "leaf_active") lead_la else if (metric == "greenup") lead_gu else lead_n
     lab <- sprintf("<b>%s</b> · %d plants<br>%s", short_plot(ps$plotID), ps$n_ind, metric_line)
     leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "CartoDB.Positron") %>%
@@ -777,20 +790,22 @@ server <- function(input, output, session) {
   })
 
   # ---- Across sites (the national gradient the 46-site data unlocks) ------
-  # site-aware NUDGE (suggest, don't switch): when the loaded site has thin
-  # green-up coverage, point the desert user to leaf-active — but the network
-  # charts keep a stable green-up default (auto-flipping a network view by the
-  # loaded site would make the same chart show different defaults to two users).
+  # site-aware note: at a thin-green-up (desert) entry site we auto-DEFAULT this
+  # network view to leaf-active (see ingest); this banner explains that default,
+  # or — if the user has switched back to green-up here — points them to it.
   output$xsNudge <- renderUI({
-    if (identical(input$xsMetric %||% "greenup", "leaf_active")) return(NULL)
     is_ <- rv$ind_summary; if (is.null(is_)) return(NULL)
     share <- greenup_coverage(is_)
     if (!is.finite(share) || share >= GU_COVERAGE_FLOOR) return(NULL)
-    where <- rv$label %||% rv$site %||% "the site you loaded"
-    div(class = "xs-nudge", style = "margin:4px 0 2px",
-      insight_banner("arrow-right-circle", tone = "gold", HTML(sprintf(
-        "<b>%s</b> scores green-up for only <b>%d%%</b> of its plants &mdash; switch <b>Show</b> to <b>Leaf-active days</b> for the honest season-length read.",
-        where, round(share * 100)))))
+    where <- rv$label %||% rv$site %||% "this site"; pct <- round(share * 100)
+    if (identical(input$xsMetric %||% "greenup", "leaf_active"))
+      div(class = "xs-nudge", style = "margin:4px 0 2px",
+        insight_banner("info-circle", tone = "pine", HTML(sprintf(
+          "Showing <b>leaf-active days</b> by default &mdash; green-up is scored for only <b>%d%%</b> of plants at <b>%s</b>, so it's the honest read here.", pct, where))))
+    else
+      div(class = "xs-nudge", style = "margin:4px 0 2px",
+        insight_banner("arrow-right-circle", tone = "gold", HTML(sprintf(
+          "<b>%s</b> scores green-up for only <b>%d%%</b> of its plants &mdash; switch <b>Show</b> to <b>Leaf-active days</b> for the honest read.", where, pct))))
   })
   output$gradientPlot <- renderPlotly({
     metric <- input$xsMetric %||% "greenup"

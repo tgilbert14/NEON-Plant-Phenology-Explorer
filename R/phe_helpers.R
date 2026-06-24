@@ -348,8 +348,13 @@ plot_summary_phe <- function(obs, inds, ind_s = NULL) {
   if (is.null(ind_s)) ind_s <- individual_summary(obs, inds)
   if (is.null(ind_s)) return(NULL)
   ind_s %>% dplyr::group_by(.data$plotID) %>%
-    dplyr::summarise(n_ind = dplyr::n(), greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
+    # gu_share MUST be computed BEFORE the `greenup =` redefine below: inside one
+    # summarise(), once `greenup` is reassigned to the scalar median, `.data$greenup`
+    # in a later expression refers to THAT scalar (is.finite -> 0/1), not the column.
+    # Order bug = every plot reading ~0% or ~1/n coverage. Keep gu_share first.
+    dplyr::summarise(n_ind = dplyr::n(),
                      gu_share = sum(is.finite(.data$greenup)) / dplyr::n(),
+                     greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
                      leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
                      lat = stats::median(.data$lat, na.rm=TRUE), lng = stats::median(.data$lng, na.rm=TRUE), .groups="drop")
 }
