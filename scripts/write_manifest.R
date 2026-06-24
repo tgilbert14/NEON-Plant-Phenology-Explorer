@@ -22,6 +22,16 @@
 # ===========================================================================
 suppressMessages(library(rsconnect))
 
+# Connect Cloud installs Linux package BINARIES from Posit Package Manager (RSPM)
+# rather than compiling CRAN source. This is CRITICAL for the leaflet -> raster ->
+# terra chain: terra's source build needs GDAL >= 3.5, but Connect's image ships
+# GDAL 3.4.1, so a from-source terra fails to compile and aborts the whole publish.
+# Pin the repo to the RSPM jammy (Ubuntu 22.04) BINARY mirror so a precompiled terra
+# is installed instead. NOTE: the __linux__/jammy path is what makes RSPM serve
+# binaries — the bare .../cran/latest URL still resolves to SOURCE on Linux. If a
+# regen ever records a non-binary URL, swap it to this one before committing.
+options(repos = c(RSPM = "https://packagemanager.posit.co/cran/__linux__/jammy/latest"))
+
 appFiles <- c(
   "global.R", "ui.R", "server.R",
   list.files("R", pattern = "\\.R$", full.names = TRUE),
