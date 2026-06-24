@@ -93,6 +93,7 @@ PHE_PROVENANCE <- list(
   data_product      = "DP1.10055.001",
   data_product_name = "Plant phenology observations",
   source            = "NEON (National Ecological Observatory Network), data.neonscience.org",
+  license           = "Source: NEON DP1.10055.001, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); aggregated and derived by this app.",
   unit_of_analysis  = "tagged plant individual (repeated-measures across weeks and years); plotID = spatial block. Observations are NOT independent: cluster/random-effect by individualID nested in plotID.",
   status_handling   = "phenophaseStatus retained as yes/no/uncertain; 'missed' dropped at bundle time. 'uncertain' kept in obs but EXCLUDED from every yes-share denominator and all onset computations.",
   onset_rule        = "Onset is interval-censored to the midpoint between the last preceding 'no' day and the first 'yes' day, reflecting up-to-twice-weekly visits. With no preceding 'no', left-censored to the first 'yes' (true onset earlier; see onsets$left_censored). greenup = earliest such onset across green-up phenophases.",
@@ -120,11 +121,11 @@ phe_codebook_csv <- function(site = NA_character_, app_version = NA_character_) 
   prov$export_date <- as.character(Sys.Date())
   meta <- data.frame(
     table = "_provenance",
-    column = c("data_product", "data_product_name", "source", "unit_of_analysis",
+    column = c("data_product", "data_product_name", "source", "license", "unit_of_analysis",
                "status_handling", "onset_rule", "leaf_active_rule", "intensity_rule",
                paste0("caveat_", seq_along(prov$caveats)), "site", "app_version", "export_date"),
     type = "", units = "", allowed_values = "",
-    definition = c(prov$data_product, prov$data_product_name, prov$source, prov$unit_of_analysis,
+    definition = c(prov$data_product, prov$data_product_name, prov$source, prov$license, prov$unit_of_analysis,
                    prov$status_handling, prov$onset_rule, prov$leaf_active_rule, prov$intensity_rule,
                    prov$caveats, prov$site %||% "", prov$app_version %||% "", prov$export_date),
     stringsAsFactors = FALSE)
