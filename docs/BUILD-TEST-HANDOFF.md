@@ -196,3 +196,21 @@ findings only until the pinned build and deployed semantic receipt pass.
 - Next action: commit and push the focused repair to PR #3, inspect the exact failing
   or passing gate, download and promote only a fully validated release-candidate
   artifact, then require a clean exact-head rerun.
+
+### 2026-07-18 18:40 MST - migration idempotence finding / Codex
+
+- Run `29668461839`, job `88143068558`, on repair head `fbf854b` passed the full
+  dependency install, loaded Haswell/one-thread check, static contracts, and the
+  expanded scientific helper suite. The new all-suppressed-trend fixture therefore
+  passed in pinned R 4.5.2.
+- The first normalizer pass found and changed exactly one file,
+  `data/sites/KONA.rds`. Its second/idempotence pass failed because R list assignment
+  with `bundle$trend <- NULL` deletes the named field. The strict bundle-container
+  check then correctly reported that KONA no longer had a `trend` field. All later
+  build, manifest, bundle, boot, and artifact steps were withheld.
+- Repair: use `bundle["trend"] <- list(NULL)` so the required name is retained with
+  an unavailable `NULL` value. This is an R container-semantics correction; no
+  scientific threshold, verifier, bundle schema, or artifact rule changed.
+- Next action: push the one-line structure-preserving correction, rerun the pinned
+  validator from its now-populated dependency cache, and require the normalizer's
+  second pass to reproduce exact all-bundle hashes before any artifact promotion.

@@ -19,7 +19,9 @@ for (path in sort(paths)) {
          call. = FALSE)
 
   if (is.data.frame(bundle$trend) && nrow(bundle$trend) == 0L) {
-    bundle$trend <- NULL
+    # `bundle$trend <- NULL` would delete the field from an R list. Subset
+    # assignment preserves the required named field with a NULL value.
+    bundle["trend"] <- list(NULL)
     saveRDS(bundle, path, compress = "xz")
     changed <- c(changed, path)
   }
