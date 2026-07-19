@@ -122,13 +122,13 @@ nothing in production, and a changed bundle whose checksum wasn't refreshed can 
 This bit us once — bundles looked updated locally but the live app kept serving the old data until a
 republish. The required sequence after any data rebuild:
 
-1. rebuild the bundles (`scripts/refresh_data.R`)
-2. **regenerate the manifest** so its checksums match the new files (`scripts/write_manifest.R` →
-   `rsconnect::writeManifest()`)
-3. `git add data/ manifest.json && git commit`
-4. **push + republish** on Connect Cloud (git-backed redeploy)
+1. stage and rebuild the complete expected bundle roster outside production
+2. validate schemas, keys, scientific fixtures, deterministic derived bytes, and offline boot
+3. generate the manifest in the pinned validator and promote that exact artifact—never hand-edit it
+4. review and merge the validated data/manifest candidate
+5. **republish the exact green merge** on Connect Cloud and record a semantic/browser receipt
 
-Miss step 2 or 4 and the deployed app silently keeps the stale data. (On a non-manifest host like
+Miss step 3 or 5 and the deployed app silently keeps the stale data. (On a non-manifest host like
 shinyapps.io, there's no checksum step, but you still must redeploy — the bundle only updates on push.)
 
 ---

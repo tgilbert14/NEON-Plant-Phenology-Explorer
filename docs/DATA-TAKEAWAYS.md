@@ -66,8 +66,9 @@ coverage trap, not fixing the machinery.
     `leaf_active` (distinct leaf-weeks × 7).
   - `individual_summary()` → median across years per plant. `onset_trend()` → species×year median green-up,
     **n ≥ 3 individuals** gate, **never pooled across years** (the climate-shift signal).
-  - `weekly_yesrate()` → the Phenology Clock: % of plants 'yes' per phenophase per week, **n ≥ 5** gate,
-    **pooled across years by design** (and captioned as such).
+  - `weekly_yesrate()` → the Phenology Clock: % of scored plant-year opportunities 'yes' per phenophase/week,
+    **n ≥ 5** opportunity gate. Repeated visits collapse within a plant-year-week; years remain separate
+    opportunities and are **pooled into a descriptive typical-year profile by design** (captioned as such).
 - **App renders:** Overview (growth-form composition + auto-written narrative + analysis-ready zip),
   Phenology Clock (polar petals + CI-honest onset-shift verdict), Onset Lab (pin-card scatter:
   green-up × leaf-active), Plant Profile (downloadable card + phenophase calendar + growth-form-aware QC

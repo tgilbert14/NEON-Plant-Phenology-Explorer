@@ -20,7 +20,7 @@ suppressWarnings(suppressMessages({ library(dplyr); library(tibble) }))
 source("R/site_metadata.R")     # neon_sites (name/state/domain/elevation_m)
 source("R/phe_helpers.R")       # individual_summary / onset_trend / site_phe_summary / site_species_onsets
 
-RAW <- "../phe-data-fetch"; DEMO <- "HARV"
+RAW <- Sys.getenv("PHE_RAW_DIR", "../phe-data-fetch"); DEMO <- "HARV"
 # bundle every raw site present (resumable national build); CLI args = subset
 SITES <- sub("_raw\\.rds$", "", list.files(RAW, pattern = "_raw\\.rds$"))
 if (length(commandArgs(trailingOnly = TRUE))) SITES <- commandArgs(trailingOnly = TRUE)

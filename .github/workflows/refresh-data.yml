@@ -1,116 +1,261 @@
-name: Refresh NEON data bundle
+name: Propose NEON plant-phenology refresh
 
-# Monthly rebuild of the per-site phenology .rds bundles (data/sites/*.rds) + the
-# indexes (data/site_index.rds, data/national_onsets.rds), committed to master —
-# which AUTO-REDEPLOYS the Posit Connect Cloud app (git-backed). NEON publishes on
-# a lag, so a monthly pull keeps the bundled "database" current.
-#
-# Runs late on the FIRST SATURDAY NIGHT of each month (~11pm Arizona) so the
-# redeploy lands off-peak. Also runnable on demand from the Actions tab
-# (workflow_dispatch); tick "skip_download" to re-bundle the committed raw without
-# a full NEON re-pull (only useful if raw is present — normally leave unticked).
-#
-# REQUIRES one repo secret (Settings -> Secrets and variables -> Actions):
-#   NEON_TOKEN   your NEON API token (https://data.neonscience.org/myaccount)
-# Without it the fetch still runs but is rate-limited.
+# R 4.1.1 fetches into an empty raw staging area. A separate pinned R 4.5.2
+# validator builds all 46 bundles, indexes, tests, manifest, and offline app. Only
+# the final job can write, and it publishes a review branch—never master.
 
 on:
   schedule:
-    # Every Sunday 06:00 UTC == Saturday 23:00 America/Phoenix (Arizona, no DST).
-    # Cron can't express "first Saturday", so fire every Saturday night and let
-    # the gate job proceed only on the first one.
     - cron: "0 6 * * 0"
   workflow_dispatch:
     inputs:
       skip_download:
-        description: "Skip the NEON re-pull and re-bundle the committed raw (fast)"
+        description: "Skip NEON download; rebuild indexes/manifest from committed bundles"
         type: boolean
         default: false
 
 permissions:
-  contents: write          # commit the refreshed bundles to master (triggers Connect Cloud redeploy)
+  contents: read
+
+concurrency:
+  group: plant-phenology-refresh
+  cancel-in-progress: false
 
 jobs:
   gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:
       - id: check
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual run — proceeding."; echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "Manual run — proceeding."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          dow=$(TZ='America/Phoenix' date +%u)    # 6 = Saturday
-          day=$(TZ='America/Phoenix' date +%-d)   # day-of-month, no leading zero
+          dow=$(TZ='America/Phoenix' date +%u)
+          day=$(TZ='America/Phoenix' date +%-d)
           if [ "$dow" = "6" ] && [ "$day" -le 7 ]; then
-            echo "First Saturday in Arizona (day $day) — proceeding."
+            echo "First Saturday in Arizona — proceeding."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Not the first Saturday in Arizona (dow=$dow day=$day) — skipping."
+            echo "SKIPPED_BY_CALENDAR: dow=$dow day=$day"
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-  refresh:
+  fetch_raw:
     needs: gate
-    if: needs.gate.outputs.run == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 330
+    if: needs.gate.outputs.run == 'true' && github.event.inputs.skip_download != 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    env:
+      RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2024-12-31
+      RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2024-12-31
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: r-lib/actions/setup-r@v2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          use-public-rspm: true
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Install R packages
-        uses: r-lib/actions/setup-r-dependencies@v2
+      # neonUtilities::loadByProduct is isolated to the proven fetch runtime. The
+      # deployed app and validator remain R 4.5.2 and never install neonUtilities.
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          packages: >
-            neonUtilities, dplyr, tibble, tidyr, stringr, RColorBrewer
+          r-version: '4.1.1'
+          use-public-rspm: false
 
-      - name: Fetch all NEON terrestrial phenology sites (full re-pull)
-        if: ${{ github.event.inputs.skip_download != 'true' }}
+      - name: Install fetch-only dependencies
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          packages: neonUtilities, dplyr, tibble, tidyr, stringr, RColorBrewer
+          pak-version: stable
+          dependencies: '"hard"'
+          cache-version: plant-phenology-fetch-r411-2024-12-31-v1
+          install-pandoc: 'false'
+          install-quarto: 'false'
+
+      - name: Fetch all expected sites into empty staging
         env:
           NEON_TOKEN: ${{ secrets.NEON_TOKEN }}
-        run: Rscript scripts/fetch_all_phe.R
-
-      - name: Rebuild per-site bundles + indexes + national table (full)
-        if: ${{ github.event.inputs.skip_download != 'true' }}
-        run: Rscript scripts/bundle_phe_data.R
-
-      # Rebuild the bundled "Search the network" index from the freshly rebuilt
-      # bundles + indexes so the cross-site search never goes stale. Full path
-      # only — the skip_download fast path already rebuilds it inside
-      # rebuild_indexes.R. Reads committed/just-built .rds only, never NEON.
-      - name: Rebuild the search index
-        if: ${{ github.event.inputs.skip_download != 'true' }}
-        run: Rscript scripts/build_search_index.R
-
-      # skip_download fast path: NO NEON pull. Rebuild ONLY the derived indexes
-      # (site_index + national_onsets) from the committed data/sites/*.rds bundles.
-      # This is the deploy-safe pipeline self-test — if it pushes nothing, the
-      # committed bundles are already current; it never dies on a missing raw.
-      - name: Rebuild derived indexes from committed bundles (skip_download fast path)
-        if: ${{ github.event.inputs.skip_download == 'true' }}
-        run: Rscript scripts/rebuild_indexes.R
-
-      - name: Commit refreshed data to master (auto-redeploys Connect Cloud)
+          PHE_RAW_OUT_DIR: ${{ runner.temp }}/phe-raw
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          # a prior bot run (or another session) may have pushed; rebase local
-          # onto the remote first or the push below is rejected.
+          set -euo pipefail
+          mkdir -p "$PHE_RAW_OUT_DIR"
+          Rscript --vanilla scripts/fetch_all_phe.R
+          count=$(find "$PHE_RAW_OUT_DIR" -maxdepth 1 -name '*_raw.rds' -type f | wc -l)
+          test "$count" -eq 46
+
+      - name: Upload immutable raw staging
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plant-phenology-raw-${{ github.sha }}
+          path: ${{ runner.temp }}/phe-raw
+          if-no-files-found: error
+          retention-days: 1
+
+  build_candidate:
+    needs: [gate, fetch_raw]
+    if: >-
+      always() && needs.gate.outputs.run == 'true' &&
+      (github.event.inputs.skip_download == 'true' || needs.fetch_raw.result == 'success')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      RSPM: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
+      RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.posit.co/cran/__linux__/jammy/2026-07-15
+      OPENBLAS_CORETYPE: Haswell
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PHE_LIVE: "0"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          r-version: '4.5.2'
+          use-public-rspm: false
+
+      - name: Install pinned build and runtime closure
+        uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          packages: >
+            shiny, bslib, bsicons, dplyr, tidyr, stringr, tibble, plotly,
+            leaflet, DT, shinyjs, shinycssloaders, RColorBrewer, htmltools,
+            zip, jsonlite, rsconnect, cpp11,
+            url::https://cran.r-project.org/src/contrib/Archive/terra/terra_1.8-50.tar.gz,
+            url::https://cran.r-project.org/src/contrib/sf_1.1-1.tar.gz,
+            url::https://cran.r-project.org/src/contrib/s2_1.1.11.tar.gz,
+            url::https://cran.r-project.org/src/contrib/units_1.0-1.tar.gz,
+            url::https://cran.r-project.org/src/contrib/wk_0.9.5.tar.gz,
+            url::https://cran.r-project.org/src/contrib/classInt_0.4-11.tar.gz,
+            url::https://cran.r-project.org/src/contrib/raster_3.6-32.tar.gz,
+            url::https://cran.r-project.org/src/contrib/sp_2.2-1.tar.gz
+          pak-version: stable
+          dependencies: '"hard"'
+          cache-version: plant-phenology-refresh-geo-closure-v1
+          install-pandoc: 'false'
+          install-quarto: 'false'
+
+      - name: Verify deterministic numeric runtime
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import ctypes
+          lib = ctypes.CDLL("libopenblas.so.0")
+          lib.openblas_get_corename.restype = ctypes.c_char_p
+          core = lib.openblas_get_corename().decode("ascii")
+          threads = lib.openblas_get_num_threads()
+          print(f"OpenBLAS core={core} threads={threads}")
+          if core.lower() != "haswell" or threads != 1:
+              raise SystemExit("numeric runtime contract failed")
+          PY
+
+      - name: Download raw staging
+        if: ${{ github.event.inputs.skip_download != 'true' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plant-phenology-raw-${{ github.sha }}
+          path: ${{ runner.temp }}/phe-raw
+
+      - name: Build the complete 46-site candidate
+        if: ${{ github.event.inputs.skip_download != 'true' }}
+        env:
+          PHE_RAW_DIR: ${{ runner.temp }}/phe-raw
+        run: Rscript --vanilla scripts/bundle_phe_data.R
+
+      - name: Rebuild indexes from committed bundles (fast path)
+        if: ${{ github.event.inputs.skip_download == 'true' }}
+        run: Rscript --vanilla scripts/rebuild_indexes.R
+
+      - name: Regenerate and validate the exact release candidate
+        run: |
+          set -euo pipefail
+          Rscript --vanilla scripts/rebuild_indexes.R
+          find data -maxdepth 1 -name '*.rds' -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/index-hashes-first.txt"
+          Rscript --vanilla scripts/rebuild_indexes.R
+          find data -maxdepth 1 -name '*.rds' -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/index-hashes-second.txt"
+          diff -u "$RUNNER_TEMP/index-hashes-first.txt" "$RUNNER_TEMP/index-hashes-second.txt"
+          Rscript --vanilla scripts/write_manifest.R
+          Rscript --vanilla scripts/test_helpers.R
+          Rscript --vanilla scripts/verify_bundle.R
+          node scripts/check_custom_message_handlers.mjs
+          Rscript --vanilla -e 'Sys.setenv(PHE_LIVE="0"); source("global.R"); source("ui.R"); source("server.R"); stopifnot(inherits(ui, "shiny.tag.list") || inherits(ui, "shiny.tag"), is.function(server))'
+          git diff --check
+
+      - name: Package the validated candidate
+        run: tar -czf "$RUNNER_TEMP/plant-phenology-refresh.tgz" data data-sample manifest.json
+
+      - name: Upload immutable validated candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plant-phenology-refresh-${{ github.sha }}
+          path: ${{ runner.temp }}/plant-phenology-refresh.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish_candidate:
+    needs: [gate, build_candidate]
+    if: needs.gate.outputs.run == 'true' && needs.build_candidate.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Download validated candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: plant-phenology-refresh-${{ github.sha }}
+          path: ${{ runner.temp }}/refresh-candidate
+
+      - name: Publish or update the review branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
           git fetch origin master
-          git pull --rebase --autostash origin master || true
-          # commit ONLY the data artifacts by EXPLICIT path — never a blanket add
-          # that could sweep in a gitignored sibling or another job's half-written
-          # file. Skip cleanly if nothing changed.
-          git add data/sites data/site_index.rds data/national_onsets.rds data/search_index.rds data-sample/demo.rds
-          if git diff --cached --quiet; then
-            echo "No data changes this run — nothing to commit."
+          remote_master=$(git rev-parse origin/master)
+          if [ "$remote_master" != "$GITHUB_SHA" ]; then
+            echo "::error title=Stale refresh base::master moved from $GITHUB_SHA to $remote_master; rebuild the candidate."
+            exit 1
+          fi
+          tar -xzf "$RUNNER_TEMP/refresh-candidate/plant-phenology-refresh.tgz"
+          if git diff --quiet -- data data-sample manifest.json; then
+            echo "No validated release-byte change; no review branch created."
+            exit 0
+          fi
+          branch="automation/plant-phenology-data-refresh"
+          remote_head=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
+          git switch -C "$branch"
+          git config user.name "neon-data-bot"
+          git config user.email "neon-data-bot@users.noreply.github.com"
+          git add -A data data-sample manifest.json
+          git commit -m "data: propose validated plant-phenology refresh [bot]" \
+                     -m "Produced from ${GITHUB_SHA}; 46 bundles, scientific contracts, indexes, exact manifest, and offline app source passed before publication."
+          if [ -n "$remote_head" ]; then
+            git push --force-with-lease="refs/heads/$branch:$remote_head" origin "$branch:refs/heads/$branch"
           else
-            git commit -m "data: monthly NEON phenology refresh (DP1.10055.001) [bot]"
-            git push origin HEAD:master
-            echo "Pushed refreshed data — Connect Cloud will auto-redeploy."
+            git push origin "$branch:refs/heads/$branch"
+          fi
+          pr_url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
+          if [ -z "$pr_url" ]; then
+            gh pr create --base master --head "$branch" \
+              --title "data: validated NEON plant-phenology refresh" \
+              --body "Validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Merging this review PR is the explicit production/deployment decision."
+          else
+            gh pr comment "$pr_url" --body "Updated with validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
           fi

@@ -170,25 +170,27 @@ individual_summary <- function(obs, inds) {
 }
 
 # ---------------------------------------------------------------------------
-# Phenology Clock data: % of individuals 'yes' per phenophase per week-of-year,
-# for one species (or all). Pools years BY DESIGN (caption it). Restricted to the
-# phenophases that species' growth form actually records.
+# Phenology Clock data: % of scored PLANT-YEAR opportunities 'yes' per
+# phenophase/week-of-year, for one species (or all). Pools plant-year opportunities
+# across years BY DESIGN (caption it), but never collapses a plant across years.
+# Restricted to the phenophases that species' growth form actually records.
 # ---------------------------------------------------------------------------
 weekly_yesrate <- function(obs, sci = NULL) {
   d <- species_level_only(obs); d <- d[d$status %in% c("yes","no") & is.finite(d$dayOfYear), , drop=FALSE]
   if (!is.null(sci)) d <- d[d$scientificName %in% sci, , drop=FALSE]
   if (!nrow(d)) return(NULL)
   d$week <- pmin(52L, ((d$dayOfYear - 1L) %/% 7L) + 1L)
-  # PLANT-weighted, not visit-weighted: a plant visited twice in a week must count
-  # ONCE, or the "% of plants" label is false (it would be "% of observations").
-  # Collapse to one row per individual x phenophase x week first; the plant counts
-  # 'yes' if ANY visit that week was 'yes' (the phenophase was active that week).
-  d <- d %>% dplyr::group_by(.data$individualID, .data$phenophaseName, .data$week) %>%
-    dplyr::summarise(plant_yes = any(.data$status == "yes"), .groups = "drop")
+  # PLANT-YEAR-weighted, not visit-weighted or ever-yes weighted: a plant visited
+  # twice in the same week/year counts ONCE, while that plant scored in the same
+  # week in a second year is a second opportunity. Collapse to one row per
+  # individual x phenophase x year x week; the plant-year counts 'yes' if ANY
+  # visit in that cell was 'yes' (the phenophase was active that week/year).
+  d <- d %>% dplyr::group_by(.data$individualID, .data$phenophaseName, .data$year, .data$week) %>%
+    dplyr::summarise(plant_year_yes = any(.data$status == "yes"), .groups = "drop")
   d %>% dplyr::group_by(.data$phenophaseName, .data$week) %>%
-    dplyr::summarise(yes = sum(.data$plant_yes), n = dplyr::n(), .groups="drop") %>%
+    dplyr::summarise(yes = sum(.data$plant_year_yes), n = dplyr::n(), .groups="drop") %>%
     dplyr::mutate(rate = round(100 * .data$yes / .data$n, 1)) %>%
-    dplyr::filter(.data$n >= 5)   # suppress sub-threshold weeks: a 100%-of-3 ring must not look as solid as 100%-of-1000 (n is now distinct plants/week)
+    dplyr::filter(.data$n >= 5)   # suppress sub-threshold weeks: a 100%-of-3 ring must not look as solid as 100%-of-1000 (n is scored plant-year opportunities/week)
 }
 
 # onset trend per species x year (the climate-shift signal — NOT pooled).
@@ -201,9 +203,15 @@ onset_trend <- function(obs, phenophases = GREENUP) {
   o <- onset(obs, phenophases); if (is.null(o) || !nrow(o)) return(NULL)
   o <- o %>% dplyr::group_by(.data$individualID, .data$scientificName, .data$year) %>%
     dplyr::summarise(onset_doy = min(.data$onset_doy), .groups = "drop")
-  o %>% dplyr::group_by(.data$scientificName, .data$year) %>%
+  out <- o %>% dplyr::group_by(.data$scientificName, .data$year) %>%
     dplyr::summarise(onset = round(stats::median(.data$onset_doy)), n = dplyr::n_distinct(.data$individualID), .groups="drop") %>%
     dplyr::filter(.data$n >= 3)   # >=3 individuals/species/year before a point is shown
+  # A site can have green-up observations yet no species-year that clears the
+  # support gate. Preserve that as an unavailable result, not a typed 0-row table:
+  # bundle and UI contracts use NULL to distinguish "no supported trend" from a
+  # trend table with meaningful rows.
+  if (!nrow(out)) return(NULL)
+  out
 }
 
 # leaf-active YEAR-trend: median days-carrying-leaves per species per year, the

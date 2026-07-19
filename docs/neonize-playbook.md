@@ -164,27 +164,30 @@ The suite has **migrated off shinyapps.io to Posit Connect Cloud with a GIT-BACK
 This is now the standard; shinyapps.io (small-mammal reference) is legacy and slated to follow.
 
 **Deploy model (the new standard — Connect Cloud, git-backed):**
-- The app lives on Connect Cloud, pointed at the GitHub repo + its watched branch. **A push to the
-  watched branch IS the deploy** — Connect Cloud auto-republishes. So there are **no shinyapps.io
-  secrets, no `rsconnect/` dir, and no `deploy.R` step** (those are the legacy shinyapps path).
-- Required in-repo: a lean **`manifest.json`** (`rsconnect::writeManifest()`; bundle-only, keep
-  `neonUtilities` OUT via the computed-package-name trick), the committed `data/` bundles, and a
-  `docs/index.html` GitHub Pages showcase whose `APP_URL` points at the live Connect Cloud app.
+- The app lives on Connect Cloud, pointed at the GitHub repo + its watched branch. A push is a
+  **deployment request, not a deployment receipt**. Close a release only after the Connect record
+  identifies the exact green merge and a real browser establishes a Shiny session and exercises a
+  representative bundled interaction.
+- Required in-repo: a lean, validator-generated **`manifest.json`** (bundle-only; keep
+  `neonUtilities` OUT of runtime), committed data bundles, an app-specific semantic-ready marker,
+  and a `docs/index.html` GitHub Pages showcase that launches the fixed Connect URL without an
+  opaque no-CORS prewarm.
 - Branch naming is split across the suite (`main` vs `master`) — each workflow must push to the
   branch its own Connect Cloud app watches. Standardize new repos on `main`.
 
-**Auto-refresh + self-deploy (`.github/workflows/refresh-data.yml`) — copy this shape:**
+**Validated refresh candidate (`.github/workflows/refresh-data.yml`) — copy this shape:**
 - **Schedule (identical across the suite):** `cron: "0 6 * * 0"` (Sunday 06:00 UTC = Saturday 23:00
   America/Phoenix, off-peak), with a **gate job** that proceeds only on the **first Saturday of the
   month** (`dow=6 && day<=7`, `TZ=America/Phoenix`) — cron can't say "first Saturday", so fire weekly
   and gate. `workflow_dispatch` with a `skip_download` input always proceeds (fast redeploy test).
-- **Flow:** gate → checkout → `setup-r` + deps → fetch raw + rebuild `data/sites/*.rds` (+ any
-  overlays) → **commit/push to the watched branch (= the deploy on Connect Cloud)** → optionally open
-  a data-refresh PR. Time-box + `continue-on-error` the heavy/optional steps so they can't block the
-  deploy. `NEON_TOKEN` is an optional secret (anonymous works, slower).
-- **Two deploy triggers seen in the wild — prefer auto-push:** (a) *auto* — push refreshed data
-  straight to the watched branch (mammal/bird/phe/plant). (b) *PR-merge* — open a PR a human merges
-  (veg) — this is NOT self-deploying; convert to auto-push unless a review gate is wanted.
+- **Flow:** gate → read-only fetch into empty staging → immutable raw artifact → separately pinned,
+  read-only validator builds the complete expected roster → scientific/schema/determinism/offline
+  gates → immutable candidate artifact → restricted publisher opens or updates a review PR. Never
+  give the raw producer write authority and never delete the last valid bundle before its replacement
+  passes.
+- A derived index must not contain `Sys.Date()` or another wall-clock value. Derive provenance from
+  immutable input (for example maximum observation date) and rebuild twice to require identical
+  hashes. A refresh PR is production input, so review and merge are intentional release decisions.
 
 **Derived/master apps (e.g. Driver Cascade):** their bundle is built FROM sibling repos' bundles, so
 CI must obtain them — `git clone --depth 1` each sibling repo (use the real slugs, not dir names:
@@ -197,9 +200,9 @@ remote + a Connect Cloud app** before any of this works.
 
 Data bundles: `data/sites/*.rds` present + valid (loadable, non-empty) · `data/site_index.rds`
 (picker) · `data-sample/demo.rds` (instant demo) · all git-tracked · refreshed within the cadence.
-Automation: `.github/workflows/refresh-data.yml` on the **standard schedule** · self-deploys via
-**auto-push** (not PR-merge) · `manifest.json` present · GitHub **remote** exists · `docs/index.html`
-`APP_URL` is live. NEONization: cover/landing splash · **in-app sibling links** + `docs` cross-promo
+Automation: `.github/workflows/refresh-data.yml` on the **standard schedule** · publishes only a
+validated review candidate · exact `manifest.json` present · GitHub **remote** exists · public
+Connect source commit and semantic/browser receipt match. NEONization: cover/landing splash · **in-app sibling links** + `docs` cross-promo
 grid covering the WHOLE suite · mobile-responsive CSS (`@media`, prefers-reduced-motion) · **QC-flag
 system** (§ below) · metadata/codebook view · comprehensive downloads (CSV + card PNG + report PDF) ·
 entity pin-cards · current shared chrome (styles.css + app.js + pincards.js).

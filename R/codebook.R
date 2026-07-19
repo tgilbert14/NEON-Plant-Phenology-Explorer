@@ -60,9 +60,9 @@ PHE_CODEBOOK_ROWS <- tibble::tribble(
   # 4. clock / weekly_yesrate (one row per phenophaseName x week; n>=5 gate)
   "clock", "phenophaseName", "character", "", "see PHE_PHENOPHASE_DECODE", "Phenophase whose weekly active-share is summarized.",
   "clock", "week", "integer", "week-of-year", "1-52 (final partial week folded into 52)", "Week of year (7-day bins from Jan 1).",
-  "clock", "yes", "integer", "count", ">=0", "Number of DISTINCT plants recorded 'yes' for this phenophase in this week (a plant visited twice in a week counts once), POOLED ACROSS ALL YEARS (and the selected species, or all).",
-  "clock", "n", "integer", "count", ">=5 (rows with n<5 suppressed)", "Denominator: DISTINCT plants with a yes-or-no record for this phenophase-week (PLANT-weighted, not visit-weighted; uncertain excluded). Weeks with n<5 distinct plants dropped.",
-  "clock", "rate", "numeric", "percent", "0-100, one decimal", "100 * yes / n: percent of monitored PLANTS in this phenophase this week (plant-weighted), pooled across years. A TIMING signal, NOT abundance.",
+  "clock", "yes", "integer", "count", ">=0", "Number of scored PLANT-YEAR-WEEK opportunities recorded 'yes' for this phenophase. Multiple visits to one plant in the same year/week count once (any 'yes' wins); the same plant scored in another year is a separate opportunity.",
+  "clock", "n", "integer", "count", ">=5 (rows with n<5 suppressed)", "Denominator: scored individual x phenophase x year x week opportunities with a yes-or-no record (PLANT-YEAR-weighted, not visit-weighted; uncertain excluded). Weeks with n<5 opportunities are dropped.",
+  "clock", "rate", "numeric", "percent", "0-100, one decimal", "100 * yes / n: percent of scored PLANT-YEAR opportunities 'yes' for this phenophase/week, pooled into a descriptive typical-year profile. A TIMING signal, NOT abundance or a population trend.",
 
   # 5. onset_trend (one row per scientificName x year; n>=3 gate)
   "onset_trend", "scientificName", "character", "", "Genus species (species-level only)", "Species whose green-up trend is tracked.",
@@ -101,9 +101,9 @@ PHE_PROVENANCE <- list(
   intensity_rule    = "intensity is an ORDINAL, phenophase-specific bin recorded only when status=='yes'. Bins are incommensurable across phenophases: do NOT average bin midpoints, and do NOT mix intensity across phenophases.",
   caveats           = c(
     "TIMING, not abundance: a fixed roster of tagged individuals is scored for WHEN phenophases occur; rates and counts here do not measure how common a species is.",
-    "The clock (weekly_yesrate) POOLS all years into one average calendar by design; for between-year shifts use onset_trend.",
+    "The clock (weekly_yesrate) POOLS scored plant-year-week opportunities into one average calendar by design; repeated visits collapse within a plant-year-week, years remain separate opportunities, and between-year shifts belong in onset_trend.",
     "individual_summary fields are medians-of-per-year values; onset_trend$onset is a median across individuals per species-year. Both collapse within-group variance, so n must travel with any point.",
-    "Suppression gates: clock rows need n>=5 DISTINCT PLANTS/phenophase-week (plant-weighted, not visit-weighted); onset_trend points need n>=3 individuals/species-year. Suppressed cells are absent rows, NOT zeros.",
+    "Suppression gates: clock rows need n>=5 scored PLANT-YEAR opportunities/phenophase-week (plant-year-weighted, not visit-weighted; uncertain excluded); onset_trend points need n>=3 individuals/species-year. Suppressed cells are absent rows, NOT zeros.",
     "Left-censored onsets bias greenup LATE; not-sampled / not-yet-reached phenophases appear as NA, distinct from a structural 'no'.",
     "GREEN-UP COVERAGE varies by biome: in warm deserts the green-up PHENOPHASE itself is scored for only ~1/5 of plants (drought-deciduous/cactus/evergreen forms are logged straight into 'Leaves'), so a desert median_greenup rests on a small, non-random subsample. Pair it with the green-up coverage share and read leaf_active, which survives where green-up collapses.",
     "CROSS-SITE onset comparisons are not cadence-controlled: sites differ in effective visit frequency, so part of an onset difference between two sites can be censoring geometry, not plant biology (the phenology analog of detection probability). leaf_active is likewise visit-cadence-sensitive (7-day floor; undercounts at sparse-visit sites).",

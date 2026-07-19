@@ -1,6 +1,18 @@
 # Plant phenology observations (green-up onset) — Expert Review by Iris (NEON DP1.10055.001)
 _Devoted product-expert review — June 2026._
 
+> **Current disposition (2026-07-18):** The narrative below is the historical
+> review baseline, not a current open-issue list. `PHE-001` Clock denominator is
+> now corrected to one scored plant-year-week opportunity, with repeat visits
+> collapsed within year and years retained. `PHE-002` visit-cadence badges/gates,
+> `PHE-003` desert green-up coverage and leaf-active default, `PHE-004`
+> within-species-first gradient with uncertainty, `PHE-005` leaf-active cadence
+> caveat, and `PHE-006` per-metric contributing-year fields are implemented in
+> source. All remain **FIXED, NOT YET RELEASE-VERIFIED** until the pinned validator,
+> manifest, Connect deployment, and semantic production receipt pass. Historical
+> statements such as “the app surfaces NONE of this” describe the reviewed June
+> build and are retained for traceability.
+
 > Iris here. I walked this app the way I walk a green-up number: from the tagged plant on the loop, through the interval-censored `onset()`, out to the cross-site gradient — and I'll say plainly that this is the cleanest sibling in the suite and the one place the whole cascade earns a defensible rung. The timing-not-abundance framing is everywhere, the onset is honestly interval-censored to the midpoint (Diez et al. 2012 done right — I checked it against HARV: 55.4% of onsets land on a `.5`, mean first-yes→onset gap 2.47 d, exactly the half-interval of twice-weekly visits), `leaf_off` is correctly *not* first-coloration, `leaf_active` is the honest growing extent, the QC ordering check is suppressed for the drought-deciduous forms that legitimately flush twice, and every verdict refuses small-n or prints a CI that admits when it spans zero. So the machinery is gold and I am telling you not to touch it. My quarrel is narrow and it is the same one I always have: **in warm deserts, green-up onset is not a weak metric — it is the WRONG phenophase, scored for a fifth of the roster — and the app still leads with `median_greenup` in the hero, the map, and the national gradient without a coverage badge that says so.** Surface the coverage share, make `leaf_active`/first-leaf the desert metric, and lead the cross-site read with the within-species slope. That is the difference between handing Cass a green-up signal and handing Cass a temperate construct in a desert's clothing.
 
 ## Method fidelity (is the NEON protocol represented correctly?)

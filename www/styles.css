@@ -433,6 +433,13 @@ svg.smt-pin-lines { position: absolute; inset: 0; width: 100%; height: 100%; poi
 /* let plots shrink on narrow screens */
 .shiny-plot-output, .plotly, .leaflet-container { max-width: 100%; }
 
+/* Local export feedback; replaces a runtime CDN toast dependency. */
+.phe-export-toast { position: fixed; top: 18px; right: 18px; z-index: 6000;
+  max-width: min(340px, calc(100vw - 36px)); padding: 11px 15px; border-radius: 12px;
+  background: var(--pine); color: #fff; font-weight: 750; box-shadow: 0 14px 36px var(--shadow); }
+.phe-export-toast.is-error { background: #8c2f20; }
+.phe-export-toast.is-busy { background: var(--terra); }
+
 /* ---- mobile friendliness ---------------------------------------------- */
 @media (max-width: 640px) {
   .app-hero { padding: 16px 16px; }
