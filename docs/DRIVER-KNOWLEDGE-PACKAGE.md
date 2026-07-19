@@ -2,16 +2,18 @@
 
 ## Decision state
 
-`HOLD - PASS IN PROGRESS`. This package is a scaffold, not an adoption receipt.
-No Driver artifact byte is authorized from the current source or public deployment.
+`HOLD - PASS 2 COMPLETE / NO DRIVER BYTE CHANGE`. The app release is verified;
+the candidate phenology signals are not an adoption receipt. No Driver artifact
+byte is authorized from this pass.
 
 ## Product identity
 
 - Repository: `tgilbert14/NEON-Plant-Phenology-Explorer`
 - Product: NEON Plant Phenology Observations `DP1.10055.001`
 - Baseline source: `1917f760bddd1781388462bcfebedff322edc6af`
-- Bundle/schema version: not yet formalized; 46 committed per-site RDS bundles plus
-  site, national-onset, search, and demo indexes require pinned validation.
+- Verified release source/deployment: `29c0ed119fe7a4183d77b9fae475a8d6ddff9154`
+- Release family: 46 committed per-site RDS bundles plus site, national-onset,
+  search, and demo indexes; pinned R 4.5.2 / Haswell / one-thread validation.
 
 ## Unit and support
 
@@ -40,8 +42,9 @@ No Driver artifact byte is authorized from the current source or public deployme
 3. Green-up coverage, the share of monitored tagged plants with a finite green-up
    onset. This is a support/interpretability signal, not phenological timing.
 
-These remain candidates until raw-oracle, fixture, bundle, manifest, and public
-release receipts pass.
+These are trusted app-local signals after the fixture, bundle, deterministic-index,
+manifest, offline-source, and public release receipts passed. They remain Driver
+candidates until the exact eligible site-year join and registered analysis pass.
 
 ## Claims
 
@@ -87,14 +90,41 @@ release receipts pass.
 - Cover imagery can be expressive without becoming evidence: retain source and web
   derivatives, prompts, dimensions, hashes, alt text, and an explicit non-data
   interpretation boundary; keep app startup independent of third-party CDNs.
+- A filtered derived result with no supported rows is an unavailable value, not a
+  valid empty estimate. Normalize typed zero-row trend frames to `NULL`; when a
+  named R-list field must remain in the schema, use `bundle["trend"] <- list(NULL)`
+  because `$trend <- NULL` deletes the field. Run migrations twice and require exact
+  all-bundle hashes on the second pass.
+- A 320-pixel browser can reserve 15 pixels for its vertical scrollbar. Avoid
+  `100vw` inside shell-relative mobile carousels, allow the body below 320 pixels,
+  and require root `clientWidth == scrollWidth` at both 390 and 320 widths while
+  allowing the carousel itself to scroll.
+- A product cover should lead with a memorable app-native promise and honest task
+  routes. This pass used an explicitly stylized seasonal cut-paper scene; suite
+  cohesion comes from shared navigation, claim boundaries, and receipts rather
+  than forcing every app into the same hero or repetitive relationship prose.
 
-Learning classes: `suite-platform`, `scientific-contract`, `cover-system`, and potentially
-`Driver-impacting`. Final classification and exact Driver disposition are pending.
+Learning classes: `suite-platform`, `scientific-contract`, `cover-system`, and
+`Driver-impacting` (held; no byte change).
+
+## Publication receipt
+
+- Green PR head: `cc0151dae58d4128e831e74cc44f2f7c01ec3ac6`, run
+  `29669603912`, job `88146136480`.
+- Merge, Pages, and Connect Last deployed:
+  `29c0ed119fe7a4183d77b9fae475a8d6ddff9154`; Pages run `29670192167`.
+- Master validator `29670192503`, job `88147654406`, reproduced the complete
+  release on merge in 20m26s.
+- Production semantic run `29670192516` passed. A fresh public HARV session loaded
+  211 tagged plants, 20 species, two plots, and median green-up day 116, then
+  rendered Overview, Phenology Clock, Onset Lab, and Across Sites. The 390-pixel
+  app and the 390/320-pixel Pages cover had no page-level horizontal overflow.
 
 ## Driver decision and next dependency
 
-Current decision: `HOLD`. The first dependency that can change it is a verified
-release containing the corrected plant-year estimand and adversarial tests, followed
-by an exact eligible site-year join and registered temperature/onset analysis. If
-that analysis does not support an inferential vote, preserve green-up/leaf-active as
-`CONTEXT` rather than forcing adoption.
+Current decision: `HOLD / NO DRIVER BYTE CHANGE`. The corrected plant-year estimand,
+adversarial tests, and verified release are complete. The first dependency that can
+change the decision is an exact eligible site-year join with support/censoring gates
+and a registered temperature/onset analysis. If that analysis does not support an
+inferential vote, preserve green-up/leaf-active as `CONTEXT` rather than forcing
+adoption.
