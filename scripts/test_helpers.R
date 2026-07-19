@@ -99,6 +99,18 @@ tr <- onset_trend(trend_fixture)
 check(nrow(tr) == 1L && tr$n[[1L]] == 3L && tr$onset[[1L]] == 105,
       "onset trend de-pseudoreplicates phenophases to one value per plant-year")
 
+# Green-up observations from only two individuals create candidate onsets, but no
+# supported species-year. The public contract is an unavailable trend (NULL), not
+# an empty data-frame container that can look like a valid derived table.
+trend_sparse_fixture <- bind_rows(
+  obs_row("S1", 2020, 100, "no"),
+  obs_row("S1", 2020, 104, "yes"),
+  obs_row("S2", 2020, 102, "no"),
+  obs_row("S2", 2020, 108, "yes")
+)
+check(is.null(onset_trend(trend_sparse_fixture)),
+      "onset trend normalizes an all-suppressed result to unavailable NULL")
+
 # Days 1 and 2 share a week; day 8 and day 100 are two more active weeks. The
 # multi-flush-safe extent is therefore three distinct weeks x seven days.
 leaf_fixture <- bind_rows(

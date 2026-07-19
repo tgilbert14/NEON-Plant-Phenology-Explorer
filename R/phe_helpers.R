@@ -203,9 +203,15 @@ onset_trend <- function(obs, phenophases = GREENUP) {
   o <- onset(obs, phenophases); if (is.null(o) || !nrow(o)) return(NULL)
   o <- o %>% dplyr::group_by(.data$individualID, .data$scientificName, .data$year) %>%
     dplyr::summarise(onset_doy = min(.data$onset_doy), .groups = "drop")
-  o %>% dplyr::group_by(.data$scientificName, .data$year) %>%
+  out <- o %>% dplyr::group_by(.data$scientificName, .data$year) %>%
     dplyr::summarise(onset = round(stats::median(.data$onset_doy)), n = dplyr::n_distinct(.data$individualID), .groups="drop") %>%
     dplyr::filter(.data$n >= 3)   # >=3 individuals/species/year before a point is shown
+  # A site can have green-up observations yet no species-year that clears the
+  # support gate. Preserve that as an unavailable result, not a typed 0-row table:
+  # bundle and UI contracts use NULL to distinguish "no supported trend" from a
+  # trend table with meaningful rows.
+  if (!nrow(out)) return(NULL)
+  out
 }
 
 # leaf-active YEAR-trend: median days-carrying-leaves per species per year, the

@@ -158,3 +158,41 @@ findings only until the pinned build and deployed semantic receipt pass.
   head, promote only the exact green validator artifact when CI exposes the
   expected generated-byte diff, then merge, republish the exact merge on Connect,
   and run public app/Pages browser verification.
+
+### 2026-07-18 18:20 MST - first pinned validator finding and repair / Codex
+
+- Published candidate `8b443c4adf2d0687cf9f02ac8474b3965cd05477` to draft PR #3.
+  Pinned run `29667231377`, job `88139693110`, compiled the full R 4.5.2 source
+  closure in 22m00s, then passed the loaded Haswell/one-thread runtime, static
+  contracts, all original scientific fixtures, deterministic index rebuild, and
+  manifest generation.
+- The run failed closed at bundle verification with one exact finding:
+  `data/sites/KONA.rds trend must be NULL or a non-empty data frame`. Offline boot,
+  validated artifact upload, and committed-byte equality were correctly withheld.
+  The uploaded manifest was explicitly diagnostic/unvalidated.
+- Root cause: `onset_trend()` returned `NULL` when no onset observations existed,
+  but returned a typed zero-row data frame when observations existed and every
+  species-year was removed by the `n >= 3` support gate. KONA preserved that
+  semantically unavailable container. The verifier's rule is correct and was not
+  weakened.
+- Repair: `onset_trend()` now normalizes an all-suppressed result to `NULL`, with a
+  new two-individual adversarial fixture. A focused bundle normalizer changes only
+  historical zero-row `trend` fields to `NULL`, fetches no data, fails on malformed
+  containers, and is executed twice under the pinned runtime with exact all-bundle
+  hashes to prove idempotence.
+- Artifact boundary: the validator now includes exact `data/sites/KONA.rds` bytes
+  alongside the three rebuilt indexes and generated manifest in the immutable
+  release candidate. The expected next run may fail only at committed-byte equality
+  after every semantic, bundle, manifest, and offline-boot gate passes; only that
+  validated artifact is eligible for promotion.
+- Local static gates (PASS): Ruby parsed all three workflows; Node parsed the two
+  runtime scripts and passed the five-handler and cover contracts; Bash parsed the
+  semantic smoke; `git diff --check` passed. Local R remains unavailable, so the new
+  R fixture, normalizer, bundle verifier, and artifact bytes require the pinned
+  GitHub run.
+- Artifacts/non-impact: no RDS or manifest byte was hand-edited, no Connect publish
+  occurred, and no Driver artifact changed. The public app remains a P0 Startup
+  Error until a green promoted release is merged and explicitly deployed.
+- Next action: commit and push the focused repair to PR #3, inspect the exact failing
+  or passing gate, download and promote only a fully validated release-candidate
+  artifact, then require a clean exact-head rerun.

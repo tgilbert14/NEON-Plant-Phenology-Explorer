@@ -89,6 +89,15 @@ jobs:
       - name: Run scientific helper contracts
         run: Rscript --vanilla scripts/test_helpers.R
 
+      - name: Normalize unavailable trend containers and require idempotence
+        run: |
+          set -euo pipefail
+          Rscript --vanilla scripts/normalize_empty_trends.R
+          find data/sites data-sample -name '*.rds' -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/bundle-hashes-first.txt"
+          Rscript --vanilla scripts/normalize_empty_trends.R
+          find data/sites data-sample -name '*.rds' -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/bundle-hashes-second.txt"
+          diff -u "$RUNNER_TEMP/bundle-hashes-first.txt" "$RUNNER_TEMP/bundle-hashes-second.txt"
+
       - name: Rebuild derived indexes twice and require identical bytes
         run: |
           set -euo pipefail
@@ -130,6 +139,7 @@ jobs:
         with:
           name: plant-phenology-release-candidate-${{ github.sha }}
           path: |
+            data/sites/KONA.rds
             data/site_index.rds
             data/national_onsets.rds
             data/search_index.rds
