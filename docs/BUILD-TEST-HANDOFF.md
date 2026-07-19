@@ -245,3 +245,41 @@ findings only until the pinned build and deployed semantic receipt pass.
 - Next action: commit the exact promoted bytes and responsive correction, push the
   PR head, and require the complete exact-head validator to finish green before
   merge or Connect publication.
+
+### 2026-07-18 19:32 MST - publication closeout / Codex
+
+- Exact PR head `cc0151dae58d4128e831e74cc44f2f7c01ec3ac6` passed the complete
+  release validator in run `29669603912`, job `88146136480` (21m08s). The final
+  committed-byte equality guard was clean after every scientific, deterministic,
+  manifest, bundle, and offline-source gate.
+- PR #3 merged as `29c0ed119fe7a4183d77b9fae475a8d6ddff9154`. GitHub Pages
+  published that exact merge in run `29670192167`. Connect was explicitly
+  republished from watched branch `master`; Content Info reports Last deployed
+  `29c0ed1` at 2026-07-18 19:26 MST.
+- Production semantic run `29670192516` passed the app-specific marker and host
+  error rejection. An independent one-attempt smoke also returned HTTP 200 plus
+  semantic body checks for both Connect and Pages.
+- Fresh unauthenticated browser session: selected HARV, loaded 211 tagged plants,
+  20 species, two plots, median green-up day 116, and analysis-bundle/report-card
+  download routes. Overview, Phenology Clock, Onset Lab, and Across Sites rendered;
+  the Clock exposed its scored plant-year opportunity, no-shift CI, and roster
+  caveat, while Across Sites led with a 10-site within-species Acer rubrum view,
+  cadence support, interval censoring, and explicit observational/non-causal limits.
+- Public app at 390 x 844 reported root client/scroll `375/375`, retained semantic
+  marker `plant-phenology-v1`, loaded HARV, and showed KPI values 211/20/2/116.
+  Public Pages passed desktop `1425/1425`, 390 `375/375`, and 320 `305/305` root
+  geometry; selected the 1666 x 944 desktop and 864 x 1821 mobile assets; retained
+  57/52-pixel launch controls at 390 and 77/52-pixel controls at 320; and exposed
+  the canonical URL, exact `og-image-v2.jpg`, all ten suite links, and one current
+  app marker.
+- Driver disposition is `HOLD / NO DRIVER BYTE CHANGE`. The corrected app-local
+  onset/leaf-active/coverage signals are trusted; adoption still requires the exact
+  eligible site-year join, support/censoring gates, and a registered analysis.
+- Master validator run `29670192503`, job `88147654406`, passed the same complete
+  contract on merge `29c0ed1` in 20m26s, including exact committed data/manifest
+  equality and offline source. No release gate remains.
+- Central Driver PR #25 merged the reusable R-list, idempotent migration,
+  documentary/stylized cover, and 320-pixel overflow lessons as Driver master
+  `9c70951`; its post-merge rebuild `29670522783` and Pages run `29670522519`
+  passed with no Driver artifact change. Final action: merge this documentation-only
+  app receipt and advance the suite to Plant Diversity.
