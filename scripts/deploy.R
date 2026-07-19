@@ -1,6 +1,7 @@
 # Optional shinyapps.io deploy (legacy fallback). The PRIMARY home is Posit
-# Connect Cloud, which deploys straight from this git repo via manifest.json
-# (scripts/write_manifest.R) and auto-republishes on every push — no token needed.
+# Connect Cloud, which deploys straight from this git repo via the pinned,
+# validator-generated manifest.json. A merge is not a deployment receipt: verify
+# the exact Connect source commit and browser session after every republish.
 # Use this only if you also want a shinyapps.io mirror.
 #   Rscript scripts/deploy.R   (after rsconnect::setAccountInfo(...))
 # NOTE: shinyapps.io retires 2026-12-31 — prefer Connect Cloud.

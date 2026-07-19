@@ -86,8 +86,8 @@ document.addEventListener("keydown", function (e) { if (e.key === "Escape") smtC
 // ---- Shiny custom message handlers ---------------------------------------
 document.addEventListener("DOMContentLoaded", function () {
   if (!window.Shiny) return;
-  Shiny.addCustomMessageHandler("countUp", function () { setTimeout(runCounters, 60); });
-  Shiny.addCustomMessageHandler("loadDone", function () { smtLoadDone(); });
+  Shiny.addCustomMessageHandler("countUp", function (_msg) { setTimeout(runCounters, 60); });
+  Shiny.addCustomMessageHandler("loadDone", function (_msg) { smtLoadDone(); });
   // server-triggered overlay (e.g. a click on the national picker map / search)
   Shiny.addCustomMessageHandler("smtLoadStart", function (msg) { smtLoadStart(msg && msg.label); });
   // current site code, used to stamp export filenames (pincards.js)
@@ -96,7 +96,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // the relocated select panel) needs a moment to settle its width before
   // Leaflet measures, or the national map captures a half-width and paints
   // narrow. Dispatch resize across several frames to catch the settled layout.
-  Shiny.addCustomMessageHandler("kickMaps", function () {
+  Shiny.addCustomMessageHandler("kickMaps", function (_msg) {
     var kick = function () { try { window.dispatchEvent(new Event("resize")); } catch (e) {} };
     requestAnimationFrame(kick);
     [80, 250, 500, 900].forEach(function (t) { setTimeout(kick, t); });

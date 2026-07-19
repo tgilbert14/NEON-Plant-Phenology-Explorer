@@ -330,12 +330,12 @@ server <- function(input, output, session) {
         r = r, theta = th, fill = "toself",
         fillcolor = grDevices::adjustcolor(col, alpha.f = fa), line = ln,
         customdata = nn,
-        hovertemplate = paste0(pn, "<br>%{r:.0f}% of plants 'yes'<br>%{customdata} plants that week<extra></extra>"))
+        hovertemplate = paste0(pn, "<br>%{r:.0f}% of scored plant-years 'yes'<br>%{customdata} plant-year opportunities<extra></extra>"))
     }
     ink <- if (is_dark()) "#e8eef2" else "#1f2a30"; grid <- if (is_dark()) "rgba(220,230,240,0.20)" else "rgba(31,42,48,0.12)"
     muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
     mo_theta <- (c(1,32,60,91,121,152,182,213,244,274,305,335) - 1)/365*360
-    scope <- sprintf("%s · %% of plants in each phenophase, by week · pooled across years%s",
+    scope <- sprintf("%s · %% of scored plant-years 'yes', by week · typical-year pool%s",
       rv$ctx %||% "", if (is.null(sci)) " · all species (mixes evergreen, deciduous & forb leaf calendars; pick a species to read timing)" else paste0(" · ", sci))
     anns <- list(list(text = scope, x = 0, y = if (leaf_lead) 1.18 else 1.10, xref = "paper", yref = "paper",
         showarrow = FALSE, xanchor = "left", font = list(color = muted, size = 10.5)))
@@ -409,16 +409,16 @@ server <- function(input, output, session) {
     slope <- co[2,1]; se <- co[2,2]; tcrit <- stats::qt(0.975, df = ny - 2)
     lo <- slope - tcrit*se; hi <- slope + tcrit*se
     if (lo < 0 && hi > 0) return(insight_banner("dash-circle", tone = "navy",
-      HTML(sprintf("Over <b>%d</b> years, %s shows <b>no statistically detectable shift</b> (%.1f days/yr, 95%% CI %.1f to %.1f, spans zero). More years are needed to tell drift from noise.", ny, noun, slope, lo, hi))))
+      HTML(sprintf("Across <b>%d</b> annual medians, the monitored-species %s summary shows <b>no statistically detectable linear shift</b> (%.1f days/yr, 95%% CI %.1f to %.1f, spans zero). The roster and species mix can change among years.", ny, noun, slope, lo, hi))))
     if (lf) {
       dir <- if (slope > 0) "longer" else "shorter"   # +days/yr = season lengthening
       return(insight_banner(if (slope > 0) "arrow-up-right" else "arrow-down-right", tone = if (slope > 0) "pine" else "gold",
-        HTML(sprintf("Over <b>%d</b> years, the site-wide growing season has grown <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series, a signal, not a verdict; partly reflects which species were monitored each year.</em>",
+        HTML(sprintf("Across <b>%d</b> annual medians, the monitored-species leaf-active summary changed <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>Descriptive and composition-sensitive: it is not a site-wide growing-season estimate.</em>",
           ny, abs(slope), dir, lo, hi))))
     }
     dir <- if (slope < 0) "earlier" else "later"
     insight_banner(if (slope < 0) "arrow-down-right" else "arrow-up-right", tone = if (slope < 0) "pine" else "gold",
-      HTML(sprintf("Over <b>%d</b> years, site-wide green-up has shifted <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>A short series, a signal, not a verdict; partly reflects which species were monitored each year.</em>",
+      HTML(sprintf("Across <b>%d</b> annual medians, the monitored-species green-up summary changed <b>%.1f days/year %s</b> (95%% CI %.1f to %.1f). <em>Descriptive and composition-sensitive: it is not a causal or site-wide population trend.</em>",
         ny, abs(slope), dir, lo, hi)))
   })
 
@@ -725,11 +725,11 @@ server <- function(input, output, session) {
         "  obs_long.csv                     one row per individual x visit x phenophase (tidy long)",
         "  onsets_by_individual_year.csv    per individual-year green-up/flower/leaf-off/leaf-active + left_censored flag",
         "  individual_summary.csv           one row per tagged plant (medians across years)",
-        "  phenology_clock_weekly.csv       % of plants 'yes' per phenophase per week (pooled years; n>=5)",
+        "  phenology_clock_weekly.csv       % of scored plant-years 'yes' per phenophase/week (typical-year pool; n>=5)",
         "  onset_trend_by_species_year.csv  median green-up per species per year (n>=3 individuals)",
         "  codebook.csv                     every column's type/units/definition + _phenophase_decode + _provenance", "",
         "Unit of analysis: tagged plant individual (repeated measures); plotID = spatial block.",
-        "TIMING, not abundance. Onset is interval-censored. The clock pools years by design.",
+        "TIMING, not abundance. Onset is interval-censored. The clock pools plant-year opportunities; repeat visits collapse within year and years stay separate.",
         "leaf_off is the last leaf-week, NOT senescence (meaningless for multi-flush plants). Read leaf_active.",
         "See codebook.csv for the full contract."),
         file.path(td, "README.txt"))
@@ -908,11 +908,11 @@ server <- function(input, output, session) {
     if (!is.null(ws)) {
       sp_short <- sub("^([A-Z][a-z]+ [a-z\\-]+).*$", "\\1", ws$species)
       return(tagList(insight_banner(if (ws$slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
-        "Holding the species constant, <b><em>%s</em></b> greens up <b>%.1f days %s per °N</b> across <b>%d</b> sites (95%% CI %.1f to %.1f, R²=%.2f), the spatial echo of Hopkins' bioclimatic law, with the species-mix confound removed. <em>The across-network slope (all species pooled, ~%.0f d/°N) is a coarser echo of the same temperature signal.</em>",
+        "Holding the species constant, <b><em>%s</em></b> greens up <b>%.1f days %s per °N</b> across <b>%d</b> sites (95%% CI %.1f to %.1f, R²=%.2f). This removes the between-species mix but remains an observational space-for-time pattern. <em>The all-species network slope (~%.0f d/°N) is shown only as a coarser, composition-confounded comparison; neither slope alone identifies a temperature effect.</em>",
         sp_short, abs(ws$slope), if (ws$slope >= 0) "later" else "earlier", ws$n_sites, ws$lo, ws$hi, ws$r2, abs(net_slope)))), cad_badge))
     }
     tagList(insight_banner(if (net_slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
-      "Across <b>%d</b> sites, green-up shifts roughly <b>%.0f days %s per degree of latitude north</b>, the spatial echo of Hopkins' bioclimatic law. <em>Each point is a site's median across its species (different species mixes, n as few as 4), so read it as a coarse across-network gradient, not a controlled comparison.</em>",
+      "Across <b>%d</b> sites, median green-up differs by roughly <b>%.0f days %s per degree of latitude north</b>. <em>Each point mixes species and visit schedules (n as few as 4), so this is a descriptive space-for-time gradient—not a controlled comparison or a temperature effect.</em>",
       nrow(d), abs(net_slope), if (net_slope >= 0) "later" else "earlier"))), cad_badge)
   })
   observe({ if (is.null(NATIONAL_ONSETS) || !nrow(NATIONAL_ONSETS)) {
@@ -961,7 +961,7 @@ server <- function(input, output, session) {
         p("Phenology is a ", tags$b("timing signal"), ": when a plant wakes, blooms, and senesces. Because the roster is fixed, it is not a measure of how common a species is. It tracks the ", tags$b("calendar of the canopy"), ", and how that calendar shifts year to year."),
         p("Onset is ", tags$b("interval-censored"), ": the true first-leaf day lies between the last 'no' and first 'yes' visit, so we use the midpoint, honest about the twice-weekly resolution.")),
       div(class="about-card", h4(bs_icon("graph-down-arrow"), " Why it matters"),
-        p("Shifts in green-up and bloom timing are among the clearest biological fingerprints of a changing climate, and drive mismatches with pollinators and migrating birds."),
+        p("Green-up and bloom timing can respond to climate and can alter overlap with pollinators or migrating birds. This app exposes timing and support; it does not estimate those drivers, causal effects, or species mismatches."),
         p(bs_icon("envelope"), " ", tags$a(href="mailto:desertdatalabs@gmail.com","desertdatalabs@gmail.com"), " · ",
           tags$a(href="https://data.neonscience.org/data-products/DP1.10055.001", target="_blank", "NEON data product"))),
       div(class="about-card", h4(bs_icon("award"), " Data attribution & license"),

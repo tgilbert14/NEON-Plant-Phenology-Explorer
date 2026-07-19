@@ -15,6 +15,8 @@
 #   $sites — the site-level table for the threshold query (one row/site),
 #            site, name, state, median_greenup, year_min, year_max, n_species,
 #            n_individuals, gu_share.
+#   $built — deterministic data-through date: maximum observation date in the
+#            committed bundles. It is deliberately NOT the wall-clock build date.
 # Loaded once at app boot (like site_index); searches filter it in memory, so
 # the network search is instant and keeps the fast bundled load.
 #
@@ -36,11 +38,16 @@ if (is.null(NO) || !nrow(NO)) stop("national_onsets.rds is empty — run scripts
 # Cheap: obs already carries year + scientificName. One pass per bundle; only
 # species-rank rows (is_species) so it lines up with national_onsets' roster.
 span_rows <- list()
+source_dates <- as.Date(character())
 files <- list.files("data/sites", pattern = "\\.rds$", full.names = TRUE)
 for (f in files) {
   b <- tryCatch(readRDS(f), error = function(e) NULL)
   if (is.null(b) || is.null(b$obs) || !nrow(b$obs)) next
   o <- b$obs
+  if ("date" %in% names(o)) {
+    observed_dates <- suppressWarnings(as.Date(as.character(o$date)))
+    source_dates <- c(source_dates, observed_dates[!is.na(observed_dates)])
+  }
   sci <- as.character(o$scientificName)
   isp <- if ("is_species" %in% names(o)) o$is_species %in% TRUE else !is.na(sci)
   keep <- isp & !is.na(sci) & !is.na(o$year)
@@ -85,10 +92,13 @@ sites$lat   <- neon_sites$lat[match(sites$site, neon_sites$site)] %||% NA_real_
 sites$lng   <- neon_sites$lng[match(sites$site, neon_sites$site)] %||% NA_real_
 sites <- sites %>% dplyr::filter(!is.na(median_greenup)) %>% dplyr::arrange(median_greenup)
 
-search_index <- list(taxa = taxa, sites = sites, built = as.character(Sys.Date()))
+if (!length(source_dates)) stop("No finite observation date found in committed bundles.")
+data_through <- as.character(max(source_dates))
+search_index <- list(taxa = taxa, sites = sites, built = data_through)
 saveRDS(search_index, "data/search_index.rds", compress = "xz")
 
 cat(sprintf("search_index: %d taxon-site rows, %d distinct species, %d sites (taxa) | %d sites (threshold)\n",
             nrow(taxa), dplyr::n_distinct(taxa$scientificName), dplyr::n_distinct(taxa$site), nrow(sites)))
 cat(sprintf("file size: %s bytes\n", format(file.size("data/search_index.rds"), big.mark = ",")))
+cat(sprintf("data through: %s (derived from committed observations)\n", data_through))
 cat("DONE\n")

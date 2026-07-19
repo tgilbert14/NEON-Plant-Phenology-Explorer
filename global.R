@@ -81,18 +81,13 @@ DDL <- list(
   # legacy aliases so older references keep resolving to the new palette
   navy = "#1f6f3e", navy2 = "#14532a", cardinal = "#AB0520",   # cardinal = destructive only
   gold = "#d98014", gold2 = "#9a5b0e", sky = "#2f8f87", green = "#1f7a3f", green2 = "#14532a")
-# Fonts are named as plain CSS families here, NOT font_google(). font_google()
-# defaults to local = TRUE, which downloads the font from Google's servers and
-# compiles it into the theme AT APP STARTUP (server-side). On Connect Cloud that
-# live fetch runs on every cold start against an empty cache and, when Google Fonts
-# is slow/unreachable, blocks/fails the boot -> "start-up error". Naming the family
-# as a string does zero network at boot; the glyphs still reach the browser via the
-# non-blocking client-side <link> in ui.R (display=swap), with a system fallback.
+# Local/system stacks only. Neither the server nor the browser needs a font CDN to
+# render the first view, so a cold/offline worker preserves the complete UI.
 rubik_stack <- bslib::font_collection(
-  "Rubik", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
+  "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
 )
 fraunces_stack <- bslib::font_collection(
-  "Fraunces", "Georgia", "Cambria", "Times New Roman", "serif"
+  "Georgia", "Cambria", "Times New Roman", "serif"
 )
 app_theme <- bs_theme(version = 5, bg = "#f6f3ea", fg = DDL$ink,
   primary = DDL$primary, secondary = DDL$terra, success = DDL$leaf, info = DDL$teal,

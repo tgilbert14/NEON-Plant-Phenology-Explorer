@@ -230,23 +230,76 @@
     requestAnimationFrame(function () { scanPending = false; scan(); });
   }
 
-  /* ---- exports (with a toast + double-fire guard) ------------------------- */
+  /* ---- local exports (with a toast + double-fire guard) -------------------
+     No CDN is required. We clone the export node, inline computed styles, wrap it
+     in an SVG foreignObject, and rasterize that local blob to a PNG canvas. */
   function toastStart(msg) {
-    if (typeof Swal === "undefined") return;
-    Swal.fire({ toast: true, position: "top-end", title: msg, showConfirmButton: false,
-      allowOutsideClick: false, didOpen: function () { if (Swal.showLoading) Swal.showLoading(); } });
+    toastDone(msg, false, true);
   }
-  function toastDone(msg, isErr) {
-    if (typeof Swal === "undefined") return;
-    Swal.fire({ toast: true, position: "top-end", icon: isErr ? "error" : "success",
-      title: msg, showConfirmButton: false, timer: 2200 });
+  function toastDone(msg, isErr, busy) {
+    var old = document.getElementById("pheExportToast");
+    if (old) old.remove();
+    var toast = document.createElement("div");
+    toast.id = "pheExportToast";
+    toast.className = "phe-export-toast" + (isErr ? " is-error" : "") + (busy ? " is-busy" : "");
+    toast.setAttribute("role", isErr ? "alert" : "status");
+    toast.textContent = (busy ? "↻ " : isErr ? "! " : "✓ ") + msg;
+    document.body.appendChild(toast);
+    if (!busy) setTimeout(function () { if (toast.parentNode) toast.remove(); }, 2400);
   }
   function downloadUrl(url, name) {
     var a = document.createElement("a"); a.download = name; a.href = url; a.click();
   }
+  function inlineStyles(source, clone) {
+    if (source.nodeType !== 1 || clone.nodeType !== 1) return;
+    var style = window.getComputedStyle(source);
+    for (var i = 0; i < style.length; i++) {
+      var prop = style[i];
+      clone.style.setProperty(prop, style.getPropertyValue(prop), style.getPropertyPriority(prop));
+    }
+    var sourceKids = source.children, cloneKids = clone.children;
+    for (var j = 0; j < sourceKids.length && j < cloneKids.length; j++)
+      inlineStyles(sourceKids[j], cloneKids[j]);
+  }
+  function localPng(node, opts) {
+    return new Promise(function (resolve, reject) {
+      var rect = node.getBoundingClientRect();
+      var width = Math.max(1, Math.ceil(rect.width));
+      var height = Math.max(1, Math.ceil(rect.height));
+      var clone = node.cloneNode(true);
+      inlineStyles(node, clone);
+      clone.querySelectorAll(".smt-pin-close,.smt-pin-resize,.smt-snap-btn,.smt-clear-btn").forEach(function (el) { el.remove(); });
+      clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      clone.style.width = width + "px";
+      clone.style.height = height + "px";
+      clone.style.margin = "0";
+      var markup = new XMLSerializer().serializeToString(clone);
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
+        '<foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:' + width + 'px;height:' + height + 'px;background:' + opts.backgroundColor + '">' +
+        markup + '</div></foreignObject></svg>';
+      var blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+      var blobUrl = URL.createObjectURL(blob);
+      var image = new Image();
+      image.onload = function () {
+        try {
+          var ratio = opts.pixelRatio || 2;
+          var canvas = document.createElement("canvas");
+          canvas.width = width * ratio; canvas.height = height * ratio;
+          var ctx = canvas.getContext("2d");
+          ctx.scale(ratio, ratio);
+          ctx.fillStyle = opts.backgroundColor; ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(image, 0, 0, width, height);
+          URL.revokeObjectURL(blobUrl);
+          resolve(canvas.toDataURL("image/png"));
+        } catch (err) { URL.revokeObjectURL(blobUrl); reject(err); }
+      };
+      image.onerror = function () { URL.revokeObjectURL(blobUrl); reject(new Error("local PNG renderer failed")); };
+      image.src = blobUrl;
+    });
+  }
   var saving = false;
   function snap(node, name, beforeEl) {
-    if (!node || typeof htmlToImage === "undefined" || saving) return;
+    if (!node || saving) return;
     saving = true;
     // force the plotly chart to its current size first (a tab that rendered while
     // hidden, or a just-toggled fullscreen, can leave a 0-sized / stale SVG)
@@ -255,10 +308,7 @@
     node.querySelectorAll(".smt-pin.smt-pulse").forEach(function (p) { p.classList.remove("smt-pulse"); });
     toastStart("Rendering image…");
     setTimeout(function () {
-      htmlToImage.toPng(node, { pixelRatio: 2, backgroundColor: bgColor(), cacheBust: true, skipFonts: true,
-        filter: function (n) { return !(n.classList && (n.classList.contains("smt-pin-close") ||
-          n.classList.contains("smt-pin-resize") || n.classList.contains("smt-snap-btn") ||
-          n.classList.contains("smt-clear-btn"))); } })   // keep cards + leader lines; drop chrome buttons
+      localPng(node, { pixelRatio: 2, backgroundColor: bgColor() })
         .then(function (url) { downloadUrl(url, name); toastDone("Saved ✓"); })
         .catch(function () { toastDone("Render failed — try again", true); })
         .then(function () { saving = false; });

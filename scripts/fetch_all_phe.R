@@ -14,14 +14,19 @@ tok <- Sys.getenv("NEON_TOKEN", "")
 if (!nzchar(tok)) for (f in c("../App-NEON-Small-Mammal-Tracker/.neon_token", ".neon_token"))
   if (file.exists(f)) { tok <- trimws(readLines(f, warn = FALSE))[1]; break }
 
-outdir <- "../phe-data-fetch"; dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
+outdir <- Sys.getenv("PHE_RAW_OUT_DIR", "../phe-data-fetch")
+enddate <- Sys.getenv("PHE_ENDDATE", format(Sys.Date(), "%Y-%m"))
+if (!grepl("^[0-9]{4}-(0[1-9]|1[0-2])$", enddate))
+  stop("PHE_ENDDATE must use YYYY-MM; got: ", enddate)
+dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
 # site universe = the app's terrestrial site table
 source("R/site_metadata.R")
 sites <- neon_sites$site
 args  <- commandArgs(trailingOnly = TRUE); if (length(args)) sites <- args
 
-cat(sprintf("Fetching %d sites | token: %s | %s\n", length(sites), nzchar(tok), R.version.string)); flush.console()
+cat(sprintf("Fetching %d sites through %s | token: %s | %s\n",
+            length(sites), enddate, nzchar(tok), R.version.string)); flush.console()
 ok <- character(0); empty <- character(0); failed <- character(0)
 for (s in sites) {
   outf <- file.path(outdir, paste0(s, "_raw.rds"))
@@ -29,7 +34,7 @@ for (s in sites) {
   cat("=== fetching ", s, " ===\n"); flush.console()
   res <- tryCatch(
     loadByProduct(dpID = "DP1.10055.001", site = s,
-                  startdate = "2016-01", enddate = "2024-12",
+                  startdate = "2016-01", enddate = enddate,
                   package = "basic", check.size = "FALSE",
                   token = if (nzchar(tok)) tok else NA),
     error = function(e) { cat("  ERROR:", conditionMessage(e), "\n"); NULL })
