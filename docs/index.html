@@ -48,7 +48,9 @@
     html { scroll-behavior: smooth; }
     body {
       margin: 0;
-      min-width: 320px;
+      /* Keep 320px devices inside the layout even when the browser reserves
+         space for a vertical scrollbar (305px usable content width). */
+      min-width: 280px;
       overflow-x: hidden;
       color: var(--paper);
       background:
@@ -317,7 +319,10 @@
       section { padding: 70px 0; }
       .suite-head { display: block; }
       .suite-link { display: inline-block; margin-top: 16px; }
-      .suite-grid { display: flex; width: calc(100vw - 15px); margin-right: -15px; padding-right: 15px; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; }
+      /* Extend the carousel to the shell edge without using 100vw: viewport
+         units include the desktop scrollbar and create a subtle page-level
+         horizontal overflow at phone widths. */
+      .suite-grid { display: flex; width: calc(100% + 15px); margin-right: -15px; padding-right: 15px; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; }
       .suite-app { min-width: 180px; scroll-snap-align: start; }
       .footer-links { justify-content: flex-start; }
     }

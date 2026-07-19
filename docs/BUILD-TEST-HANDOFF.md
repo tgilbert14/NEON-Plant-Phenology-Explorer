@@ -214,3 +214,34 @@ findings only until the pinned build and deployed semantic receipt pass.
 - Next action: push the one-line structure-preserving correction, rerun the pinned
   validator from its now-populated dependency cache, and require the normalizer's
   second pass to reproduce exact all-bundle hashes before any artifact promotion.
+
+### 2026-07-18 19:05 MST - validated release-byte promotion / Codex
+
+- Run `29668976235`, job `88144464344`, on source head `72c6271` and PR merge
+  revision `a87e44bb1edf91366fdd32f43c34e69b185c59cb` completed the full R 4.5.2
+  dependency closure and passed the loaded Haswell/one-thread runtime, static
+  contracts, expanded scientific helpers, two-pass trend normalization with exact
+  all-bundle hashes, two-build deterministic indexes, pinned manifest generation,
+  bundle/index/manifest verification, and complete offline app sourcing.
+- The run failed only at the intended final committed-byte equality guard. Both
+  validated artifact uploads had already completed; no semantic or runtime gate
+  failed. Exact release candidate:
+  `plant-phenology-release-candidate-a87e44bb1edf91366fdd32f43c34e69b185c59cb`.
+- Promoted all five files directly from that artifact, without rebuilding or hand
+  editing: `data/sites/KONA.rds`, `data/site_index.rds`,
+  `data/national_onsets.rds`, `data/search_index.rds`, and `manifest.json`.
+  SHA-256 receipts, in that order: `9b294811f7e880a29f05d3c11d0305d9034367b3822a529338e5b79c358b6f9e`,
+  `c2686b9e744384bbec16acaf43ff4da125f12f50bd9db19987bdb8d293516a63`,
+  `c0935aacbfeb319146eadef29f720d748f39fd03cebcef3cd10444f1767e5446`,
+  `0e3c1e3790c1a108fb991699442d5721e4b54018e7725d8609ceb0bacff899bc`,
+  and `cc5e2a464b2c96772c6e2b441b55a4eabb603f36311c08d4342e4ed0f59a5325`.
+- A fresh browser release pass at 390 and 320 CSS pixels found a page-level
+  horizontal overflow in the mobile suite carousel: `100vw` included the reserved
+  scrollbar. The carousel now extends from its shell with `calc(100% + 15px)`, and
+  the body's minimum width allows the 305-pixel usable content area on a 320-pixel
+  test viewport. Final 390 result: client/scroll `375/375`; final 320 result:
+  `305/305`. The carousel itself remains independently scrollable, both launch
+  controls remain visible, and the responsive portrait artwork is selected.
+- Next action: commit the exact promoted bytes and responsive correction, push the
+  PR head, and require the complete exact-head validator to finish green before
+  merge or Connect publication.
