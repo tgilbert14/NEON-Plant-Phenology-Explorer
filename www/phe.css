@@ -8,6 +8,244 @@
 /* leafy brand mark */
 .brand-mark { font-size: 26px; }
 
+/* ---- Suite Living Poster V1 ------------------------------------------- */
+.phe-poster {
+  --phe-night: #071c19;
+  --phe-night-2: #0d2c26;
+  --phe-leaf: #b9de75;
+  --phe-leaf-soft: #ddf1ac;
+  --phe-amber: #efad51;
+  --phe-paper: #f3edda;
+  --phe-paper-2: #d7d3c3;
+  position: relative;
+  isolation: isolate;
+  width: min(1320px, calc(100% - 32px));
+  min-height: min(690px, calc(100svh - 108px));
+  display: grid;
+  grid-template-columns: minmax(360px, .88fr) minmax(500px, 1.12fr);
+  margin: 0 auto 28px;
+  overflow: hidden;
+  border-radius: 0 0 24px 24px;
+  color: var(--phe-paper);
+  background:
+    radial-gradient(circle at 14% 82%, rgba(185, 222, 117, .12), transparent 28%),
+    radial-gradient(circle at 31% 7%, rgba(239, 173, 81, .08), transparent 25%),
+    var(--phe-night);
+  box-shadow: 0 24px 64px rgba(5, 24, 20, .22);
+}
+.phe-poster::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  opacity: .14;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+.phe-poster-copy {
+  z-index: 2;
+  align-self: center;
+  min-width: 0;
+  padding: 48px 18px 50px 52px;
+}
+.phe-poster-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 66px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(243, 237, 218, .18);
+}
+.phe-poster-brand {
+  display: inline-flex;
+  align-items: center;
+  color: var(--phe-paper);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.phe-poster-brand::before {
+  content: "↟";
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  margin-right: 8px;
+  border: 1px solid rgba(185, 222, 117, .7);
+  border-radius: 50%;
+  color: var(--phe-leaf);
+  font-size: 14px;
+}
+.phe-poster-nav { display: flex; }
+.phe-poster-suite-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--phe-paper-2);
+  font-size: 9.5px;
+  font-weight: 760;
+  letter-spacing: .03em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.phe-poster-suite-link strong { margin-left: 3px; color: var(--phe-leaf); }
+.phe-poster-suite-link span { margin-left: 4px; color: var(--phe-amber); }
+.phe-poster-suite-link:hover strong { color: var(--phe-leaf-soft); }
+.phe-poster-suite-link:focus-visible,
+.phe-poster-cta:focus-visible { outline: 3px solid var(--phe-leaf); outline-offset: 4px; }
+.phe-poster-app {
+  margin-bottom: 17px;
+  color: var(--phe-leaf);
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.phe-poster h1 {
+  max-width: 620px;
+  margin: 0;
+  color: var(--phe-paper);
+  font-family: Iowan Old Style, Palatino Linotype, Book Antiqua, Palatino, Georgia, serif;
+  font-size: clamp(68px, 7.2vw, 116px);
+  font-weight: 600;
+  letter-spacing: -.067em;
+  line-height: .84;
+}
+.phe-poster h1 span, .phe-poster h1 em { display: block; }
+.phe-poster h1 em { color: var(--phe-leaf); font-style: normal; font-weight: 600; }
+.phe-poster .phe-poster-promise {
+  max-width: 470px;
+  margin: 28px 0 0;
+  color: var(--phe-paper-2);
+  font-size: clamp(17px, 1.35vw, 21px);
+  line-height: 1.55;
+}
+.phe-poster-cta {
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 30px;
+  padding: 0 22px;
+  border-radius: 999px;
+  color: var(--phe-night);
+  background: var(--phe-leaf);
+  box-shadow: 0 14px 38px rgba(185, 222, 117, .17);
+  font-size: 14px;
+  font-weight: 850;
+  text-decoration: none;
+  transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.phe-poster-cta:hover {
+  color: var(--phe-night);
+  background: var(--phe-leaf-soft);
+  box-shadow: 0 18px 46px rgba(185, 222, 117, .25);
+  transform: translateY(-2px);
+}
+.phe-poster .phe-poster-note {
+  max-width: 510px;
+  margin: 18px 0 0;
+  color: rgba(243, 237, 218, .68);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.phe-poster-art {
+  position: relative;
+  min-width: 0;
+  min-height: 580px;
+  margin: 0;
+  overflow: hidden;
+  background: var(--phe-night-2);
+}
+.phe-poster-art::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--phe-night) 0%, rgba(7, 28, 25, .7) 12%, transparent 44%);
+}
+.phe-poster-art picture { width: 100%; height: 100%; display: block; }
+.phe-poster-art img {
+  width: 100%;
+  height: 100%;
+  min-height: 580px;
+  display: block;
+  object-fit: cover;
+  object-position: 62% center;
+}
+.phe-poster-art figcaption {
+  position: absolute;
+  z-index: 2;
+  right: 18px;
+  bottom: 16px;
+  max-width: calc(100% - 36px);
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(243, 237, 218, .18);
+  border-radius: 999px;
+  color: var(--phe-paper);
+  background: rgba(7, 28, 25, .86);
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+.picker-start-head { max-width: 760px; margin: 0 0 18px; }
+.picker-start-kicker {
+  margin-bottom: 5px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .16em;
+}
+.picker-start-head h2 {
+  margin: 0 0 7px;
+  color: var(--pine);
+  font-family: Iowan Old Style, Palatino Linotype, Book Antiqua, Palatino, Georgia, serif;
+  font-size: clamp(34px, 5vw, 52px);
+  line-height: 1;
+}
+
+@media (max-width: 900px) {
+  .phe-poster { grid-template-columns: 1fr; min-height: 0; }
+  .phe-poster-copy { grid-row: 2; padding: 30px 26px 34px; }
+  .phe-poster-topline { margin-bottom: 22px; }
+  .phe-poster-art { grid-row: 1; min-height: 310px; height: 42svh; }
+  .phe-poster-art img { min-height: 310px; height: 42svh; object-position: 52% 54%; }
+  .phe-poster-art::after { background: linear-gradient(0deg, var(--phe-night) 0%, transparent 43%); }
+  .phe-poster h1 { font-size: clamp(54px, 13vw, 78px); }
+}
+@media (max-width: 560px) {
+  .phe-poster { width: calc(100% - 20px); margin-bottom: 20px; border-radius: 0 0 18px 18px; }
+  .phe-poster-copy { padding: 24px 20px 27px; }
+  .phe-poster-topline { gap: 10px; margin-bottom: 18px; padding-bottom: 10px; }
+  .phe-poster-brand, .phe-poster-suite-link { font-size: 8.3px; }
+  .phe-poster-suite-link { max-width: 124px; line-height: 1.2; white-space: normal; text-align: right; }
+  .phe-poster-app { margin-bottom: 13px; font-size: 9px; }
+  .phe-poster h1 { font-size: clamp(48px, 15vw, 62px); }
+  .phe-poster .phe-poster-promise { margin-top: 18px; font-size: 15px; }
+  .phe-poster-cta { width: 100%; margin-top: 21px; }
+  .phe-poster .phe-poster-note { margin-top: 14px; font-size: 9.5px; }
+  .phe-poster-art, .phe-poster-art img { min-height: 270px; height: 38svh; }
+  .phe-poster-art figcaption { right: 12px; bottom: 9px; left: 12px; width: fit-content; font-size: 8.5px; }
+}
+@media (max-width: 340px) {
+  .phe-poster-brand { font-size: 7.8px; }
+  .phe-poster-brand::before { width: 22px; height: 22px; margin-right: 5px; }
+  .phe-poster-suite-link { max-width: 114px; font-size: 7.8px; }
+  .phe-poster h1 { font-size: 45px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phe-poster-cta { transition: none; }
+}
+@media (forced-colors: active) {
+  .phe-poster-brand::before, .phe-poster-cta, .phe-poster-art figcaption { border: 2px solid ButtonText; }
+}
+
 /* ---- hero stat band ---------------------------------------------------- */
 /* flex:0 0 auto is defensive: never let the hero band be the page-fill flex
    child that shrinks. It can't crush today (overflow:visible floors its min-size

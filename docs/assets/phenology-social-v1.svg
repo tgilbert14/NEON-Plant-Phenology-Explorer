@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-  <title id="title">NEON Plant Phenology Explorer social card</title>
-  <desc id="desc">A dark cut-paper seasonal forest from spring buds to autumn leaves, with the Plant Phenology Explorer title and its plant timing role.</desc>
+  <title id="title">Read the seasons.</title>
+  <desc id="desc">A dark cut-paper seasonal forest beside the hook Read the seasons and a promise to follow tagged plants through the turning year.</desc>
   <defs>
     <clipPath id="frame"><rect width="1200" height="630" rx="0"/></clipPath>
     <linearGradient id="shade" x1="0" x2="1">
@@ -9,28 +9,15 @@
       <stop offset=".78" stop-color="#071b19" stop-opacity=".16"/>
       <stop offset="1" stop-color="#071b19" stop-opacity=".08"/>
     </linearGradient>
-    <linearGradient id="season" x1="0" x2="1">
-      <stop offset="0" stop-color="#b9df73"/>
-      <stop offset=".52" stop-color="#e97677"/>
-      <stop offset="1" stop-color="#e38b2a"/>
-    </linearGradient>
   </defs>
   <g clip-path="url(#frame)">
     <image href="phenology-seasonal-hero-v1-source.png" width="1200" height="680" preserveAspectRatio="xMidYMid slice" y="-25"/>
     <rect width="1200" height="630" fill="url(#shade)"/>
-    <rect x="64" y="54" width="250" height="32" rx="16" fill="#123f36" stroke="#7bd88e" stroke-opacity=".45"/>
-    <text x="84" y="76" fill="#d5ffe0" font-family="system-ui,Segoe UI,sans-serif" font-size="15" font-weight="750" letter-spacing="1.6">NEON EXPLORER SUITE · PLANT TIMING</text>
-    <text x="64" y="186" fill="#ffffff" font-family="Georgia,Cambria,serif" font-size="66" font-weight="700">Plant Phenology</text>
-    <text x="64" y="254" fill="#ffffff" font-family="Georgia,Cambria,serif" font-size="66" font-weight="700">Explorer</text>
-    <rect x="66" y="282" width="500" height="6" rx="3" fill="url(#season)"/>
-    <text x="64" y="344" fill="#d7e8df" font-family="system-ui,Segoe UI,sans-serif" font-size="26" font-weight="520">See when tagged plants leaf out, bloom,</text>
-    <text x="64" y="382" fill="#d7e8df" font-family="system-ui,Segoe UI,sans-serif" font-size="26" font-weight="520">carry leaves, and turn—with support visible.</text>
-    <g transform="translate(64 457)">
-      <rect width="154" height="52" rx="12" fill="#f0a24a"/>
-      <text x="77" y="34" text-anchor="middle" fill="#10251f" font-family="system-ui,Segoe UI,sans-serif" font-size="18" font-weight="800">46 SITES</text>
-      <rect x="170" width="278" height="52" rx="12" fill="#123f36" stroke="#8ccf75" stroke-opacity=".55"/>
-      <text x="309" y="34" text-anchor="middle" fill="#edfff2" font-family="system-ui,Segoe UI,sans-serif" font-size="18" font-weight="760">TIMING, NOT ABUNDANCE</text>
-    </g>
+    <rect x="64" y="54" width="400" height="32" rx="16" fill="#123f36" stroke="#7bd88e" stroke-opacity=".45"/>
+    <text x="84" y="76" fill="#d5ffe0" font-family="system-ui,Segoe UI,sans-serif" font-size="15" font-weight="750" letter-spacing="1.6">NEON PLANT PHENOLOGY EXPLORER · UNOFFICIAL</text>
+    <text x="64" y="256" fill="#ffffff" font-family="Georgia,Cambria,serif" font-size="104" font-weight="600" letter-spacing="-5">Read the</text>
+    <text x="64" y="344" fill="#b9de75" font-family="Georgia,Cambria,serif" font-size="104" font-weight="600" letter-spacing="-5">seasons.</text>
+    <text x="64" y="427" fill="#d7e8df" font-family="system-ui,Segoe UI,sans-serif" font-size="26" font-weight="520">Follow tagged plants through the turning year.</text>
     <text x="64" y="582" fill="#a8c8b8" font-family="system-ui,Segoe UI,sans-serif" font-size="17" font-weight="650">DESERT DATA LABS · NEON DP1.10055.001</text>
   </g>
 </svg>

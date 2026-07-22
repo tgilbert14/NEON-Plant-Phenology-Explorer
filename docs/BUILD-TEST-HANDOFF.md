@@ -4,6 +4,28 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-07-22 Suite Living Poster V1 source candidate
+
+- Working branch: `agent/phenology-living-poster-v1`; production remains the
+  verified release recorded later in this ledger until the pinned validator,
+  review, merge, and Connect/Pages promotion path completes.
+- Pages and the in-app first-run surface now share the approved poster contract:
+  **“Read the seasons.”** / **“Follow tagged plants through the turning year.”** /
+  **“Pick a place.”** The face has one Driver route, one contextual CTA, dominant
+  responsive editorial art, an explicit illustration/data boundary, and compact
+  source and claim-boundary notes. The prior fact band, method cards, release
+  receipt, and full suite directory were removed from the companion face.
+- The documented seasonal desktop/mobile art was reused without a new generative
+  operation and mirrored byte-for-byte into `www/assets/`. The 1200×630 social
+  card was recomposed from its checked-in HTML/SVG sources around the same hook
+  and promise; `docs/IMAGE-PROVENANCE.md` carries the new exact hashes.
+- Local source verification passed `node --check scripts/check_cover.mjs`,
+  `node scripts/check_cover.mjs`, `git diff --check`, a clean 1280×720 browser
+  render with one H1/Driver route and no root overflow, and an exact 1200×630
+  social-card inspection. This shell has no R runtime, so the R parse, manifest,
+  deterministic artifact, 390/320 browser, Connect, and Pages gates remain for
+  the pinned validator. No scientific estimator, bundle, or Driver vote changed.
+
 ## Product and release identity
 
 - Repository: `tgilbert14/NEON-Plant-Phenology-Explorer`
