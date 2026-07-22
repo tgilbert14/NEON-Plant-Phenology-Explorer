@@ -6,18 +6,20 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const html = readFileSync(resolve(root, "docs/index.html"), "utf8");
+const ui = readFileSync(resolve(root, "ui.R"), "utf8");
+const css = readFileSync(resolve(root, "www/phe.css"), "utf8");
 
 function fail(message) {
   console.error(`FAIL: ${message}`);
   process.exitCode = 1;
 }
 
-function count(pattern) {
-  return (html.match(pattern) || []).length;
+function count(pattern, source = html) {
+  return (source.match(pattern) || []).length;
 }
 
-function requireText(pattern, message) {
-  if (!pattern.test(html)) fail(message);
+function requireText(pattern, message, source = html) {
+  if (!pattern.test(source)) fail(message);
 }
 
 function sha256(buffer) {
@@ -47,42 +49,46 @@ function dimensions(buffer) {
 
 if (count(/<h1\b/gi) !== 1) fail("cover must contain exactly one h1");
 if (count(/<main\b/gi) !== 1) fail("cover must contain exactly one main landmark");
-requireText(/class="skip-link"[^>]+href="#main"/, "missing skip link to main content");
-requireText(/<nav class="site-nav shell" aria-label="Primary navigation">/, "primary navigation needs an accessible label");
-requireText(/aria-label="NEON Explorer Suite applications"/, "suite navigation needs an accessible label");
-requireText(/aria-current="page"/, "current suite application must be identified");
+requireText(/<html\s+lang="en">/i, "document language must be English");
+requireText(/class="skip"[^>]+href="#main"/, "missing skip link to the poster");
+requireText(/<nav\b[^>]+aria-label="NEON Explorer Suite"/, "suite route needs an accessible label");
 requireText(/<link rel="canonical" href="https:\/\/tgilbert14\.github\.io\/NEON-Plant-Phenology-Explorer\/">/, "canonical URL is missing or incorrect");
 requireText(/og-image-v2\.jpg/, "social card must use og-image-v2.jpg");
 requireText(/property="og:image:width" content="1200"/, "Open Graph width must be 1200");
 requireText(/property="og:image:height" content="630"/, "Open Graph height must be 630");
 requireText(/property="og:image:alt" content="[^"]+"/, "Open Graph image needs alternative text");
 requireText(/name="twitter:image:alt" content="[^"]+"/, "Twitter image needs alternative text");
-requireText(/<source media="\(max-width: 740px\)" srcset="assets\/phenology-seasonal-mobile-v1\.jpg">/, "mobile hero image source is missing");
+requireText(/<source media="\(max-width: 700px\)" srcset="assets\/phenology-seasonal-mobile-v1\.jpg">/, "mobile poster image source is missing");
 requireText(/src="assets\/phenology-seasonal-hero-v1\.jpg"/, "desktop hero image is missing");
 requireText(/<img[^>]+alt="[^"]+"/, "hero image needs alternative text");
-requireText(/This explorer can/i, "cover must state what the app can answer");
-requireText(/This explorer cannot/i, "cover must state what the app cannot answer");
-requireText(/Suite role/i, "cover must state the app's suite role");
-requireText(/held from Driver voting/i, "cover must state the current Driver disposition");
-requireText(/Bundle-backed snapshot through 2024/i, "cover must identify the bundled data vintage");
-requireText(/2016–2024/, "cover must identify the verified snapshot range");
+requireText(/Read the seasons\./i, "poster hook is missing");
+requireText(/Follow tagged plants through the turning year\./i, "poster promise is missing");
+requireText(/Pick a place/i, "poster CTA must be contextual");
+requireText(/Editorial illustration—not a field photograph or data record\./i, "poster must disclose the art/data boundary");
+requireText(/fixed roster of tagged plants/i, "cover must state the observation scope");
+requireText(/not plant abundance, productivity/i, "cover must state the primary claim boundary");
 requireText(/DP1\.10055\.001/g, "cover must identify the source data product");
-
-const suiteUrls = [
-  "NEON-Driver-Cascade", "NEON-Small-Mammal-Tracker-App",
-  "NEON-Plant-Phenology-Explorer", "NEON-Plant-Diversity",
-  "NEON-Vegetation-Structure-Explorer", "NEON-Ground-Beetle-Tracker",
-  "NEON-Mosquito-Pulse", "NEON-Breeding-Birds",
-  "NEON-WaterChemistry-Analyte-Viewer-App", "NEON-My-Little-Inverts"
-];
-for (const slug of suiteUrls) {
-  if (!html.includes(`https://tgilbert14.github.io/${slug}/`)) fail(`missing suite URL: ${slug}`);
+if (count(/https:\/\/tgilbert14\.github\.io\/NEON-Driver-Cascade\//g) !== 1) {
+  fail("poster face must contain exactly one Driver route");
 }
+for (const forbiddenPosterBlock of [/hero-facts/i, /splash-contract/i, /release receipt/i, /suite-app/i]) {
+  if (forbiddenPosterBlock.test(html)) fail(`poster contains a retired report block: ${forbiddenPosterBlock}`);
+}
+
+requireText(/phenology_poster\s*<-\s*function/, "in-app Living Poster component is missing", ui);
+requireText(/Read the seasons\./i, "in-app poster hook diverges from Pages", ui);
+requireText(/Follow tagged plants through the turning year\./i, "in-app poster promise diverges from Pages", ui);
+requireText(/href = "#site-picker-start"/, "in-app poster CTA must route to the picker", ui);
+requireText(/id = "site-picker-start"[^\n]+tabindex = "-1"/, "in-app picker target must be focusable", ui);
+requireText(/phenology-seasonal-mobile-v1\.jpg/, "in-app poster needs a responsive mobile asset", ui);
+if (count(/NEON-Driver-Cascade\//g, ui) !== 1) fail("in-app poster must contain exactly one Driver route");
+requireText(/@media \(prefers-reduced-motion: reduce\)/, "poster CSS needs reduced-motion handling", css);
+requireText(/@media \(forced-colors: active\)/, "poster CSS needs forced-colors handling", css);
 
 for (const forbidden of [
   /fonts\.googleapis\.com/i, /fonts\.gstatic\.com/i, /cdnjs\.cloudflare\.com/i,
   /unpkg\.com/i, /jsdelivr\.net/i, /fetch\s*\(/i, /mode\s*:\s*["']no-cors["']/i,
-  /http:\/\//i
+  /(?:href|src)=["']http:\/\//i
 ]) {
   if (forbidden.test(html)) fail(`forbidden external runtime or insecure pattern: ${forbidden}`);
 }
@@ -92,7 +98,14 @@ const assets = [
   ["docs/assets/phenology-seasonal-hero-v1.jpg", 1666, 944, "6111a72cfc178a3b0751d44a99ebee3f15c71b8c766d45ec9cfd1615a17ef317"],
   ["docs/assets/phenology-seasonal-mobile-v1-source.png", 864, 1821, "17fd2d13a56315967a93480a8f9fda930c438834650fb9df023ee15ffe6ce6bc"],
   ["docs/assets/phenology-seasonal-mobile-v1.jpg", 864, 1821, "b11c9940e56b1c2d49f86b6ea01d6ef6ad5ad82f2ab020d2d03d381711771576"],
-  ["docs/og-image-v2.jpg", 1200, 630, "a9415052fab1af2ba6d2aebb4c247ebefaaaaecf8d9cdb8a9d3dc28abb9e62ed"]
+  ["docs/og-image-v2.jpg", 1200, 630, "cd6390b20670f6d1ef3a7c08fe2906df1e05e0a8b162963420119c79c6d9db94"],
+  ["www/assets/phenology-seasonal-hero-v1.jpg", 1666, 944, "6111a72cfc178a3b0751d44a99ebee3f15c71b8c766d45ec9cfd1615a17ef317"],
+  ["www/assets/phenology-seasonal-mobile-v1.jpg", 864, 1821, "b11c9940e56b1c2d49f86b6ea01d6ef6ad5ad82f2ab020d2d03d381711771576"]
+];
+
+const sourceHashes = [
+  ["docs/assets/phenology-social-render.html", "39aa17020a4bb582cb1b2593436dc122c3e260196ea73ff676077e344fe4c114"],
+  ["docs/assets/phenology-social-v1.svg", "2ead4991f8f1093ecae7faacac6ddac20e93a5a55f9252ad68e3c898d296bd41"]
 ];
 
 for (const [file, expectedWidth, expectedHeight, expectedHash] of assets) {
@@ -109,4 +122,13 @@ for (const [file, expectedWidth, expectedHeight, expectedHash] of assets) {
   }
 }
 
-if (!process.exitCode) console.log("OK: cover, suite, accessibility, claim, and image contracts passed");
+for (const [file, expectedHash] of sourceHashes) {
+  try {
+    const actualHash = sha256(readFileSync(resolve(root, file)));
+    if (actualHash !== expectedHash) fail(`${file} hash changed: ${actualHash}`);
+  } catch (error) {
+    fail(`${file}: ${error.message}`);
+  }
+}
+
+if (!process.exitCode) console.log("OK: Pages and in-app Living Poster, accessibility, claim, and image contracts passed");

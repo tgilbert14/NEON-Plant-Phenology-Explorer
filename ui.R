@@ -1,6 +1,39 @@
 # ===========================================================================
 # NEON Plant Phenology Explorer — ui.R
 # ===========================================================================
+
+phenology_poster <- function() {
+  tags$section(
+    class = "phe-poster",
+    `aria-labelledby` = "phe-poster-title",
+    div(class = "phe-poster-copy",
+      div(class = "phe-poster-topline",
+        div(class = "phe-poster-brand", "Desert Data Labs"),
+        tags$nav(class = "phe-poster-nav", `aria-label` = "NEON Explorer Suite",
+          tags$a(class = "phe-poster-suite-link",
+            href = "https://tgilbert14.github.io/NEON-Driver-Cascade/",
+            target = "_blank", rel = "noopener",
+            "Whole suite: ", tags$strong("Driver Cascade"), tags$span("↗")))),
+      div(class = "phe-poster-app", "NEON Plant Phenology Explorer · unofficial"),
+      h1(id = "phe-poster-title", `aria-label` = "Read the seasons.",
+        tags$span("Read the"), tags$em("seasons.")),
+      p(class = "phe-poster-promise", "Follow tagged plants through the turning year."),
+      tags$a(class = "phe-poster-cta", href = "#site-picker-start",
+        onclick = "window.setTimeout(function(){var target=document.getElementById('site-picker-start');if(target){target.focus({preventScroll:true});}},0)",
+        "Pick a place ", bs_icon("arrow-down")),
+      p(class = "phe-poster-note",
+        "Public NEON DP1.10055.001 · monitored timing on tagged plants—not abundance, productivity, or a causal climate signal.")),
+    tags$figure(class = "phe-poster-art",
+      tags$picture(
+        tags$source(media = "(max-width: 700px)",
+          srcset = asset_url("assets/phenology-seasonal-mobile-v1.jpg")),
+        tags$img(src = asset_url("assets/phenology-seasonal-hero-v1.jpg"),
+          width = "1666", height = "944", fetchpriority = "high", decoding = "async",
+          alt = "Cut-paper landscape showing plants and the same tree through spring, summer, autumn, and winter.")),
+      tags$figcaption("Editorial illustration—not a field photograph or data record."))
+  )
+}
+
 ui <- bslib::page_fillable(
   theme = app_theme, title = NULL,
   window_title = "NEON Plant Phenology Explorer", fillable = FALSE,
@@ -49,29 +82,12 @@ ui <- bslib::page_fillable(
     div(class = "load-note", "Building the phenology clock, onset board, and plant careers."))),
   uiOutput("heroStats"),
   div(id = "splash",
-    div(class = "splash-guide",
-      div(class = "sg-bubble", "Pick a site to start!"),
-      div(class = "sg-mascot", MASCOT_CRITTER)),
-    div(class = "splash",
-    div(class = "app-hero app-hero-splash",
-      div(class = "app-role", bs_icon("calendar3"), " Plant timing & seasonal change"),
-      h1(class = "app-title", "NEON Plant Phenology Explorer", span(class = "title-tag", "unofficial")),
-      p(class = "app-subtitle", "Follow tagged plants through leaf-out, flowering, leaf presence, and senescence—one scored visit at a time, with coverage and censoring visible. Built from NEON Plant Phenology Observations (DP1.10055.001).")),
-    div(class = "splash-facts", role = "list",
-      div(class = "splash-fact", role = "listitem", tags$b(nrow(site_table)), tags$span(" bundled sites")),
-      div(class = "splash-fact", role = "listitem", tags$b(format(sum(site_table$n_individuals, na.rm = TRUE), big.mark = ",")), tags$span(" tagged plants across sites")),
-      div(class = "splash-fact", role = "listitem", tags$b("Bundle-only"), tags$span(" analysis startup"))),
-    div(class = "splash-contract",
-      div(class = "contract-card can",
-        h2(bs_icon("check-circle-fill"), " What this can tell you"),
-        p("When scored phenophases were active, interval-censored onset, and leaf-active duration—with the contributing opportunity and coverage beside the result.")),
-      div(class = "contract-card cannot",
-        h2(bs_icon("slash-circle-fill"), " What this cannot tell you"),
-        p("Plant abundance, productivity, unobserved phenophases, or a causal climate effect. This is monitored timing on a fixed roster.")),
-      div(class = "contract-card suite",
-        h2(bs_icon("diagram-3-fill"), " Role in the suite"),
-        p("The plant-timing companion to the Driver Response Atlas. Candidate Driver links remain held until support, joins, and registered analyses pass."))),
-    p("Tap a site on the map. ", tags$b("Bigger dots"), " carry more tagged plants, ", tags$b("color"), " is median green-up (green = early spring, amber = late). Or pick one by name below."),
+    phenology_poster(),
+    div(id = "site-picker-start", class = "splash", tabindex = "-1",
+    div(class = "picker-start-head",
+      div(class = "picker-start-kicker", "START HERE"),
+      h2("Pick a place"),
+      p("Tap a site on the map. ", tags$b("Bigger dots"), " carry more tagged plants; ", tags$b("color"), " is median green-up (green = early spring, amber = late). Or pick one by name below.")),
     div(class = "picker-map-wrap", leafletOutput("nationalMap", height = "460px")),
     div(class = "picker-map-hint", bs_icon("hand-index-thumb"), " tap a dot, then ", tags$b("Explore this site"), ", or pick a site by name below"),
 

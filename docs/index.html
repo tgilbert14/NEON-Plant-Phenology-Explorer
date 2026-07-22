@@ -2,492 +2,432 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Plant Phenology Explorer | NEON Explorer Suite</title>
-  <meta name="description" content="Explore when tagged plants leaf out, flower, fruit, and lose leaves across 46 NEON sites—with sampling support and uncertainty kept visible.">
-  <meta name="theme-color" content="#14261f">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NEON Plant Phenology Explorer — Read the seasons.</title>
+  <meta name="description" content="Follow tagged plants through the turning year with public NEON phenology observations.">
+  <meta name="theme-color" content="#071c19">
+  <meta name="color-scheme" content="dark">
+
   <link rel="canonical" href="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/">
+  <link rel="preload" as="image" href="assets/phenology-seasonal-hero-v1.jpg" media="(min-width: 701px)" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/phenology-seasonal-mobile-v1.jpg" media="(max-width: 700px)" fetchpriority="high">
 
   <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NEON Explorer Suite">
   <meta property="og:url" content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/">
-  <meta property="og:title" content="Plant Phenology Explorer | NEON Explorer Suite">
-  <meta property="og:description" content="Read the seasons one tagged plant at a time, with sampling support and uncertainty kept visible.">
+  <meta property="og:title" content="Read the seasons.">
+  <meta property="og:description" content="Follow tagged plants through the turning year.">
   <meta property="og:image" content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image-v2.jpg">
-  <meta property="og:image:secure_url" content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image-v2.jpg">
-  <meta property="og:image:type" content="image/jpeg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Four seasonal trees beside the title Plant Phenology Explorer and the phrase Read the seasons.">
+  <meta property="og:image:alt" content="Cut-paper seasonal plants beside the words Read the seasons.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Plant Phenology Explorer | NEON Explorer Suite">
-  <meta name="twitter:description" content="Read the seasons one tagged plant at a time, with sampling support and uncertainty kept visible.">
+  <meta name="twitter:title" content="Read the seasons.">
+  <meta name="twitter:description" content="Follow tagged plants through the turning year.">
   <meta name="twitter:image" content="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/og-image-v2.jpg">
-  <meta name="twitter:image:alt" content="Four seasonal trees beside the title Plant Phenology Explorer and the phrase Read the seasons.">
+  <meta name="twitter:image:alt" content="Cut-paper seasonal plants beside the words Read the seasons.">
 
   <style>
     :root {
-      color-scheme: dark;
-      --night: #091510;
-      --forest: #14261f;
-      --forest-2: #1d3329;
-      --paper: #f5f2e8;
-      --mist: #cad5c7;
-      --leaf: #b8d85d;
-      --mint: #72c69b;
-      --sun: #f3c86c;
-      --coral: #e78a67;
-      --blue: #8dc8d3;
-      --line: rgba(245, 242, 232, .16);
-      --panel: rgba(245, 242, 232, .065);
-      --shadow: 0 22px 70px rgba(0, 0, 0, .34);
-      --radius: 24px;
-      --max: 1180px;
+      --forest: #071c19;
+      --forest-2: #0d2c26;
+      --leaf: #b9de75;
+      --leaf-soft: #ddf1ac;
+      --amber: #efad51;
+      --paper: #f3edda;
+      --paper-2: #d7d3c3;
+      --ink: #15241f;
+      --line: rgba(243, 237, 218, .2);
+      --sans: Aptos, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      --serif: Iowan Old Style, Palatino Linotype, Book Antiqua, Palatino, Georgia, serif;
     }
 
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { background: var(--forest); scroll-behavior: smooth; }
     body {
       margin: 0;
-      /* Keep 320px devices inside the layout even when the browser reserves
-         space for a vertical scrollbar (305px usable content width). */
-      min-width: 280px;
-      overflow-x: hidden;
-      color: var(--paper);
-      background:
-        radial-gradient(circle at 8% -10%, rgba(184, 216, 93, .17), transparent 30rem),
-        radial-gradient(circle at 95% 20%, rgba(141, 200, 211, .12), transparent 26rem),
-        var(--night);
-      font: 500 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: var(--sans);
       -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
+    img { max-width: 100%; }
     a { color: inherit; }
-    a:focus-visible, button:focus-visible, summary:focus-visible {
-      outline: 3px solid var(--sun);
-      outline-offset: 4px;
+    a:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--leaf);
+      outline-offset: 5px;
     }
-    img { display: block; max-width: 100%; }
-    h1, h2, h3, p { margin-top: 0; }
-    h1, h2, h3 { line-height: 1.08; text-wrap: balance; }
-    h1 { max-width: 820px; margin-bottom: 22px; font-size: clamp(3.1rem, 8vw, 7.5rem); letter-spacing: -.065em; }
-    h2 { margin-bottom: 18px; font-size: clamp(2rem, 4.4vw, 4rem); letter-spacing: -.04em; }
-    h3 { margin-bottom: 10px; font-size: 1.12rem; letter-spacing: -.015em; }
-    p { color: var(--mist); }
-    .shell { width: min(calc(100% - 40px), var(--max)); margin-inline: auto; }
-    .skip-link {
+    .skip {
       position: fixed;
       z-index: 100;
-      top: 12px;
-      left: 12px;
-      padding: 10px 14px;
-      border-radius: 10px;
-      color: var(--night);
-      background: var(--sun);
-      font-weight: 800;
-      transform: translateY(-160%);
+      top: -80px;
+      left: 16px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 16px;
+      border-radius: 999px;
+      color: var(--forest);
+      background: var(--paper);
+      font-weight: 850;
+      transition: top .2s ease;
     }
-    .skip-link:focus { transform: translateY(0); }
+    .skip:focus { top: 16px; }
 
-    .site-nav {
+    .poster {
+      position: relative;
+      min-height: 100svh;
+      overflow: hidden;
+      isolation: isolate;
+      color: var(--paper);
+      background:
+        radial-gradient(circle at 14% 82%, rgba(185, 222, 117, .12), transparent 28%),
+        radial-gradient(circle at 31% 7%, rgba(239, 173, 81, .08), transparent 25%),
+        var(--forest);
+    }
+    .poster::after {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      opacity: .15;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='110' height='110' viewBox='0 0 110 110'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+    .topline {
       position: relative;
       z-index: 5;
-      display: flex;
+      width: min(1440px, calc(100% - 48px));
       min-height: 82px;
+      display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
+      gap: 24px;
+      margin: 0 auto;
       border-bottom: 1px solid var(--line);
     }
     .brand {
       display: inline-flex;
       align-items: center;
       gap: 11px;
-      text-decoration: none;
       font-size: .78rem;
-      font-weight: 850;
-      letter-spacing: .14em;
-      text-transform: uppercase;
-    }
-    .brand-mark {
-      display: grid;
-      width: 34px;
-      height: 34px;
-      place-items: center;
-      border: 1px solid rgba(184, 216, 93, .54);
-      border-radius: 50%;
-      background: rgba(184, 216, 93, .11);
-      box-shadow: 0 0 24px rgba(184, 216, 93, .13);
-    }
-    .brand-mark::before { content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--leaf); }
-    .nav-links { display: flex; align-items: center; gap: 22px; }
-    .nav-links a { min-height: 44px; align-content: center; color: var(--mist); font-size: .9rem; font-weight: 750; text-decoration: none; }
-    .nav-links a:hover { color: var(--paper); }
-
-    .hero { position: relative; padding: clamp(36px, 5vw, 62px) 0 72px; }
-    .hero-grid {
-      position: relative;
-      min-height: clamp(590px, 54vw, 680px);
-      overflow: hidden;
-      border: 1px solid rgba(245, 242, 232, .2);
-      border-radius: 30px;
-      background: var(--forest);
-      box-shadow: var(--shadow);
-    }
-    .hero-copy {
-      position: relative;
-      z-index: 3;
-      display: flex;
-      min-height: inherit;
-      max-width: 670px;
-      flex-direction: column;
-      justify-content: center;
-      padding: clamp(42px, 6vw, 76px);
-    }
-    .eyebrow, .section-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 9px;
-      margin-bottom: 20px;
-      color: var(--leaf);
-      font-size: .74rem;
       font-weight: 850;
       letter-spacing: .16em;
       text-transform: uppercase;
     }
-    .eyebrow::before, .section-label::before { content: ""; width: 24px; height: 1px; background: currentColor; }
-    .dek { max-width: 690px; margin-bottom: 30px; font-size: clamp(1.08rem, 2vw, 1.3rem); }
-    .dek strong { color: var(--paper); }
-    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
-    .button {
+    .brand-mark {
+      width: 27px;
+      height: 27px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border: 1px solid rgba(185, 222, 117, .68);
+      border-radius: 50%;
+      color: var(--leaf);
+    }
+    .brand-mark svg { width: 15px; height: 15px; }
+    .cover-nav { display: flex; }
+    .suite-jump {
+      min-height: 44px;
       display: inline-flex;
-      min-height: 50px;
+      align-items: center;
+      color: var(--paper-2);
+      font-size: .76rem;
+      font-weight: 760;
+      letter-spacing: .04em;
+      text-decoration: none;
+    }
+    .suite-jump strong { margin-left: 3px; color: var(--leaf); }
+    .suite-jump span { margin-left: 5px; color: var(--amber); }
+    .suite-jump:hover strong { color: var(--leaf-soft); }
+
+    .poster-grid {
+      width: min(1440px, calc(100% - 48px));
+      min-height: calc(100svh - 82px);
+      display: grid;
+      grid-template-columns: minmax(360px, .84fr) minmax(520px, 1.36fr);
+      align-items: stretch;
+      margin: 0 auto;
+    }
+    .poster-copy {
+      z-index: 3;
+      align-self: center;
+      max-width: 630px;
+      padding: 70px 0 88px;
+    }
+    .eyebrow {
+      margin: 0 0 22px;
+      color: var(--leaf);
+      font-size: .76rem;
+      font-weight: 850;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 690px;
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(4.2rem, 7.55vw, 8rem);
+      font-weight: 600;
+      letter-spacing: -.067em;
+      line-height: .84;
+      text-wrap: balance;
+    }
+    h1 span, h1 em { display: block; }
+    h1 em { color: var(--leaf); font-style: normal; font-weight: 600; }
+    .promise {
+      max-width: 470px;
+      margin: 31px 0 0;
+      color: var(--paper-2);
+      font-size: clamp(1.06rem, 1.4vw, 1.3rem);
+      line-height: 1.55;
+    }
+    .poster-actions { margin-top: 34px; }
+    .button {
+      min-height: 52px;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      padding: 12px 19px;
-      border: 1px solid var(--line);
+      gap: 11px;
+      padding: 0 24px;
       border-radius: 999px;
-      background: var(--panel);
-      color: var(--paper);
+      color: var(--forest);
+      background: var(--leaf);
+      box-shadow: 0 14px 42px rgba(185, 222, 117, .17);
+      font-size: .91rem;
       font-weight: 850;
       text-decoration: none;
-      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+      transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
     }
-    .button:hover { transform: translateY(-2px); border-color: rgba(245, 242, 232, .4); background: rgba(245, 242, 232, .1); }
-    .button-primary { border-color: var(--leaf); background: var(--leaf); color: #142014; }
-    .button-primary:hover { background: #cae779; border-color: #cae779; }
-    .button .arrow { font-size: 1.2em; }
-    .receipt-line { margin: 18px 0 0; color: #aebdad; font-size: .82rem; }
-    .hero-art { position: absolute; inset: 0; margin: 0; }
-    .hero-art::before {
+    .button:hover {
+      background: var(--leaf-soft);
+      box-shadow: 0 18px 50px rgba(185, 222, 117, .26);
+      transform: translateY(-2px);
+    }
+    .button svg { width: 17px; height: 17px; }
+
+    .poster-art {
+      position: relative;
+      align-self: stretch;
+      min-height: 600px;
+      margin: 0 -4vw 0 -8vw;
+    }
+    .poster-art::before {
       content: "";
       position: absolute;
       z-index: 1;
       inset: 0;
-      background: linear-gradient(90deg, rgba(9, 21, 16, .97) 0%, rgba(9, 21, 16, .88) 36%, rgba(9, 21, 16, .3) 62%, rgba(9, 21, 16, .06) 100%);
+      pointer-events: none;
+      background: linear-gradient(90deg, var(--forest) 0%, rgba(7, 28, 25, .79) 12%, transparent 43%);
     }
-    .hero-art picture { display: block; width: 100%; height: 100%; }
-    .hero-art img { width: 100%; height: 100%; object-fit: cover; }
-    .art-caption {
+    .poster-art picture { width: 100%; height: 100%; display: block; }
+    .poster-art img {
+      width: 100%;
+      height: 100%;
+      min-height: calc(100svh - 82px);
+      display: block;
+      object-fit: cover;
+      object-position: 62% center;
+      filter: saturate(.98) contrast(1.03);
+    }
+    .art-note {
       position: absolute;
-      right: -16px;
-      bottom: 26px;
-      max-width: 230px;
-      margin: 0;
-      padding: 12px 15px;
-      border: 1px solid rgba(245, 242, 232, .18);
-      border-radius: 13px;
-      color: var(--paper);
-      background: rgba(9, 21, 16, .9);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, .28);
-      font-size: .78rem;
-      backdrop-filter: blur(12px);
-    }
-
-    .facts { padding: 0 0 82px; }
-    .fact-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--line); }
-    .fact { padding: 25px 18px; }
-    .fact + .fact { border-left: 1px solid var(--line); }
-    .fact b { display: block; color: var(--paper); font-size: clamp(1.35rem, 2.5vw, 2rem); line-height: 1.1; letter-spacing: -.035em; }
-    .fact span { display: block; margin-top: 7px; color: var(--mist); font-size: .78rem; }
-
-    section { padding: 86px 0; }
-    .section-intro { max-width: 770px; margin-bottom: 36px; }
-    .section-intro p { max-width: 66ch; margin-bottom: 0; font-size: 1.05rem; }
-    .question-grid, .method-grid, .role-grid { display: grid; gap: 18px; }
-    .question-grid { grid-template-columns: 1fr 1fr; }
-    .question-card, .method-card, .role-card, .evidence-panel {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel);
-    }
-    .question-card { padding: clamp(24px, 4vw, 38px); }
-    .question-card.can { background: linear-gradient(140deg, rgba(114, 198, 155, .13), rgba(245, 242, 232, .045)); }
-    .question-card.cannot { background: linear-gradient(140deg, rgba(231, 138, 103, .1), rgba(245, 242, 232, .035)); }
-    .card-kicker { margin-bottom: 20px; color: var(--mint); font-size: .7rem; font-weight: 900; letter-spacing: .15em; text-transform: uppercase; }
-    .cannot .card-kicker { color: var(--coral); }
-    .clean-list { display: grid; gap: 13px; margin: 0; padding: 0; list-style: none; }
-    .clean-list li { position: relative; padding-left: 24px; color: var(--mist); }
-    .clean-list li::before { content: "+"; position: absolute; left: 0; color: var(--mint); font-weight: 900; }
-    .cannot .clean-list li::before { content: "–"; color: var(--coral); }
-
-    .method-grid { grid-template-columns: repeat(4, 1fr); counter-reset: method; }
-    .method-card { position: relative; min-height: 240px; padding: 26px; overflow: hidden; counter-increment: method; }
-    .method-card::after {
-      content: "0" counter(method);
-      position: absolute;
-      right: 18px;
-      bottom: -18px;
-      color: rgba(245, 242, 232, .055);
-      font-size: 5.6rem;
-      font-weight: 900;
-      letter-spacing: -.08em;
-    }
-    .method-icon { display: grid; width: 42px; height: 42px; margin-bottom: 44px; place-items: center; border-radius: 12px; color: var(--night); background: var(--leaf); font-weight: 900; }
-    .method-card:nth-child(2) .method-icon { background: var(--mint); }
-    .method-card:nth-child(3) .method-icon { background: var(--sun); }
-    .method-card:nth-child(4) .method-icon { background: var(--blue); }
-    .method-card p { position: relative; z-index: 1; margin: 0; font-size: .9rem; }
-
-    .role-section { background: linear-gradient(180deg, transparent, rgba(29, 51, 41, .58), transparent); }
-    .role-grid { grid-template-columns: 1.08fr .92fr; }
-    .role-card, .evidence-panel { padding: clamp(28px, 4.5vw, 48px); }
-    .role-card h3 { max-width: 18ch; font-size: clamp(1.55rem, 3vw, 2.35rem); }
-    .role-card p:last-child, .evidence-panel p:last-child { margin-bottom: 0; }
-    .status-chip {
+      z-index: 2;
+      right: 5vw;
+      bottom: 24px;
+      min-height: 30px;
       display: inline-flex;
-      margin-bottom: 22px;
-      padding: 7px 11px;
-      border: 1px solid rgba(243, 200, 108, .4);
+      align-items: center;
+      margin: 0;
+      padding: 5px 9px;
+      border: 1px solid rgba(243, 237, 218, .18);
       border-radius: 999px;
-      color: var(--sun);
-      background: rgba(243, 200, 108, .09);
-      font: 850 .7rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
-      letter-spacing: .07em;
-      text-transform: uppercase;
+      color: var(--paper);
+      background: rgba(7, 28, 25, .86);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, .22);
+      font-size: .69rem;
+      line-height: 1.3;
+      letter-spacing: .035em;
     }
-    .evidence-panel dl { display: grid; grid-template-columns: max-content 1fr; gap: 12px 18px; margin: 0; }
-    .evidence-panel dt { color: var(--paper); font-size: .8rem; font-weight: 850; }
-    .evidence-panel dd { margin: 0; color: var(--mist); font-size: .84rem; }
 
-    .suite-head { display: flex; align-items: end; justify-content: space-between; gap: 32px; margin-bottom: 30px; }
-    .suite-head .section-intro { margin: 0; }
-    .suite-link { flex: 0 0 auto; color: var(--leaf); font-size: .88rem; font-weight: 850; text-underline-offset: 4px; }
-    .suite-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-    .suite-app {
-      position: relative;
+    footer {
+      padding: 30px 24px 38px;
+      color: #59665f;
+      background: var(--paper);
+      font-size: .76rem;
+      line-height: 1.65;
+    }
+    .footer-inner {
+      width: min(1160px, 100%);
       display: flex;
-      min-height: 138px;
-      flex-direction: column;
       justify-content: space-between;
-      padding: 17px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: var(--panel);
-      text-decoration: none;
-      transition: transform .18s ease, border-color .18s ease, background .18s ease;
+      gap: 42px;
+      margin: 0 auto;
     }
-    .suite-app:hover { transform: translateY(-3px); border-color: rgba(184, 216, 93, .5); background: rgba(245, 242, 232, .09); }
-    .suite-app[aria-current="page"] { border-color: var(--leaf); background: rgba(184, 216, 93, .1); }
-    .suite-app small { color: var(--mist); font-size: .66rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .suite-app strong { display: block; max-width: 14ch; font-size: .9rem; line-height: 1.25; }
-    .suite-app .suite-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dot, var(--leaf)); box-shadow: 0 0 16px var(--dot, var(--leaf)); }
+    .footer-copy { max-width: 820px; }
+    .footer-copy > p { margin: 0; }
+    .honesty { margin-top: 10px; }
+    .honesty summary {
+      width: fit-content;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      color: var(--ink);
+      font-weight: 800;
+    }
+    .honesty p { max-width: 790px; margin: 2px 0 0; }
+    .footer-links { display: flex; gap: 8px 18px; white-space: nowrap; }
+    .footer-links a {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      font-weight: 750;
+      text-underline-offset: 4px;
+    }
 
-    footer { padding: 40px 0 56px; border-top: 1px solid var(--line); }
-    .footer-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 32px; }
-    footer p { max-width: 75ch; margin: 0; font-size: .78rem; }
-    .footer-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 18px; }
-    .footer-links a { color: var(--mist); font-size: .78rem; font-weight: 750; text-underline-offset: 3px; }
-
-    @media (max-width: 950px) {
-      .method-grid { grid-template-columns: repeat(2, 1fr); }
-      .suite-grid { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 980px) {
+      .poster-grid { grid-template-columns: .95fr 1.05fr; }
+      .poster-art { margin-right: -12vw; margin-left: -14vw; }
+      .poster-copy { padding-right: 8px; }
     }
-    @media (max-width: 740px) {
-      .shell { width: min(calc(100% - 30px), var(--max)); }
-      .site-nav { min-height: 70px; }
-      .nav-links a:not(:last-child) { display: none; }
-      .hero { padding-top: 30px; }
-      .question-grid, .role-grid, .footer-grid { grid-template-columns: 1fr; }
-      .hero-grid { min-height: 780px; border-radius: 24px; }
-      .hero-copy { min-height: inherit; max-width: 100%; justify-content: flex-start; padding: 54px 25px 150px; }
-      .hero-art::before { background: linear-gradient(180deg, rgba(9, 21, 16, .8) 0%, rgba(9, 21, 16, .44) 38%, rgba(9, 21, 16, .16) 66%, rgba(9, 21, 16, .72) 100%); }
-      .art-caption { right: 10px; bottom: 14px; }
-      h1 { margin-top: 0; font-size: clamp(3.2rem, 17vw, 5.6rem); }
-      .fact-grid { grid-template-columns: repeat(2, 1fr); }
-      .fact:nth-child(3) { border-left: 0; }
-      .fact:nth-child(n+3) { border-top: 1px solid var(--line); }
-      section { padding: 70px 0; }
-      .suite-head { display: block; }
-      .suite-link { display: inline-block; margin-top: 16px; }
-      /* Extend the carousel to the shell edge without using 100vw: viewport
-         units include the desktop scrollbar and create a subtle page-level
-         horizontal overflow at phone widths. */
-      .suite-grid { display: flex; width: calc(100% + 15px); margin-right: -15px; padding-right: 15px; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; }
-      .suite-app { min-width: 180px; scroll-snap-align: start; }
-      .footer-links { justify-content: flex-start; }
-    }
-    @media (max-width: 500px) {
-      .method-grid { grid-template-columns: 1fr; }
-      .method-card { min-height: 205px; }
-      .method-icon { margin-bottom: 28px; }
-      .actions { display: grid; }
+    @media (max-width: 700px) {
+      .topline { width: calc(100% - 32px); min-height: 66px; }
+      .brand { font-size: .66rem; letter-spacing: .1em; }
+      .brand-mark { width: 25px; height: 25px; }
+      .suite-jump { max-width: 152px; font-size: .66rem; line-height: 1.25; text-align: right; }
+      .poster-grid {
+        width: 100%;
+        min-height: auto;
+        display: flex;
+        flex-direction: column;
+      }
+      .poster-art {
+        order: 1;
+        width: 100%;
+        height: 42svh;
+        min-height: 300px;
+        margin: 0;
+      }
+      .poster-art::before { background: linear-gradient(0deg, var(--forest) 0%, transparent 42%); }
+      .poster-art img {
+        height: 42svh;
+        min-height: 300px;
+        object-position: 52% 54%;
+      }
+      .art-note {
+        right: 16px;
+        bottom: 8px;
+        left: 16px;
+        width: fit-content;
+        max-width: calc(100% - 32px);
+        min-height: 28px;
+        font-size: .6rem;
+        line-height: 1.25;
+      }
+      .poster-copy {
+        order: 2;
+        width: calc(100% - 32px);
+        align-self: center;
+        padding: 26px 0 38px;
+      }
+      .eyebrow { margin-bottom: 13px; font-size: .65rem; }
+      h1 { font-size: clamp(3.5rem, 18.2vw, 5.35rem); line-height: .84; }
+      .promise { margin-top: 22px; font-size: 1rem; }
+      .poster-actions { margin-top: 25px; }
       .button { width: 100%; }
-      .evidence-panel dl { grid-template-columns: 1fr; gap: 3px; }
-      .evidence-panel dd + dt { margin-top: 12px; }
+      .footer-inner { display: block; }
+      .footer-links { margin-top: 12px; white-space: normal; flex-wrap: wrap; }
+    }
+    @media (max-width: 420px) and (max-height: 860px) {
+      .poster-art, .poster-art img { height: 34svh; min-height: 34svh; }
+      .poster-copy { padding-top: 22px; }
+      h1 { font-size: clamp(3rem, 16.3vw, 3.7rem); }
+      .promise { margin-top: 18px; }
+      .poster-actions { margin-top: 20px; }
+    }
+    @media (max-width: 340px) {
+      .topline { gap: 10px; }
+      .brand { font-size: .61rem; }
+      .suite-jump { max-width: 126px; font-size: .61rem; }
+      .poster-copy { width: calc(100% - 24px); }
+      h1 { font-size: 2.85rem; }
     }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
-      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; }
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+      .button:hover { transform: none; }
+    }
+    @media (prefers-contrast: more) {
+      .promise { color: var(--paper); }
+      .art-note { background: var(--forest); border-color: var(--paper); }
+      footer { color: #26352f; }
+    }
+    @media (forced-colors: active) {
+      .brand-mark, .button, .art-note { border: 2px solid ButtonText; }
     }
   </style>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
+  <a class="skip" href="#main">Skip to the poster</a>
 
-  <nav class="site-nav shell" aria-label="Primary navigation">
-    <a class="brand" href="https://tgilbert14.github.io/NEON-Driver-Cascade/" aria-label="NEON Explorer Suite home">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <span>NEON Explorer Suite</span>
-    </a>
-    <div class="nav-links">
-      <a href="#answers">Questions</a>
-      <a href="#suite">The suite</a>
-      <a href="https://github.com/tgilbert14/NEON-Plant-Phenology-Explorer">Source</a>
-    </div>
-  </nav>
-
-  <main id="main">
-    <header class="hero">
-      <div class="shell hero-grid">
-        <div class="hero-copy">
-          <span class="eyebrow">Plant timing · DP1.10055.001</span>
-          <h1>Read the seasons.</h1>
-          <p class="dek">Follow <strong>tagged plants</strong> as leaves emerge, flowers open, fruit develops, and canopies quiet—without hiding the sampling gaps that shape the story.</p>
-          <div class="actions">
-            <a class="button button-primary" href="https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/">Launch the explorer <span class="arrow" aria-hidden="true">↗</span></a>
-            <a class="button" href="https://github.com/tgilbert14/NEON-Plant-Phenology-Explorer#readme">Read the methods</a>
-          </div>
-          <p class="receipt-line">Bundle-backed snapshot through 2024 · No live data call at startup · Independent educational tool</p>
-        </div>
-        <figure class="hero-art">
-          <picture>
-            <source media="(max-width: 740px)" srcset="assets/phenology-seasonal-mobile-v1.jpg">
-            <img src="assets/phenology-seasonal-hero-v1.jpg" width="1666" height="944" alt="Cut-paper landscape showing the same tree through spring, summer, autumn, and winter." fetchpriority="high">
-          </picture>
-          <figcaption class="art-caption">Timing is the signal. Sampling support is part of the answer.</figcaption>
-        </figure>
-      </div>
+  <main id="main" class="poster" tabindex="-1">
+    <header class="topline">
+      <span class="brand" aria-label="Desert Data Labs">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M8 8l4-4 4 4M7 14h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        Desert Data Labs
+      </span>
+      <nav class="cover-nav" aria-label="NEON Explorer Suite">
+        <a class="suite-jump" href="https://tgilbert14.github.io/NEON-Driver-Cascade/">Whole suite: <strong>Driver Cascade</strong><span aria-hidden="true">↗</span></a>
+      </nav>
     </header>
 
-    <section class="facts" aria-label="Dataset snapshot">
-      <div class="shell fact-grid">
-        <div class="fact"><b>46</b><span>bundled NEON sites</span></div>
-        <div class="fact"><b>9,515</b><span>tagged plants</span></div>
-        <div class="fact"><b>499</b><span>recorded species</span></div>
-        <div class="fact"><b>2016–2024</b><span>snapshot coverage</span></div>
+    <div class="poster-grid">
+      <div class="poster-copy">
+        <p class="eyebrow">NEON Plant Phenology Explorer · unofficial</p>
+        <h1 aria-label="Read the seasons."><span>Read the</span><em>seasons.</em></h1>
+        <p class="promise">Follow tagged plants through the turning year.</p>
+        <div class="poster-actions">
+          <a class="button" href="https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/">
+            Pick a place
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
       </div>
-    </section>
 
-    <section id="answers">
-      <div class="shell">
-        <div class="section-intro">
-          <span class="section-label">Answer boundary</span>
-          <h2>Know what the records can carry.</h2>
-          <p>NEON crews repeatedly score named phenophases on fixed, tagged plants. That design is powerful for timing—and easy to overread if support, censoring, and missing observations disappear.</p>
-        </div>
-        <div class="question-grid">
-          <article class="question-card can">
-            <p class="card-kicker">This explorer can</p>
-            <ul class="clean-list">
-              <li>Show when recorded phenophases were active among scored plant-year-week opportunities.</li>
-              <li>Compare plant-year onset timing after repeated visits are collapsed correctly.</li>
-              <li>Expose cadence, sample size, green-up coverage, and left-censored records.</li>
-              <li>Follow the same species across sites as an observational space-for-time view.</li>
-            </ul>
-          </article>
-          <article class="question-card cannot">
-            <p class="card-kicker">This explorer cannot</p>
-            <ul class="clean-list">
-              <li>Estimate plant abundance, productivity, survival, or demographic performance.</li>
-              <li>Treat an unscored phenophase as a biological absence.</li>
-              <li>Turn repeated visits into independent biological replicates.</li>
-              <li>Identify temperature or climate as the cause of a timing pattern.</li>
-            </ul>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section aria-labelledby="method-title">
-      <div class="shell">
-        <div class="section-intro">
-          <span class="section-label">From visit to view</span>
-          <h2 id="method-title">A clock with its workings exposed.</h2>
-          <p>The app keeps its core opportunity, onset interval, support gates, and alternative desert metric visible from the first chart to the export.</p>
-        </div>
-        <div class="method-grid">
-          <article class="method-card"><span class="method-icon" aria-hidden="true">ID</span><h3>Choose a site</h3><p>Start from the national map, then work only with that site’s committed observation bundle.</p></article>
-          <article class="method-card"><span class="method-icon" aria-hidden="true">WK</span><h3>Build the clock</h3><p>Repeated visits collapse within plant, phenophase, year, and week. Different years stay separate.</p></article>
-          <article class="method-card"><span class="method-icon" aria-hidden="true">↔</span><h3>Bound onset</h3><p>Onset sits between the last “no” and first “yes”; already-active plants remain explicitly left-censored.</p></article>
-          <article class="method-card"><span class="method-icon" aria-hidden="true">✓</span><h3>Gate the claim</h3><p>Thin support is shown as unavailable. Desert sites can use leaf-active duration when green-up is structurally sparse.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section class="role-section" aria-labelledby="role-title">
-      <div class="shell role-grid">
-        <article class="role-card">
-          <span class="status-chip">Suite role · evidence hinge</span>
-          <h3 id="role-title">The plant-timing lens in the Driver Cascade.</h3>
-          <p>Phenology is the suite’s bridge from environmental timing to seasonal biological response. Its corrected plant-year signals are candidates for Cascade context, but they do not become causal Driver evidence simply because the charts align.</p>
-          <p><strong>Current disposition:</strong> held from Driver voting until the exact eligible site-year join, missingness gates, and registered analysis are complete.</p>
-        </article>
-        <aside class="evidence-panel" aria-label="Release evidence">
-          <span class="section-label">Release receipt</span>
-          <dl>
-            <dt>Runtime</dt><dd>Committed bundles only; public health requires the app-specific ready marker.</dd>
-            <dt>Scientific unit</dt><dd>One scored opportunity per plant × phenophase × year × week.</dd>
-            <dt>Suppression</dt><dd>Visible unavailable states replace unsupported estimates.</dd>
-            <dt>Verification</dt><dd>Release candidate is passing through pinned CI, merge, Connect, and browser checks.</dd>
-          </dl>
-        </aside>
-      </div>
-    </section>
-
-    <section id="suite" aria-labelledby="suite-title">
-      <div class="shell">
-        <div class="suite-head">
-          <div class="section-intro">
-            <span class="section-label">One observation network, many lenses</span>
-            <h2 id="suite-title">Meet the explorer suite.</h2>
-            <p>Each companion keeps its own ecological unit and evidence boundary. The Driver Cascade combines only signals that earn a documented role.</p>
-          </div>
-          <a class="suite-link" href="https://tgilbert14.github.io/NEON-Driver-Cascade/">Open the Driver Cascade →</a>
-        </div>
-        <nav class="suite-grid" aria-label="NEON Explorer Suite applications">
-          <a class="suite-app" style="--dot:#f3c86c" href="https://tgilbert14.github.io/NEON-Driver-Cascade/"><span class="suite-dot" aria-hidden="true"></span><strong>Driver Cascade</strong><small>Synthesis</small></a>
-          <a class="suite-app" style="--dot:#8dc8d3" href="https://tgilbert14.github.io/NEON-Small-Mammal-Tracker-App/"><span class="suite-dot" aria-hidden="true"></span><strong>Small Mammals</strong><small>Consumers</small></a>
-          <a class="suite-app" style="--dot:#b8d85d" href="https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/" aria-current="page"><span class="suite-dot" aria-hidden="true"></span><strong>Plant Phenology</strong><small>Current lens</small></a>
-          <a class="suite-app" style="--dot:#72c69b" href="https://tgilbert14.github.io/NEON-Plant-Diversity/"><span class="suite-dot" aria-hidden="true"></span><strong>Plant Diversity</strong><small>Community</small></a>
-          <a class="suite-app" style="--dot:#75a86a" href="https://tgilbert14.github.io/NEON-Vegetation-Structure-Explorer/"><span class="suite-dot" aria-hidden="true"></span><strong>Vegetation Structure</strong><small>Habitat</small></a>
-          <a class="suite-app" style="--dot:#e78a67" href="https://tgilbert14.github.io/NEON-Ground-Beetle-Tracker/"><span class="suite-dot" aria-hidden="true"></span><strong>Ground Beetles</strong><small>Ground fauna</small></a>
-          <a class="suite-app" style="--dot:#c89de8" href="https://tgilbert14.github.io/NEON-Mosquito-Pulse/"><span class="suite-dot" aria-hidden="true"></span><strong>Mosquito Pulse</strong><small>Vectors</small></a>
-          <a class="suite-app" style="--dot:#f0b45f" href="https://tgilbert14.github.io/NEON-Breeding-Birds/"><span class="suite-dot" aria-hidden="true"></span><strong>Breeding Birds</strong><small>Avian response</small></a>
-          <a class="suite-app" style="--dot:#66c7d8" href="https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/"><span class="suite-dot" aria-hidden="true"></span><strong>Water Chemistry</strong><small>Aquatic chemistry</small></a>
-          <a class="suite-app" style="--dot:#6dd2bd" href="https://tgilbert14.github.io/NEON-My-Little-Inverts/"><span class="suite-dot" aria-hidden="true"></span><strong>Aquatic Invertebrates</strong><small>Aquatic fauna</small></a>
-        </nav>
-      </div>
-    </section>
+      <figure class="poster-art">
+        <picture>
+          <source media="(max-width: 700px)" srcset="assets/phenology-seasonal-mobile-v1.jpg">
+          <img src="assets/phenology-seasonal-hero-v1.jpg" width="1666" height="944"
+            fetchpriority="high" decoding="async"
+            alt="Cut-paper landscape showing plants and the same tree through spring, summer, autumn, and winter.">
+        </picture>
+        <figcaption class="art-note">Editorial illustration—not a field photograph or data record.</figcaption>
+      </figure>
+    </div>
   </main>
 
   <footer>
-    <div class="shell footer-grid">
-      <p>Built from NEON Plant Phenology Observations <a href="https://data.neonscience.org/data-products/DP1.10055.001">DP1.10055.001</a> by Desert Data Labs. NEON data are available under <a href="https://www.neonscience.org/data-samples/guidelines-policies">CC BY 4.0</a>. This independent educational tool is not affiliated with or endorsed by NEON, Battelle, NSF, or Posit.</p>
-      <nav class="footer-links" aria-label="Project links">
-        <a href="https://github.com/tgilbert14/NEON-Plant-Phenology-Explorer">Repository</a>
-        <a href="https://github.com/tgilbert14/NEON-Plant-Phenology-Explorer/actions">Build receipts</a>
-        <a href="mailto:desertdatalabs@gmail.com?subject=Plant%20Phenology%20Explorer">Contact</a>
-      </nav>
+    <div class="footer-inner">
+      <div class="footer-copy">
+        <p>Explore 46 places using public <a href="https://data.neonscience.org/data-products/DP1.10055.001">NEON Plant Phenology Observations · DP1.10055.001</a> (CC BY 4.0). Built by Desert Data Labs; unofficial and not endorsed by NEON, Battelle, or the NSF.</p>
+        <details class="honesty">
+          <summary>What am I looking at?</summary>
+          <p>The explorer follows scored phenophases on a fixed roster of tagged plants, with cadence, coverage, and interval-censored onset kept visible. Those observations describe monitored timing—not plant abundance, productivity, unobserved phenophases, or what caused a seasonal change.</p>
+        </details>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/tgilbert14/NEON-Plant-Phenology-Explorer">Source</a>
+        <a href="mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Phenology%20Explorer">Feedback</a>
+      </div>
     </div>
   </footer>
 </body>
