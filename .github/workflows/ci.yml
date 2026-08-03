@@ -20,6 +20,7 @@ env:
   OPENBLAS_NUM_THREADS: "1"
   OMP_NUM_THREADS: "1"
   PHE_LIVE: "0"
+  PHE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   contracts:
@@ -29,9 +30,18 @@ jobs:
       - name: Checkout the immutable app revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.PHE_SOURCE_SHA }}
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Prove the exact reviewed revision is checked out
+        run: |
+          set -euo pipefail
+          actual_sha=$(git rev-parse HEAD)
+          if [[ "$actual_sha" != "$PHE_SOURCE_SHA" ]]; then
+            echo "Checked out $actual_sha; expected exact reviewed revision $PHE_SOURCE_SHA." >&2
+            exit 1
+          fi
 
       - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
@@ -87,7 +97,10 @@ jobs:
           if [ -f scripts/post_deploy_smoke.sh ]; then bash -n scripts/post_deploy_smoke.sh; fi
 
       - name: Run scientific helper contracts
-        run: Rscript --vanilla scripts/test_helpers.R
+        run: |
+          set -euo pipefail
+          Rscript --vanilla scripts/test_bundle_identity.R
+          Rscript --vanilla scripts/test_helpers.R
 
       - name: Normalize unavailable trend containers and require idempotence
         run: |
@@ -118,7 +131,7 @@ jobs:
         if: failure() && steps.manifest.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: plant-phenology-manifest-UNVALIDATED-${{ github.sha }}
+          name: plant-phenology-manifest-UNVALIDATED-${{ env.PHE_SOURCE_SHA }}
           path: manifest.json
           if-no-files-found: ignore
           retention-days: 1
@@ -129,7 +142,7 @@ jobs:
       - name: Upload the validated manifest candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: plant-phenology-manifest-${{ github.sha }}
+          name: plant-phenology-manifest-${{ env.PHE_SOURCE_SHA }}
           path: manifest.json
           if-no-files-found: error
           retention-days: 3
@@ -137,7 +150,7 @@ jobs:
       - name: Upload the validated derived-byte candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: plant-phenology-release-candidate-${{ github.sha }}
+          name: plant-phenology-release-candidate-${{ env.PHE_SOURCE_SHA }}
           path: |
             data/sites/KONA.rds
             data/site_index.rds
