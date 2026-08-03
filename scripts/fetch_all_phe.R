@@ -9,6 +9,7 @@
 #   Rscript scripts/fetch_all_phe.R BART SERC    # just these sites
 # ===========================================================================
 suppressPackageStartupMessages(library(neonUtilities))
+source("scripts/bundle_identity.R") # materialize portable raw-table vectors
 
 tok <- Sys.getenv("NEON_TOKEN", "")
 if (!nzchar(tok)) for (f in c("../App-NEON-Small-Mammal-Tracker/.neon_token", ".neon_token"))
@@ -41,6 +42,7 @@ for (s in sites) {
   if (is.null(res) || is.null(res$phe_statusintensity) || !nrow(res$phe_statusintensity)) {
     cat("  no phenology data for", s, "\n"); empty <- c(empty, s); flush.console(); next
   }
+  res <- materialize_phenology_raw_result(res, s)
   saveRDS(res, outf)
   cat(sprintf("  saved %s — status rows: %s, individuals: %s\n", s,
       format(nrow(res$phe_statusintensity), big.mark = ","),

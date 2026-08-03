@@ -81,6 +81,13 @@ candidates until the exact eligible site-year join and registered analysis pass.
   current Shiny client contract.
 - Refreshes stage and validate a full 46-site candidate before opening a review
   branch; they never publish directly from a write-enabled producer.
+- A staged RDS is an interface between producer and consumer environments, not an
+  in-process cache. Materialize package-backed ALTREP columns into ordinary base
+  vectors before serialization, then fail closed on non-rectangular tables at the
+  consumer boundary. Optional unknowns are full-length typed `NA` values; a
+  zero-length column in a nonempty frame is portability corruption, not optional
+  data. Do not solve that corruption by silently adding the producer's storage
+  backend to the application runtime.
 - Derived artifacts must not embed wall-clock build dates. Derive freshness from
   immutable inputs (here the maximum observation date) and require two rebuilds to
   produce identical hashes before publication.
@@ -128,3 +135,9 @@ change the decision is an exact eligible site-year join with support/censoring g
 and a registered temperature/onset analysis. If that analysis does not support an
 inferential vote, preserve green-up/leaf-active as `CONTEXT` rather than forcing
 adoption.
+
+The 2026-08-03 raw-staging repair candidate based on source
+`19ba023a0bf957cb993be11639e5ee38a412beaa` changes only serialization
+portability and consumer validation. It does not change a scientific estimator,
+support threshold, data-selection rule, released artifact, or this Driver decision;
+its pinned exact-head validator and full-refresh publication receipts remain pending.
