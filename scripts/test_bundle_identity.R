@@ -1,7 +1,8 @@
 #!/usr/bin/env Rscript
 
-# Dependency-free fixtures for the raw per-individual identity boundary. Run
-# from any working directory:
+# Raw per-individual identity and producer-container boundary fixtures. The
+# data.table dependency reproduces neonUtilities' live fetch result. Run from any
+# working directory:
 #   Rscript --vanilla scripts/test_bundle_identity.R
 
 args <- commandArgs(trailingOnly = FALSE)
@@ -9,6 +10,9 @@ file_arg <- sub("^--file=", "", args[grepl("^--file=", args)])
 root <- if (length(file_arg)) normalizePath(file.path(dirname(file_arg), "..")) else
   normalizePath(".")
 source(file.path(root, "scripts", "bundle_identity.R"), chdir = TRUE)
+if (!requireNamespace("data.table", quietly = TRUE)) {
+  stop("The raw-boundary contract tests require data.table.", call. = FALSE)
+}
 
 passed <- 0L
 check <- function(ok, label) {
@@ -105,6 +109,45 @@ check(
     nrow(portable_raw$optional_empty_table) == 0L &&
     all(vapply(portable_raw$optional_empty_table, length, integer(1)) == 0L),
   "raw materializer preserves types, optional NAs, and legitimate zero-row tables"
+)
+
+# `neonUtilities` returns data.table containers in the fetch job. Character `i`
+# has join semantics for `[.data.table`, so the raw boundary must inspect columns
+# one name at a time with `[[` rather than base-data-frame column subsetting.
+# Preserve the container class and every column value/attribute while replacing
+# package-backed column storage with newly allocated base vectors.
+data_table_raw <- list(
+  phe_perindividual = data.table::as.data.table(identity_optional),
+  phe_statusintensity = data.table::as.data.table(status_fixture),
+  optional_empty_table = data.table::as.data.table(
+    raw_fixture$optional_empty_table
+  )
+)
+attr(data_table_raw$phe_statusintensity$dayOfYear, "unit") <- "day-of-year"
+data_table_expected <- lapply(data_table_raw, data.table::copy)
+data_table_portable <- materialize_phenology_raw_result(
+  lapply(data_table_raw, data.table::copy), "DATA_TABLE"
+)
+same_data_table_columns <- all(vapply(names(data_table_expected), function(table) {
+  expected <- data_table_expected[[table]]
+  actual <- data_table_portable[[table]]
+  identical(names(actual), names(expected)) &&
+    all(vapply(names(expected), function(column) {
+      identical(actual[[column]], expected[[column]])
+    }, logical(1)))
+}, logical(1)))
+rectangular_data_tables <- all(vapply(data_table_portable, function(table) {
+  !is.data.frame(table) || all(vapply(names(table), function(column) {
+    length(table[[column]]) == nrow(table)
+  }, logical(1)))
+}, logical(1)))
+check(
+  all(vapply(data_table_portable, inherits, logical(1), "data.table")) &&
+    same_data_table_columns && rectangular_data_tables,
+  paste0(
+    "raw materializer handles data.table producers without join dispatch and ",
+    "preserves column values, attributes, and rectangularity"
+  )
 )
 
 local({

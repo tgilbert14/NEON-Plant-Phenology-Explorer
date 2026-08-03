@@ -87,7 +87,11 @@ candidates until the exact eligible site-year join and registered analysis pass.
   consumer boundary. Optional unknowns are full-length typed `NA` values; a
   zero-length column in a nonempty frame is portability corruption, not optional
   data. Do not solve that corruption by silently adding the producer's storage
-  backend to the application runtime.
+  backend to the application runtime. Raw-boundary validators must also be neutral
+  to valid producer container subclasses: inspect named columns through `[[`.
+  Base-style `x[character_names]` is column selection for a data frame but invokes
+  join semantics for a live `data.table`; require an executable fixture using the
+  producer's actual container class before publishing the boundary.
 - Derived artifacts must not embed wall-clock build dates. Derive freshness from
   immutable inputs (here the maximum observation date) and require two rebuilds to
   produce identical hashes before publication.

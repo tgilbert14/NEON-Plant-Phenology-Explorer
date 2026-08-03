@@ -39,7 +39,12 @@
 
   expected <- nrow(x)
   ordered_names <- c(intersect(required, names(x)), setdiff(names(x), required))
-  lengths <- vapply(x[ordered_names], length, integer(1))
+  lengths <- vapply(
+    ordered_names,
+    function(column) length(x[[column]]),
+    integer(1),
+    USE.NAMES = TRUE
+  )
   bad <- which(lengths != expected)
   if (length(bad)) {
     shown <- utils::head(bad, 10L)
