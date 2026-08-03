@@ -95,7 +95,7 @@ jobs:
           name: plant-phenology-raw-${{ github.sha }}
           path: ${{ runner.temp }}/phe-raw
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   build_candidate:
     needs: [gate, fetch_raw]
@@ -186,6 +186,7 @@ jobs:
           find data -maxdepth 1 -name '*.rds' -type f -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/index-hashes-second.txt"
           diff -u "$RUNNER_TEMP/index-hashes-first.txt" "$RUNNER_TEMP/index-hashes-second.txt"
           Rscript --vanilla scripts/write_manifest.R
+          Rscript --vanilla scripts/test_bundle_identity.R
           Rscript --vanilla scripts/test_helpers.R
           Rscript --vanilla scripts/verify_bundle.R
           node scripts/check_custom_message_handlers.mjs
@@ -222,40 +223,86 @@ jobs:
           name: plant-phenology-refresh-${{ github.sha }}
           path: ${{ runner.temp }}/refresh-candidate
 
-      - name: Publish or update the review branch
+      - name: Publish review branch, never master
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          git fetch origin master
+          git fetch --no-tags origin master
           remote_master=$(git rev-parse origin/master)
           if [ "$remote_master" != "$GITHUB_SHA" ]; then
             echo "::error title=Stale refresh base::master moved from $GITHUB_SHA to $remote_master; rebuild the candidate."
             exit 1
           fi
+          find data data-sample -mindepth 1 -delete
           tar -xzf "$RUNNER_TEMP/refresh-candidate/plant-phenology-refresh.tgz"
-          if git diff --quiet -- data data-sample manifest.json; then
-            echo "No validated release-byte change; no review branch created."
-            exit 0
-          fi
           branch="automation/plant-phenology-data-refresh"
           remote_head=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
           git switch -C "$branch"
           git config user.name "neon-data-bot"
           git config user.email "neon-data-bot@users.noreply.github.com"
-          git add -A data data-sample manifest.json
+          git add -A -- data data-sample manifest.json
+          if git diff --cached --quiet -- data data-sample manifest.json; then
+            echo "No validated candidate change, including untracked scoped files."
+            exit 0
+          fi
           git commit -m "data: propose validated plant-phenology refresh [bot]" \
                      -m "Produced from ${GITHUB_SHA}; 46 bundles, scientific contracts, indexes, exact manifest, and offline app source passed before publication."
-          if [ -n "$remote_head" ]; then
-            git push --force-with-lease="refs/heads/$branch:$remote_head" origin "$branch:refs/heads/$branch"
+          published_commit=$(git rev-parse HEAD)
+          if [[ "$(git rev-parse HEAD^)" != "$GITHUB_SHA" ]]; then
+            echo "Candidate promotion commit is not a direct child of the validated producer revision."
+            exit 1
+          fi
+          if [[ -n "$remote_head" ]]; then
+            git push --force-with-lease="refs/heads/$branch:$remote_head" \
+              origin "$branch:refs/heads/$branch"
           else
             git push origin "$branch:refs/heads/$branch"
           fi
-          pr_url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url')
-          if [ -z "$pr_url" ]; then
-            gh pr create --base master --head "$branch" \
-              --title "data: validated NEON plant-phenology refresh" \
-              --body "Validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Merging this review PR is the explicit production/deployment decision."
-          else
-            gh pr comment "$pr_url" --body "Updated with validated candidate from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+          pushed_commit=""
+          for attempt in 1 2 3 4 5; do
+            pushed_commit=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
+            [[ "$pushed_commit" == "$published_commit" ]] && break
+            sleep 2
+          done
+          if [[ "$pushed_commit" != "$published_commit" ]]; then
+            echo "Published branch does not resolve to the validated candidate commit."
+            exit 1
           fi
+
+          pr_count=$(gh pr list --head "$branch" --base master --state open \
+            --json url --jq 'length')
+          if (( pr_count > 1 )); then
+            echo "More than one open master PR exists for $branch; refusing ambiguous publication."
+            exit 1
+          fi
+          if (( pr_count == 0 )); then
+            compare_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/master...${branch}?expand=1"
+            {
+              echo "### Validated Plant Phenology review branch ready"
+              echo "- Branch: ${branch}"
+              echo "- Exact head: ${published_commit}"
+              echo "- Validator run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+              echo "- [Open the reviewer-authenticated PR](${compare_url})"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Validated review branch ready::Open a reviewer-authenticated PR from $branch to master after reviewing run ${GITHUB_RUN_ID}; that PR event is the exact-head CI trigger."
+            exit 0
+          fi
+
+          pr_record=""
+          for attempt in 1 2 3 4 5; do
+            pr_record=$(gh pr list --head "$branch" --base master --state open \
+              --json url,baseRefName,headRefName,headRefOid \
+              --jq 'if length == 1 then .[0] | [.url,.baseRefName,.headRefName,.headRefOid] | @tsv else "" end')
+            [[ "$pr_record" == *$'\t'"$published_commit" ]] && break
+            sleep 2
+          done
+          IFS=$'\t' read -r pr_url pr_base pr_head pr_oid <<< "$pr_record"
+          if [[ -z "$pr_record" || "$pr_base" != master || "$pr_head" != "$branch" || \
+                "$pr_oid" != "$published_commit" ]]; then
+            echo "Open PR identity does not match master <- $branch at $published_commit."
+            exit 1
+          fi
+          gh pr comment "$pr_url" \
+            --body "Updated from ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. GitHub will hold the pull_request synchronize checks triggered by this automation update for approval; a repository write user must select **Approve workflows to run**. Do not merge until checks are green on exact head ${published_commit}."
+          echo "::notice title=Approve exact-head PR checks::Existing PR updated to $published_commit. A repository write user must select Approve workflows to run, then verify green checks on that exact head."

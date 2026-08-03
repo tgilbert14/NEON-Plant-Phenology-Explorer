@@ -19,6 +19,7 @@
 suppressWarnings(suppressMessages({ library(dplyr); library(tibble) }))
 source("R/site_metadata.R")     # neon_sites (name/state/domain/elevation_m)
 source("R/phe_helpers.R")       # individual_summary / onset_trend / site_phe_summary / site_species_onsets
+source("scripts/bundle_identity.R") # stable first-row identity deduplication
 
 RAW <- Sys.getenv("PHE_RAW_DIR", "../phe-data-fetch"); DEMO <- "HARV"
 # bundle every raw site present (resumable national build); CLI args = subset
@@ -31,9 +32,10 @@ is_species_rank <- function(rank, sci){ ok <- is.na(rank)|rank %in% c("species",
 build_site <- function(site) {
   f <- file.path(RAW, paste0(site,"_raw.rds")); if(!file.exists(f)){cat("  MISSING",f,"\n"); return(NULL)}
   r <- readRDS(f)
-  pind <- tibble::as_tibble(r$phe_perindividual); si <- tibble::as_tibble(r$phe_statusintensity)
+  pind <- first_phenology_identity_rows(r$phe_perindividual, site)
+  pind <- tibble::as_tibble(pind); si <- tibble::as_tibble(r$phe_statusintensity)
   num <- function(x) suppressWarnings(as.numeric(x))
-  ident <- pind %>% dplyr::distinct(.data$individualID, .keep_all = TRUE) %>%
+  ident <- pind %>%
     dplyr::transmute(individualID, scientificName, growthForm, taxonRank, nativeStatusCode,
                      plotID, lat = num(decimalLatitude), lng = num(decimalLongitude)) %>%
     dplyr::mutate(is_species = is_species_rank(.data$taxonRank, .data$scientificName))
