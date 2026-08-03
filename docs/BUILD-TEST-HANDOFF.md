@@ -4,6 +4,64 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-08-03 scheduled-refresh native-crash repair candidate
+
+- Audit time: `2026-08-03 08:40:38 EDT (-0400)`. Work began from exact
+  `origin/master` `50106f205a38ab5abf1e807f1c54e44a9b5d8885` in isolated
+  worktree `/private/tmp/neon-phenology-refresh-fix.duRTRe`, branch
+  `codex/phenology-refresh-native-crash`. At audit time no repair candidate had
+  been committed, pushed, merged, dispatched, or deployed; the publication
+  receipt below remains required before any production claim.
+- Scheduled run `30736823432` did not update production. `fetch_raw` job
+  `91467014297` succeeded for all 46 expected sites. Its immutable raw artifact
+  was ID `8830739400`, 224,849,352 bytes, SHA-256
+  `5bc89c0b7c919a115735f6b2e8100ab23f2869e364f1eef74a1845b5a1092856`;
+  the former one-day retention expired it before this repair pass. ABBY, the
+  first alphabetic bundle, contained 136,563 status rows and 244 individual rows.
+- `build_candidate` job `91473889852` used pinned R 4.5.2 with dplyr 1.2.1,
+  vctrs 0.7.3, and tibble 3.3.1, then received SIGSEGV / null address at
+  `scripts/bundle_phe_data.R:36`. The trace entered
+  `vctrs::vec_unique_loc(cols)` through
+  `dplyr::distinct(individualID, .keep_all = TRUE)`. ABBY being first does not
+  establish malformed ABBY data, and the expired raw artifact prevents a
+  lower-level reproduction from those exact bytes. Publisher job `91475415648`
+  was skipped, so there was no validated candidate artifact, review-branch
+  update, PR update, merge, Pages update, or Connect update.
+- Repair scope is build/release hardening only. New pure-base helper
+  `scripts/bundle_identity.R` requires the eight identity fields, materializes
+  `individualID` as UTF-8, fails closed on absent fields or NA/blank keys, and
+  keeps the complete first source row with stable `!duplicated()` selection.
+  `scripts/bundle_phe_data.R` applies that boundary before tibble conversion and
+  no longer routes the raw identity key through vctrs hashing. Dependency-free
+  adversarial fixtures cover unsorted and non-ASCII keys, conflicting duplicate
+  metadata, exact output schema, absent fields, NA keys, and whitespace-only keys.
+- Raw-evidence retention is now seven days. The publisher now follows the
+  Breeding Birds exact-head contract: exact `master` base, direct-child promotion
+  commit, scoped staged-byte comparison, force-with-lease, remote-head receipt,
+  one unambiguous `master <- automation/plant-phenology-data-refresh` PR, and
+  verification that an existing PR's `headRefOid` equals the pushed commit. It
+  never calls `gh pr create`; when no PR exists it emits the reviewer-authenticated
+  exact-head PR notice, and when one exists it emits the workflow-approval notice.
+- Local PASS on R 4.5.3: `Rscript --vanilla scripts/test_bundle_identity.R`
+  (all six fixtures); parse of `scripts/bundle_identity.R`,
+  `scripts/bundle_phe_data.R`, `scripts/test_bundle_identity.R`, and
+  `scripts/test_helpers.R`; Ruby YAML parse plus `bash -n` of the embedded
+  publisher; `node scripts/check_custom_message_handlers.mjs` (five exact
+  one-payload handlers); workflow static assertions; and `git diff --check`.
+  `Rscript --vanilla scripts/test_helpers.R` is locally BLOCKED before fixture
+  execution because this worktree runtime lacks `dplyr` and `tibble`; those are
+  installed by the pinned workflow, and no substitute result is claimed.
+- No generated bundle, index, demo, or `manifest.json` byte was touched. Scientific
+  disposition remains `HOLD / NO DRIVER BYTE CHANGE`; no estimator, threshold,
+  grouping, label, or app runtime contract changed.
+- Residual gate and next action: review and publish this source-only candidate,
+  require green exact-head CI, merge it, then manually run the complete refresh
+  with `skip_download=false`. The old failed run cannot validate the repair because
+  it remains attached to the old source SHA and its raw artifact expired; the
+  `skip_download=true` path only rebuilds committed indexes and does not execute
+  the repaired bundler. Review and merge only the new workflow's fully validated
+  generated candidate, then verify the exact production merge.
+
 ## 2026-07-22 Suite Living Poster V1 source candidate
 
 - Working branch: `agent/phenology-living-poster-v1`; production remains the
