@@ -4,6 +4,91 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-08-03 raw-staging portability repair candidate
+
+- Audit time: `2026-08-03 11:31:09 EDT (-0400)`. This source-only repair began
+  from exact `origin/master` `19ba023a0bf957cb993be11639e5ee38a412beaa`
+  in isolated worktree
+  `/Users/vgs/Documents/Codex/2026-07-22/we-have-been-working-through-updating/work/trees/NEON-Plant-Phenology-identity-schema-30819294736`,
+  branch `agent/phenology-identity-schema-30819294736`. The watched branch remains
+  `master`; Pages remains
+  <https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/> and Connect remains
+  <https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/>
+  (content ID `019ee118-bf17-1622-bd5d-e59cab3b36a7`). This candidate has not
+  been pushed, merged, dispatched, or deployed.
+- Full-refresh run `30819294736` fetched all 46 sites successfully in job
+  `91704881226`, then failed in build job `91719922015` while bundling first site
+  ABBY. Publisher job `91724482179` was skipped. Its unexpired raw artifact is ID
+  `8859906292`, name
+  `plant-phenology-raw-19ba023a0bf957cb993be11639e5ee38a412beaa`,
+  224,861,437 bytes, artifact SHA-256
+  `8ebd712f36875077e42202912278ff6a94e0f3cc98b9f71dcf40a9d1c7416239`.
+  Exact ABBY raw-file SHA-256 is
+  `824ded7ee13754951c93072c697bab7ddf242f9ef95d66ed4f6c3ac190fd2301`.
+- Root cause is storage-backend drift, not an upstream field-name or value-schema
+  change. The producer's `neonUtilities` 2.4.3 result contained Arrow-backed
+  ALTREP columns even though Arrow is not a declared `neonUtilities` import. With
+  Arrow loaded, exact ABBY `phe_perindividual` is a rectangular 244-row,
+  38-column table and all eight app identity fields are present and complete.
+  Without Arrow, `readRDS()` retains the 244-row frame but warns that it cannot
+  unserialize `arrow::array_*_vector` values and substitutes length-zero columns,
+  producing the misleading `$<-.data.frame` replacement error. The complete
+  artifact has one identity schema across all 46 sites, 10,176 raw identity rows,
+  and 5,739,845 raw status rows; none of the eight identity fields is absent,
+  NA, or blank. Optional metadata semantics are unchanged: unknown values are
+  full-length typed `NA`; a length-zero column is valid only in a zero-row table.
+- `scripts/fetch_all_phe.R` now materializes every raw data-frame column into a
+  dependency-free base vector before `saveRDS()`, preserving names, classes,
+  attributes, factors, dates, and typed all-NA values. The shared helper validates
+  every table's rectangular shape before and after materialization.
+  `scripts/bundle_phe_data.R` also validates required tables, fields, nonempty
+  row sets, unique column names, and column lengths immediately after `readRDS()`.
+  Corrupt legacy artifacts therefore fail closed with the table/site/column and
+  expected length rather than continuing into identity assignment. No Arrow
+  runtime dependency was added and the existing stable first-source identity
+  deduplication contract is unchanged.
+- Regression coverage now includes typed optional NAs, Date/factor preservation,
+  legitimate zero-row metadata, dependency-free RDS round-trip, and the exact
+  corrupt shape from this run: a nonempty frame with a zero-length
+  `individualID`. `Rscript --vanilla scripts/test_bundle_identity.R` passes all
+  10 fixtures. `scripts/test_helpers.R` passes all 11 fixtures using a temporary
+  local library; every R source parses, all five one-payload handler and cover
+  checks pass, all three workflow YAML files and the embedded publisher Bash
+  parse, and `git diff --check` passes.
+- Exact-artifact local proof used R 4.5.3 on macOS arm64, temporary Arrow 25.0.0
+  only to decode and normalize the producer bytes, then an explicitly Arrow-free
+  library to read and validate all 46 normalized RDS files with zero warnings.
+  The sorted aggregate normalized-raw SHA-256 is
+  `0aa0d4f44d527b6ea2a996a160814b5ca00f7cb0402fff4d3408cbfab461ab92`.
+  A full isolated build from those bytes succeeded for all 46 sites: 5,735,598
+  bundled observations, 9,537 retained individuals, 723 national onsets, 723
+  search taxa, 46 search sites, demo site HARV, and KONA `trend = NULL`.
+  Two index rebuilds had identical MD5 values (`3850299bdc76e069b7d839e4ae87be74`
+  national, `7cc7a5503f26bcc2d1ecc2acac6c797c` search,
+  `d8ef3c8dfcb9fde1496e52fe5c350be8` site), and two trend normalizations were
+  idempotent across 47 files.
+- Diagnostic attempts that did not pass were resolved rather than counted as
+  evidence: the first full-build assertion expected 244 ABBY identities before
+  accounting for the existing observation semi-join (the correct final count is
+  240); helper tests initially lacked temporary `tidyr` and `RColorBrewer`;
+  local Ruby 2.6 rejected the newer `aliases:` keyword and an initial workflow
+  list named nonexistent `pages.yml`; and an early error-substring assertion was
+  too order-specific. The first aggregate R-parse wrapper also misescaped its
+  filename regex. An exact Arrow-free validator assertion initially surfaced a
+  corrupt auxiliary categorical-code table before the required identity table;
+  validation now deliberately checks the two required build tables first.
+  Corrected assertions and environment-independent parsers pass. Temporary
+  evidence/libraries remain only under explicit `/private/tmp` paths and are not
+  repository or release artifacts.
+- No estimator, threshold, grouping, label, generated RDS, demo, index,
+  `manifest.json`, workflow authority, token, publisher, Connect, Pages, or Driver
+  byte changed. Scientific disposition remains `HOLD / NO DRIVER BYTE CHANGE`.
+  Residual gates after local review and commit: run exact-head CI on pinned R
+  4.5.2 / Ubuntu 22.04 / Haswell / one thread, merge only a green head, then
+  dispatch a complete `skip_download=false` refresh and promote only its fully
+  validated candidate through the review-branch publisher. The macOS proof is
+  strong diagnostic evidence but is not a release or publication receipt.
+
 ## 2026-08-03 scheduled-refresh native-crash repair candidate
 
 - Audit time: `2026-08-03 08:40:38 EDT (-0400)`. Work began from exact

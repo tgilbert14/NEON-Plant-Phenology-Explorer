@@ -32,6 +32,7 @@ is_species_rank <- function(rank, sci){ ok <- is.na(rank)|rank %in% c("species",
 build_site <- function(site) {
   f <- file.path(RAW, paste0(site,"_raw.rds")); if(!file.exists(f)){cat("  MISSING",f,"\n"); return(NULL)}
   r <- readRDS(f)
+  validate_phenology_raw_result(r, site)
   pind <- first_phenology_identity_rows(r$phe_perindividual, site)
   pind <- tibble::as_tibble(pind); si <- tibble::as_tibble(r$phe_statusintensity)
   num <- function(x) suppressWarnings(as.numeric(x))
