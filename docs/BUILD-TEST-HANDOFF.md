@@ -4,6 +4,71 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-08-03 live-data.table producer-boundary follow-up candidate
+
+- Audit time: `2026-08-03 12:21:41 EDT (-0400)`. This focused source-only
+  follow-up began from exact current `origin/master` merge
+  `849d4fb17824b21db0e1b0e9fd632e841e86b9b9` in isolated worktree
+  `/Users/vgs/Documents/Codex/2026-07-22/we-have-been-working-through-updating/work/trees/NEON-Plant-Phenology-datatable-boundary-30831102602`,
+  branch `codex/phenology-datatable-boundary-fix`. The watched branch remains
+  `master`; Pages remains
+  <https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/> and Connect remains
+  <https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/>
+  (content ID `019ee118-bf17-1622-bd5d-e59cab3b36a7`).
+- The first portability repair head
+  `5414cef7d242066b17b35a4b4ffbbabf76e6f967` passed exact-head CI run
+  `30828987483` / job `91737844063`; validated artifacts were release candidate
+  ID `8862640658`, SHA-256
+  `45d80c43b71086c9aaa049cc5084cdc8f7a2f4ed745ff9ad5483ac1ee773f0f1`,
+  and manifest ID `8862639837`, SHA-256
+  `df8dcaa7ddbb11563aaa80bdfafd2a651bcac82f965581ed1d214e7af01e0f23`.
+  PR #7 merged as `849d4fb17824b21db0e1b0e9fd632e841e86b9b9`.
+  Post-merge validator `30830610250`, semantic-production run `30830611272`,
+  and Pages run `30830607424` all passed on that exact merge.
+- The one authorized complete `skip_download=false` refresh, run `30831102602`,
+  was bound to exact master `849d4fb17824b21db0e1b0e9fd632e841e86b9b9`.
+  Gate job `91744959578` passed. Fetch job `91744990072` installed its pinned
+  R 4.1.1 closure, downloaded and stacked first site HARV, then failed before
+  serialization at `scripts/bundle_identity.R:42` with
+  `Error in [.data.table(x, ordered_names)` and the data.table character-`i`
+  join-contract message. Raw-artifact upload was skipped; build job `91745707628`
+  and publisher job `91745707857` were skipped; the run has zero artifacts; no
+  `automation/plant-phenology-data-refresh` ref exists; and no generated-data PR
+  was opened. No candidate or production data byte changed.
+- Root cause was a producer-container test gap, not NEON schema or value drift.
+  `validate_phenology_raw_result()` correctly validated saved base data frames in
+  local and pinned tests, but the live `neonUtilities` producer returns
+  `data.table` containers. `x[ordered_names]` is base-data-frame column selection
+  but invokes join semantics for `[.data.table`. The failure was therefore a
+  deterministic code compatibility defect; retrying the unchanged workflow would
+  not be meaningful.
+- The repair computes each column length through subclass-neutral
+  `x[[column]]`, retaining required-first ordering, duplicate/missing/nonempty
+  checks, exact column names in diagnostics, and all existing fail-closed shape
+  rules. The executable producer fixture uses real `data.table` containers and
+  verifies Date, factor, typed-NA, custom-column attributes, legitimate zero-row
+  metadata, container classes, exact values/attributes, and rectangularity. It
+  would execute the failed join path against the old implementation.
+- Local PASS on R 4.5.3/macOS arm64: all 11 raw-boundary fixtures and all 11
+  scientific helper fixtures; parse of all 18 R sources; five one-payload Shiny
+  handlers; Living Poster/cover contract; all three workflow YAML files; and
+  `git diff --check`. An exact ABBY reproduction used the immutable raw file
+  `824ded7ee13754951c93072c697bab7ddf242f9ef95d66ed4f6c3ac190fd2301`,
+  Arrow 25.0.0, and data.table 1.18.4: all nine data-frame containers / 139
+  columns remained value-and-attribute identical after materialization and
+  rectangular; a second Arrow-free process read the staged RDS with zero warnings,
+  244 identity rows, and 136,563 status rows. The first isolated local
+  data.table source install was blocked by missing macOS `libintl.h`; the official
+  R 4.5 macOS binary supplied the test-only dependency, and the failed compiler
+  attempt is not counted as evidence.
+- No estimator, threshold, grouping, label, generated RDS, demo, index,
+  `manifest.json`, app runtime, workflow authority, token, publisher, Connect,
+  Pages, or Driver artifact byte changed. Scientific disposition remains
+  `HOLD / NO DRIVER BYTE CHANGE`. Residual gates: independent diff review, green
+  exact-head CI on pinned Ubuntu/R 4.5.2/Haswell/one thread, guarded merge, then
+  exactly one new complete refresh and review of its generated candidate. This
+  local proof is not permission to merge a data candidate.
+
 ## 2026-08-03 raw-staging portability repair candidate
 
 - Audit time: `2026-08-03 11:31:09 EDT (-0400)`. This source-only repair began
