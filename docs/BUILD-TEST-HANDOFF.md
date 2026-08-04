@@ -4,6 +4,45 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-08-04 15:13:38 EDT - [Codex] manifest dependency-drift repair candidate
+
+- Scope began on branch `agent/suite-synthesis-phenology-governance` at exact
+  PR #10 head `f4399dab6f4d2c7de0299e7be43cc07d92974edd`. The watched branch remains
+  `master`; Pages remains
+  <https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/> and Connect remains
+  <https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/>
+  (content ID `019ee118-bf17-1622-bd5d-e59cab3b36a7`). No app, data, estimator,
+  generated index, tracked `manifest.json`, Pages, Connect, or Driver byte was
+  changed by this repair.
+- Exact-head validation run `30940936808` / job `92098810379` passed the static,
+  scientific-helper, trend-normalization, and first deterministic-index build
+  work. Its second `scripts/rebuild_indexes.R` invocation correctly attempted
+  manifest regeneration because `rsconnect` was installed, then failed closed in
+  `rsconnect::createAppManifest()` before publication. The install resolver had
+  moved the unversioned direct requests from the committed-manifest identities
+  `bslib 0.11.0` and `zip 3.0.1` to source-built `bslib 0.12.0` and `zip 3.0.2`;
+  those source installs had no reproducible reinstall location, so `rsconnect`
+  rejected them. This was dependency-resolution/cache drift, not a scientific or
+  index determinism failure.
+- Both manifest-producing lanes now request exact `bslib@0.11.0` and
+  `zip@3.0.1`, matching the committed manifest. The PR validator cache key moved
+  from `plant-phenology-geo-closure-v1` to `-v2`, and the refresh validator key
+  moved from `plant-phenology-refresh-geo-closure-v1` to `-v2`, so neither lane can
+  restore the stale source-built closure. The dated RSPM lane, R 4.5.2, exact
+  geospatial URLs, Haswell/one-thread contract, generator, and provenance gate
+  remain unchanged.
+- Local PASS: Ruby parsed all three workflow YAML files; R 4.5.3 parsed
+  `scripts/write_manifest.R` and `scripts/rebuild_indexes.R`; Node parsed the cover
+  and custom-message checkers; static assertions found both exact package pins and
+  both `v2` cache keys in the only two workflows that invoke manifest generation;
+  and `git diff --check` passed. A local macOS install is not equivalent to the
+  pinned Ubuntu binary resolver, so exact manifest equality and the full release
+  contract remain pending a fresh GitHub Actions run on the amended PR head.
+
+Next action: commit and push this focused workflow/handoff repair, then require a
+fresh exact-head PR validator to regenerate the byte-identical manifest and pass
+all remaining gates before merge.
+
 ## 2026-08-04 14:49:56 EDT - [Codex] current-production governance closeout
 
 - Scope was documentation-only suite synthesis from clean branch
