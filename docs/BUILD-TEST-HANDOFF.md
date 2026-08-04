@@ -4,6 +4,87 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-08-04 15:13:38 EDT - [Codex] manifest dependency-drift repair candidate
+
+- Scope began on branch `agent/suite-synthesis-phenology-governance` at exact
+  PR #10 head `f4399dab6f4d2c7de0299e7be43cc07d92974edd`. The watched branch remains
+  `master`; Pages remains
+  <https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/> and Connect remains
+  <https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/>
+  (content ID `019ee118-bf17-1622-bd5d-e59cab3b36a7`). No app, data, estimator,
+  generated index, tracked `manifest.json`, Pages, Connect, or Driver byte was
+  changed by this repair.
+- Exact-head validation run `30940936808` / job `92098810379` passed the static,
+  scientific-helper, trend-normalization, and first deterministic-index build
+  work. Its second `scripts/rebuild_indexes.R` invocation correctly attempted
+  manifest regeneration because `rsconnect` was installed, then failed closed in
+  `rsconnect::createAppManifest()` before publication. The install resolver had
+  moved the unversioned direct requests from the committed-manifest identities
+  `bslib 0.11.0` and `zip 3.0.1` to source-built `bslib 0.12.0` and `zip 3.0.2`;
+  those source installs had no reproducible reinstall location, so `rsconnect`
+  rejected them. This was dependency-resolution/cache drift, not a scientific or
+  index determinism failure.
+- Both manifest-producing lanes now request exact `bslib@0.11.0` and
+  `zip@3.0.1`, matching the committed manifest. The PR validator cache key moved
+  from `plant-phenology-geo-closure-v1` to `-v2`, and the refresh validator key
+  moved from `plant-phenology-refresh-geo-closure-v1` to `-v2`, so neither lane can
+  restore the stale source-built closure. The dated RSPM lane, R 4.5.2, exact
+  geospatial URLs, Haswell/one-thread contract, generator, and provenance gate
+  remain unchanged.
+- Local PASS: Ruby parsed all three workflow YAML files; R 4.5.3 parsed
+  `scripts/write_manifest.R` and `scripts/rebuild_indexes.R`; Node parsed the cover
+  and custom-message checkers; static assertions found both exact package pins and
+  both `v2` cache keys in the only two workflows that invoke manifest generation;
+  and `git diff --check` passed. A local macOS install is not equivalent to the
+  pinned Ubuntu binary resolver, so exact manifest equality and the full release
+  contract remain pending a fresh GitHub Actions run on the amended PR head.
+
+Next action: commit and push this focused workflow/handoff repair, then require a
+fresh exact-head PR validator to regenerate the byte-identical manifest and pass
+all remaining gates before merge.
+
+## 2026-08-04 14:49:56 EDT - [Codex] current-production governance closeout
+
+- Scope was documentation-only suite synthesis from clean branch
+  `agent/suite-synthesis-phenology-governance` at exact `origin/master`
+  `7d0f29f7886cfae1c760a9ffc9e056184ec6fc68`. The watched branch remains
+  `master`; Pages remains
+  <https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/> and Connect remains
+  <https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/>
+  (content ID `019ee118-bf17-1622-bd5d-e59cab3b36a7`). No runtime, data,
+  estimator, manifest, workflow, Pages, Connect, or Driver artifact was changed.
+- The former portability candidate is now closed by promoted production. Validated
+  data candidate `3089dc8e527340245735efbc62c95aa2faee5b25` passed PR-head
+  check `30841258764`; reviewer-authenticated PR #9 merged it as
+  `7d0f29f7886cfae1c760a9ffc9e056184ec6fc68`. Merged validation
+  `30842200764`, Pages `30842196863`, and exact production health
+  `30842199076` passed. Current `manifest.json` SHA-256 is
+  `512737700fdad555264737303439a1816eb189f5ec456e7420aa40dc9165d29b`.
+- The measured suite audit ran from the Driver worktree with
+  `Rscript --vanilla scripts/audit_suite_compatibility.R
+  /Users/vgs/Documents/Codex/2026-07-22/we-have-been-working-through-updating/work/repos
+  phenology`. It found 346 distinct app-supported finite-onset site-year keys
+  across 45 sites; all 346/346 match Driver calendar keys, and 39 sites have at
+  least six supported years. That is calendar compatibility for an app-supported
+  result, not a registered Driver estimator, independent adapter, or vote receipt.
+- Decision axes are now explicit: the current app scientific/release contract is
+  `VERIFIED`; the ecological Driver disposition remains
+  `HOLD / NO DRIVER BYTE CHANGE`. The existing temperature -> green-up vote is not
+  re-authorized by the 346/346 key match. It still requires a registered
+  temperature/onset analysis that preserves support and censoring, an independent
+  current-source adapter, and old/new parity.
+- Static documentation checks passed: `git diff --check`; a changed-path audit
+  limited this closeout to `docs/BUILD-TEST-HANDOFF.md` and
+  `docs/DRIVER-KNOWLEDGE-PACKAGE.md`; and exact-identity/disposition assertions
+  found the promoted candidate, merge, four workflow receipts, measured join,
+  explicit contract-trust axis, and no-byte authorization. Full R/app/browser and
+  deployment gates are `N/A` because no release byte changed. No failed mutation,
+  temporary repository artifact, or cleanup remained.
+
+Next action: keep green-up `HOLD`; only a separately registered current-source
+adapter and temperature/onset analysis with support, censoring, and parity can
+request a Driver byte change.
+
 ## 2026-08-03 live-data.table producer-boundary follow-up candidate
 
 - Audit time: `2026-08-03 12:21:41 EDT (-0400)`. This focused source-only

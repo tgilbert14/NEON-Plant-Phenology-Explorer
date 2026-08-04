@@ -52,9 +52,9 @@ jobs:
         uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           packages: >
-            shiny, bslib, bsicons, dplyr, tidyr, stringr, tibble, plotly@4.12.0,
+            shiny, bslib@0.11.0, bsicons, dplyr, tidyr, stringr, tibble, plotly@4.12.0,
             leaflet, DT, shinyjs, shinycssloaders, RColorBrewer, htmltools,
-            zip, jsonlite, rsconnect, cpp11,
+            zip@3.0.1, jsonlite, rsconnect, cpp11,
             url::https://cran.r-project.org/src/contrib/Archive/terra/terra_1.8-50.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sf_1.1-1.tar.gz,
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/s2_1.1.11.tar.gz,
@@ -65,7 +65,7 @@ jobs:
             url::https://packagemanager.posit.co/cran/2026-07-15/src/contrib/sp_2.2-1.tar.gz
           pak-version: stable
           dependencies: '"hard"'
-          cache-version: plant-phenology-geo-closure-v1
+          cache-version: plant-phenology-geo-closure-v2
           install-pandoc: 'false'
           install-quarto: 'false'
 
