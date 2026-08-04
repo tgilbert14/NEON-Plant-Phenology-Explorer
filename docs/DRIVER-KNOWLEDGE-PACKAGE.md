@@ -1,17 +1,22 @@
 # Plant Phenology Explorer -> Driver knowledge package
 
-## Decision state
+## Decision axes
 
-`HOLD - PASS 2 COMPLETE / NO DRIVER BYTE CHANGE`. The app release is verified;
-the candidate phenology signals are not an adoption receipt. No Driver artifact
-byte is authorized from this pass.
+- **Application contract trust: `VERIFIED`.** The corrected opportunity,
+  censoring, support, deterministic-build, manifest, offline-source, Pages, and
+  production-health contracts all passed for the current promoted release.
+- **Ecological Driver disposition: `HOLD / NO DRIVER BYTE CHANGE`.** App contract
+  trust is not an ecological adoption receipt. Neither the current onset family
+  nor the existing temperature -> green-up vote is authorized to change or vote in
+  Driver from this package.
 
 ## Product identity
 
 - Repository: `tgilbert14/NEON-Plant-Phenology-Explorer`
 - Product: NEON Plant Phenology Observations `DP1.10055.001`
 - Baseline source: `1917f760bddd1781388462bcfebedff322edc6af`
-- Verified release source/deployment: `29c0ed119fe7a4183d77b9fae475a8d6ddff9154`
+- Promoted data candidate: `3089dc8e527340245735efbc62c95aa2faee5b25`
+- Current verified release/deployment: `7d0f29f7886cfae1c760a9ffc9e056184ec6fc68`
 - Release family: 46 committed per-site RDS bundles plus site, national-onset,
   search, and demo indexes; pinned R 4.5.2 / Haswell / one-thread validation.
 
@@ -46,6 +51,24 @@ These are trusted app-local signals after the fixture, bundle, deterministic-ind
 manifest, offline-source, and public release receipts passed. They remain Driver
 candidates until the exact eligible site-year join and registered analysis pass.
 
+## Measured Driver compatibility
+
+The 2026-08-04 immutable-object audit found 346 distinct app-supported finite-onset
+site-year keys across 45 sites. All 346/346 match the current Driver calendar keys,
+and 39 sites have at least six supported years. This closes only the calendar-key
+question for the app-supported result. It does **not** prove that the app's support
+row is the registered Driver response, that censoring and species selection are
+preserved by an independent adapter, or that the existing Driver green-up family
+has old/new parity. The current Driver pin also differs from this promoted release.
+
+Therefore:
+
+- app contract trust is `VERIFIED`;
+- calendar compatibility is measured rather than assumed;
+- Driver estimator eligibility remains `UNMEASURED` until the adapter/model gate;
+  and
+- vote eligibility remains `HOLD`.
+
 ## Claims
 
 ### CAN
@@ -65,9 +88,10 @@ candidates until the exact eligible site-year join and registered analysis pass.
 
 ### HELD
 
-- Driver temperature -> green-up voting role until the corrected opportunity
-  contract, exact site-year join, support/missingness gates, registered model, and
-  release evidence are complete.
+- Driver temperature -> green-up voting role until a current-source independent
+  adapter preserves support/censoring, a registered model defines species/season/
+  lag and eligibility before results are inspected, and old/new parity is reviewed.
+  The 346/346 calendar match does not clear these gates.
 - Cross-species gradients as mechanisms; within-species estimates must lead and
   pooled taxonomic patterns remain contextual.
 
@@ -120,28 +144,22 @@ Learning classes: `suite-platform`, `scientific-contract`, `cover-system`, and
 
 ## Publication receipt
 
-- Green PR head: `cc0151dae58d4128e831e74cc44f2f7c01ec3ac6`, run
-  `29669603912`, job `88146136480`.
-- Merge, Pages, and Connect Last deployed:
-  `29c0ed119fe7a4183d77b9fae475a8d6ddff9154`; Pages run `29670192167`.
-- Master validator `29670192503`, job `88147654406`, reproduced the complete
-  release on merge in 20m26s.
-- Production semantic run `29670192516` passed. A fresh public HARV session loaded
-  211 tagged plants, 20 species, two plots, and median green-up day 116, then
-  rendered Overview, Phenology Clock, Onset Lab, and Across Sites. The 390-pixel
-  app and the 390/320-pixel Pages cover had no page-level horizontal overflow.
+- Validated refresh candidate: `3089dc8e527340245735efbc62c95aa2faee5b25`.
+- PR #9 exact-head check: `30841258764`.
+- Current promoted merge: `7d0f29f7886cfae1c760a9ffc9e056184ec6fc68`.
+- Merged validation: `30842200764`; Pages: `30842196863`; exact production
+  health: `30842199076`.
+- Current manifest SHA-256:
+  `512737700fdad555264737303439a1816eb189f5ec456e7420aa40dc9165d29b`.
+- The approved Suite Living Poster remains part of the verified current release;
+  the data promotion did not replace its cover contract.
 
 ## Driver decision and next dependency
 
-Current decision: `HOLD / NO DRIVER BYTE CHANGE`. The corrected plant-year estimand,
-adversarial tests, and verified release are complete. The first dependency that can
-change the decision is an exact eligible site-year join with support/censoring gates
-and a registered temperature/onset analysis. If that analysis does not support an
-inferential vote, preserve green-up/leaf-active as `CONTEXT` rather than forcing
-adoption.
-
-The 2026-08-03 raw-staging repair candidate based on source
-`19ba023a0bf957cb993be11639e5ee38a412beaa` changes only serialization
-portability and consumer validation. It does not change a scientific estimator,
-support threshold, data-selection rule, released artifact, or this Driver decision;
-its pinned exact-head validator and full-refresh publication receipts remain pending.
+Current decision: `HOLD / NO DRIVER BYTE CHANGE`. The application contract and
+current promoted release are trusted, and the calendar join is measured at 346/346
+app-supported site-years. The first dependency that can change the ecological
+decision is a separately registered current-source Driver adapter and
+temperature/onset analysis that preserve support and censoring and pass old/new
+parity. If that gate does not support an inferential vote, keep green-up and
+leaf-active timing as `CONTEXT` rather than forcing adoption.
