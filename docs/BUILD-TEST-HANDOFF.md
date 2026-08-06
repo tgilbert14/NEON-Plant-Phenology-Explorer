@@ -4,6 +4,71 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-08-05 19:37:36 MST - [Codex] pinned release-byte promotion
+
+- Draft PR #11 validated exact source head
+  `3979175ae05868c46bdd6ff7593127abef422fd6` in run `31065668215`, job
+  `92502746696`. Static, scientific-helper, idempotent normalization,
+  deterministic-index, pinned-manifest, bundle/index/manifest, and offline-source
+  gates passed. The run stopped only at the intentional committed-release-byte
+  equality guard after uploading the validated candidate.
+- Downloaded artifact `8953827399`,
+  `plant-phenology-release-candidate-3979175ae05868c46bdd6ff7593127abef422fd6`,
+  and verified its archive digest as
+  `sha256:6e28bbb8b2de4f560f07de5187f05a5f15e1f9426d74fffadb86defe5c0ef7b9`.
+  Extracted all five registered files directly without rebuilding or hand editing.
+  The four RDS files reproduced the reviewed candidate bytes; only
+  `manifest.json` changed, from SHA-256
+  `512737700fdad555264737303439a1816eb189f5ec456e7420aa40dc9165d29b` to
+  `77f4a43544cba60cf8a14df7eb7d3838000d29598c899dc20f261b05ea78bc1d`.
+- This is release-byte promotion for the cover-only source change. It does not
+  alter a bundle, index, estimator, scientific threshold, source family,
+  ecological disposition, or Driver artifact. Next action: commit and push the
+  promoted manifest, then require the complete validator to pass on that exact
+  amended PR head before review or publication.
+
+## 2026-08-05 19:23:15 MST - [Codex] visible art-label removal candidate
+
+- Scope began from clean exact `origin/master`
+  `30be615dc438b60e4fa6454973b3b42589b22234` on branch
+  `agent/remove-cover-art-disclaimer`. The watched deployment branch remains
+  `master`; Pages remains
+  <https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/> and Connect remains
+  <https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/>
+  (content ID `019ee118-bf17-1622-bd5d-e59cab3b36a7`). Nothing was pushed,
+  merged, dispatched, or deployed in this local candidate pass.
+- Pages and the in-app first-run poster no longer overlay the sentence
+  “Editorial illustration—not a field photograph or data record.” The matching
+  caption-only CSS was removed. Descriptive image alt text, the durable source/
+  prompt/hash register in `docs/IMAGE-PROVENANCE.md`, the tagged-plant scope,
+  `DP1.10055.001`, and the abundance/productivity/causal limits are unchanged.
+  `scripts/check_cover.mjs` now fails if either poster restores that sentence or
+  any visible `figcaption`.
+- Local PASS on Node `v24.4.1` and R `4.5.3`: `node --check
+  scripts/check_cover.mjs`; `node scripts/check_cover.mjs`; `node
+  scripts/check_custom_message_handlers.mjs` (five handlers); parse of all app,
+  helper, and script R sources; `bash -n scripts/post_deploy_smoke.sh`; and final
+  `git diff --check`. The cover gate retained alt text, hook/promise/CTA, claim,
+  source-product, accessibility, local-asset, dimension, and checksum assertions.
+- Local scientific fixtures were attempted but stopped before assertions because
+  this host library lacks `data.table` and `dplyr`. Manifest generation was also
+  attempted with `Rscript --vanilla scripts/write_manifest.R` and stopped before
+  writing because `rsconnect` is absent. The tracked manifest was not hand-edited.
+  Exact runtime-file checksums and the full fixture/release contract therefore
+  remain pending the pinned Ubuntu 22.04 / R 4.5.2 / Haswell / one-thread PR
+  validator and promotion of its exact manifest candidate.
+- Learning/Driver decision: `NONE / NO DRIVER BYTE CHANGE` (`cover-system` and
+  `suite-platform`). This changes presentation only; no bundle, index, estimator,
+  scientific threshold, source family, ecological disposition, or Driver artifact
+  changed. No temporary repository artifact required cleanup.
+
+Next action: push this local commit for review, promote only the exact green
+validator-generated manifest if its committed-byte gate requests it, merge only a
+green exact head, republish/sync the watched `master` revision in Connect if Last
+deployed lags, and require workflow `Verify Phenology production after master
+publication` to pass marker `ddl-app-ready=plant-phenology-v1` plus host-error
+rejection before browser QA.
+
 ## 2026-08-04 15:13:38 EDT - [Codex] manifest dependency-drift repair candidate
 
 - Scope began on branch `agent/suite-synthesis-phenology-governance` at exact

@@ -10,6 +10,17 @@
   nor the existing temperature -> green-up vote is authorized to change or vote in
   Driver from this package.
 
+## 2026-08-05 cover-label refinement
+
+- Decision: `NONE / NO DRIVER BYTE CHANGE` (`cover-system`, `suite-platform`).
+- The Pages and in-app poster omit the visible illustration badge while retaining
+  a meaningful text alternative and the durable source, prompt, dimensions, and
+  hashes in `docs/IMAGE-PROVENANCE.md`. Executable absence checks prevent the
+  visible label or caption from returning.
+- The fixed tagged-plant scope and abundance, productivity, and causal-claim limits
+  remain on both first impressions. No opportunity, estimator, support, join,
+  ecological disposition, data/runtime authority, or Driver artifact changed.
+
 ## Product identity
 
 - Repository: `tgilbert14/NEON-Plant-Phenology-Explorer`
