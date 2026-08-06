@@ -29,8 +29,7 @@ phenology_poster <- function() {
           srcset = asset_url("assets/phenology-seasonal-mobile-v1.jpg")),
         tags$img(src = asset_url("assets/phenology-seasonal-hero-v1.jpg"),
           width = "1666", height = "944", fetchpriority = "high", decoding = "async",
-          alt = "Cut-paper landscape showing plants and the same tree through spring, summer, autumn, and winter.")),
-      tags$figcaption("Editorial illustration—not a field photograph or data record."))
+          alt = "Cut-paper landscape showing plants and the same tree through spring, summer, autumn, and winter.")))
   )
 }
 

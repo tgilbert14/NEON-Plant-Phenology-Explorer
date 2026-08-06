@@ -64,7 +64,14 @@ requireText(/<img[^>]+alt="[^"]+"/, "hero image needs alternative text");
 requireText(/Read the seasons\./i, "poster hook is missing");
 requireText(/Follow tagged plants through the turning year\./i, "poster promise is missing");
 requireText(/Pick a place/i, "poster CTA must be contextual");
-requireText(/Editorial illustration—not a field photograph or data record\./i, "poster must disclose the art/data boundary");
+for (const [source, surface] of [[html, "Pages"], [ui, "in-app"]]) {
+  if (/Editorial illustration—not a field photograph or data record\./i.test(source)) {
+    fail(`${surface} poster must not restore the visible illustration disclaimer`);
+  }
+  if (/<figcaption\b/i.test(source)) {
+    fail(`${surface} poster must not restore a visible art caption`);
+  }
+}
 requireText(/fixed roster of tagged plants/i, "cover must state the observation scope");
 requireText(/not plant abundance, productivity/i, "cover must state the primary claim boundary");
 requireText(/DP1\.10055\.001/g, "cover must identify the source data product");
