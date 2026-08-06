@@ -4,6 +4,29 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-08-05 19:37:36 MST - [Codex] pinned release-byte promotion
+
+- Draft PR #11 validated exact source head
+  `3979175ae05868c46bdd6ff7593127abef422fd6` in run `31065668215`, job
+  `92502746696`. Static, scientific-helper, idempotent normalization,
+  deterministic-index, pinned-manifest, bundle/index/manifest, and offline-source
+  gates passed. The run stopped only at the intentional committed-release-byte
+  equality guard after uploading the validated candidate.
+- Downloaded artifact `8953827399`,
+  `plant-phenology-release-candidate-3979175ae05868c46bdd6ff7593127abef422fd6`,
+  and verified its archive digest as
+  `sha256:6e28bbb8b2de4f560f07de5187f05a5f15e1f9426d74fffadb86defe5c0ef7b9`.
+  Extracted all five registered files directly without rebuilding or hand editing.
+  The four RDS files reproduced the reviewed candidate bytes; only
+  `manifest.json` changed, from SHA-256
+  `512737700fdad555264737303439a1816eb189f5ec456e7420aa40dc9165d29b` to
+  `77f4a43544cba60cf8a14df7eb7d3838000d29598c899dc20f261b05ea78bc1d`.
+- This is release-byte promotion for the cover-only source change. It does not
+  alter a bundle, index, estimator, scientific threshold, source family,
+  ecological disposition, or Driver artifact. Next action: commit and push the
+  promoted manifest, then require the complete validator to pass on that exact
+  amended PR head before review or publication.
+
 ## 2026-08-05 19:23:15 MST - [Codex] visible art-label removal candidate
 
 - Scope began from clean exact `origin/master`
