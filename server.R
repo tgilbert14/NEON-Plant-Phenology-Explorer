@@ -142,7 +142,7 @@ server <- function(input, output, session) {
   # STATIC leafletOutput in ui (never inside renderUI — avoids the re-bind race).
   output$nationalMap <- leaflet::renderLeaflet({
     st <- site_table[is.finite(site_table$lat) & is.finite(site_table$lng), , drop=FALSE]
-    if (!nrow(st)) return(leaflet::leaflet() %>% leaflet::addProviderTiles("CartoDB.Positron") %>% leaflet::setView(-96, 38, 3))
+    if (!nrow(st)) return(leaflet::leaflet() %>% add_suite_basemap("CartoDB.Positron") %>% leaflet::setView(-96, 38, 3))
     gv <- if ("median_greenup" %in% names(st)) suppressWarnings(as.numeric(st$median_greenup)) else rep(NA_real_, nrow(st))
     gs0 <- if ("gu_share" %in% names(st)) suppressWarnings(as.numeric(st$gu_share)) else rep(NA_real_, nrow(st))
     # robust [p5,p95] colour domain from WELL-COVERED sites only, then clamp every
@@ -174,7 +174,7 @@ server <- function(input, output, session) {
       st$n_individuals, st$n_species, gtxt, covtxt, gsub("'", "", st$name), st$site, st$site)
     lab <- sprintf("<b>%s</b> · %s<br>%s plants%s · tap for details", st$site, st$name, st$n_individuals,
       ifelse(thin, " · thin green-up coverage", ""))
-    leaflet::leaflet(st) %>% leaflet::addProviderTiles("CartoDB.Positron") %>%
+    leaflet::leaflet(st) %>% add_suite_basemap("CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng=~lng, lat=~lat, radius=~radius, layerId=~site,
         fillColor=pal(gv_col), color=mk_stroke, weight=1, fillOpacity=mk_opacity,
         label=lapply(lab, htmltools::HTML), popup=pop,
@@ -776,7 +776,7 @@ server <- function(input, output, session) {
                  ifelse(thin & gp_pct > 0, sprintf(" (%d%% of plants)", gp_pct), ""), la_str)
     metric_line <- if (metric == "leaf_active") lead_la else if (metric == "greenup") lead_gu else lead_n
     lab <- sprintf("<b>%s</b> · %d plants<br>%s", short_plot(ps$plotID), ps$n_ind, metric_line)
-    leaflet::leaflet(ps) %>% leaflet::addProviderTiles(input$view %||% "CartoDB.Positron") %>%
+    leaflet::leaflet(ps) %>% add_suite_basemap(input$view %||% "CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng = ~lng, lat = ~lat, radius = ~radius, fillColor = pal(val), color = "#fff", weight = 1, fillOpacity = 0.85,
         label = lapply(lab, htmltools::HTML), popup = lapply(lab, htmltools::HTML)) %>%
       leaflet::addLegend("bottomright", pal = pal, values = val[has], title = legtitle, na.label = nalab)
