@@ -176,10 +176,12 @@ This is now the standard; shinyapps.io (small-mammal reference) is legacy and sl
   branch its own Connect Cloud app watches. Standardize new repos on `main`.
 
 **Validated refresh candidate (`.github/workflows/refresh-data.yml`) — copy this shape:**
-- **Schedule (identical across the suite):** `cron: "0 6 * * 0"` (Sunday 06:00 UTC = Saturday 23:00
-  America/Phoenix, off-peak), with a **gate job** that proceeds only on the **first Saturday of the
-  month** (`dow=6 && day<=7`, `TZ=America/Phoenix`) — cron can't say "first Saturday", so fire weekly
-  and gate. `workflow_dispatch` with a `skip_download` input always proceeds (fast redeploy test).
+- **Schedule (identical across the suite):** `cron: "17 13 * * 6"` (Saturday 13:17 UTC = 06:17
+  America/Phoenix, clear of the UTC-midnight edge), with a **gate job** whose shared calendar block
+  (byte-identical in every repo; only `REFRESH_WEEK` differs: 1 for product apps, 2 for the Driver)
+  judges the Saturday the run was scheduled for, not the wall clock, so a late start still refreshes;
+  a skip inside the refresh week emits a `::warning::`, and every decision writes a step-summary line.
+  The shared token probe step then hits a NEON data endpoint, so a bad token fails before any fetch. `workflow_dispatch` with a `skip_download` input always proceeds (fast redeploy test).
 - **Flow:** gate → read-only fetch into empty staging → immutable raw artifact → separately pinned,
   read-only validator builds the complete expected roster → scientific/schema/determinism/offline
   gates → immutable candidate artifact → restricted publisher opens or updates a review PR. Never
