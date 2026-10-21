@@ -96,8 +96,22 @@ document.addEventListener("DOMContentLoaded", function () {
   // the relocated select panel) needs a moment to settle its width before
   // Leaflet measures, or the national map captures a half-width and paints
   // narrow. Dispatch resize across several frames to catch the settled layout.
+  // Each pass only touches maps that are laid out (clientWidth > 0): a hidden
+  // map measured at width 0 would cache a zero size and paint blank or narrow.
   Shiny.addCustomMessageHandler("kickMaps", function (_msg) {
-    var kick = function () { try { window.dispatchEvent(new Event("resize")); } catch (e) {} };
+    var kick = function () {
+      var shown = 0;
+      document.querySelectorAll(".leaflet-container").forEach(function (el) {
+        if (!(el.clientWidth > 0)) return;
+        shown++;
+        try {
+          var w = (el.id && window.HTMLWidgets) ? HTMLWidgets.find("#" + el.id) : null;
+          var map = w && w.getMap ? w.getMap() : null;
+          if (map && map.invalidateSize) map.invalidateSize();
+        } catch (e) {}
+      });
+      if (shown) { try { window.dispatchEvent(new Event("resize")); } catch (e) {} }
+    };
     requestAnimationFrame(kick);
     [80, 250, 500, 900].forEach(function (t) { setTimeout(kick, t); });
   });

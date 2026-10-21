@@ -1,6 +1,21 @@
 # NEON Plant Phenology Explorer — Data Takeaways & Critical Review
 _Suite audit — June 2026. NEON DP1.10055.001 (Plant phenology observations)._
 
+> **Correction, 2026-10-21 (suite audit 2026-10-18, item 12).** Several numbers below
+> describe the earlier green-up and leaf-active definitions and are superseded. The
+> desert "coverage cliff" was mostly the app's definition: drought-deciduous shrubs
+> are scored for Young leaves, not bud-break, and now count that first new flush as
+> green-up, so SRER coverage is 0.64, not 0.19. A January 'yes' that was already
+> 'yes' at the last December visit is now read as carried-over leaves, so SRER's
+> green-up is day 77 to 88, not day 33 or 42, and LAJA's day 5 becomes day 90 to 108.
+> Leaf-active is now the interval-censored span of each leafy run over fully visited
+> years (the old weeks x 7 tracked visit effort), so site leaf-active medians rise
+> (SRER 268 to 350 days). Sites watched fewer than three seasons (DCFS, KONA, STEI,
+> STER) and sites where most plants were already greening at the first visit (BARR,
+> NIWO, ONAQ, WOOD, YELL) no longer publish a single green-up day. The current
+> numbers and rules are in `docs/BUILD-TEST-HANDOFF.md` (2026-10-21 entry) and
+> `docs/DRIVER-KNOWLEDGE-PACKAGE.md`.
+
 This is the app that produces the suite's **one robust pooled link** — temperature → green-up onset.
 It is also the cleanest-built sibling reviewed: honest metric definitions, a shipped codebook, n-gates,
 and CI-aware verdicts. The findings below are about sharpening the cascade hand-off and one structural

@@ -34,8 +34,9 @@ phenology_poster <- function() {
 }
 
 ui <- bslib::page_fillable(
-  theme = app_theme, title = NULL,
-  window_title = "NEON Plant Phenology Explorer", fillable = FALSE,
+  # page_fillable() has no window_title or fillable argument: anything unnamed
+  # in its signature leaks onto <body> as an attribute. title sets <title>.
+  theme = app_theme, title = "NEON Plant Phenology Explorer", lang = "en",
   tags$head(
     tags$meta(name = "ddl-app-ready", content = "plant-phenology-v1"),
     tags$link(rel = "stylesheet", href = asset_url("styles.css")),
@@ -63,6 +64,8 @@ ui <- bslib::page_fillable(
         input_dark_mode(id = "colorMode", mode = "light")))
   ),
 
+  # One main landmark: everything after the top bar, up to the footer.
+  tags$main(id = "main", class = "bslib-gap-spacing",
   # "Open a plant's profile" picker — was in the sidebar, now a hidden body
   # block revealed on site load (server: shinyjs::show("spPickerWrap")). Same
   # ids (indSel, surpriseBtn) so the server logic is untouched.
@@ -186,7 +189,7 @@ ui <- bslib::page_fillable(
         div(class = "tab-head", div(class = "tab-head-text",
           h4("Every plant on one board",
              info_pop("Onset Lab",
-               p("Each dot is a ", tags$b("tagged plant"), ", placed by its ", tags$b("green-up onset"), " (median day-of-year it first breaks leaf) and its ", tags$b("leaf-active days"), " (how many days a year it actually carries leaves, counted week by week, so a desert plant that flushes twice with the rains isn't credited a 300-day season)."),
+               p("Each dot is a ", tags$b("tagged plant"), ", placed by its ", tags$b("green-up onset"), " (median day-of-year it first breaks leaf) and its ", tags$b("leaf-active days"), " (how many days a year it actually carries leaves, summed over each run of leafy visits, so a desert plant that flushes twice with the rains isn't credited a 300-day season)."),
                p(tags$b("Tap a dot"), " to pin its card; tap “Open plant profile” for its full phenophase career. Faint dots don't yet have both leaf-out and leaf-active days recorded."))),
           p("Each dot is a plant: when it wakes × how many days it carries leaves. Tap to pin a card; open any plant's full career.")),
           div(class = "sizelab-controls",
@@ -277,10 +280,10 @@ ui <- bslib::page_fillable(
             div(class = "search-table-wrap", DTOutput("searchThresholdTbl")))),
         div(class = "search-foot",
           p(class = "caveat", bs_icon("info-circle"),
-            " Median green-up day is pooled across a site's monitored plants (for a species, across at least three tagged individuals). Day 1 is January 1; day 120 is about the end of April."))),
+            " Median green-up day is pooled across a site's monitored plants. For a species, green-up is shown where at least three tagged plants at that site have one in fully visited years, and days carrying leaves where at least three plants carry a value; other rows still list the species with those values blank. Day 1 is January 1; day 120 is about the end of April. Sites where most plants were already greening at the first visit, or watched for fewer than three seasons, have no green-up day and are left out of the day search; where a site's green-up is a range, the day search uses its later end."))),
 
       nav_panel(title = tagList(bs_icon("info-circle"), " About"), value = "about", uiOutput("aboutPanel"))
-    )),
+    ))),
   div(class = "ddl-footer",
     div(tags$a(class = "custom-cta", href = "mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Phenology%20Explorer",
       span(class = "hand", "\U0001F44B"), "Questions or feedback? Get in touch with Desert Data Labs.")),

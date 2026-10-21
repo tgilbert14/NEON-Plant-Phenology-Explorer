@@ -26,7 +26,29 @@ for (f in files) {
   # working copy so the summarisers see character (matches bundle_phe_data.R).
   obs_chr <- b$obs; for (cc in c("phenophaseName","status","intensity","growthForm"))
     if (cc %in% names(obs_chr)) obs_chr[[cc]] <- as.character(obs_chr[[cc]])
-  ind_s <- b$ind_summary %||% individual_summary(obs_chr, b$inds)
+  # Re-derive the per-plant summary and the species-year trend from obs on every
+  # rebuild instead of reusing the stored tables: the stored ind_summary carried a
+  # summarise-reassignment bug (every *_n_years capped at 1) and the estimand
+  # changed (Young-leaves green-up fallback, site-year support gate), so a stored
+  # table can only be trusted when it reproduces from the observations. The
+  # refreshed tables are written back into the committed bundle so the app, the
+  # export and the indexes read one definition. dayOfYear is coalesced from date
+  # first (older bundles kept ~15k valid-date rows with a blank dayOfYear).
+  obs_chr <- normalize_doy(obs_chr)
+  ind_s <- individual_summary(obs_chr, b$inds)
+  trend <- onset_trend(obs_chr)
+  obs_new <- normalize_doy(b$obs)
+  changed <- !identical(obs_new$dayOfYear, b$obs$dayOfYear) ||
+    !isTRUE(all.equal(as.data.frame(ind_s), as.data.frame(b$ind_summary), check.attributes = FALSE)) ||
+    !isTRUE(all.equal(trend, b$trend, check.attributes = FALSE))
+  if (changed) {
+    b$obs <- obs_new
+    b$ind_summary <- ind_s
+    b["trend"] <- list(trend)   # `$trend <- NULL` would delete the field
+    saveRDS(b, f, compress = "xz")
+    if (identical(s, "HARV")) saveRDS(b, file.path("data-sample", "demo.rds"), compress = "xz")
+    cat("  rewrote", basename(f), "(ind_summary/trend re-derived)\n")
+  }
   summ[[s]] <- site_phe_summary(obs_chr, b$inds, b$meta, ind_s)
   sp <- site_species_onsets(obs_chr, b$inds, b$meta)
   if (!is.null(sp)) nat[[s]] <- sp

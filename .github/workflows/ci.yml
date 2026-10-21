@@ -152,7 +152,8 @@ jobs:
         with:
           name: plant-phenology-release-candidate-${{ env.PHE_SOURCE_SHA }}
           path: |
-            data/sites/KONA.rds
+            data/sites/*.rds
+            data-sample/demo.rds
             data/site_index.rds
             data/national_onsets.rds
             data/search_index.rds

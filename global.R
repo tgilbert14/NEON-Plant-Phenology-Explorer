@@ -89,9 +89,15 @@ APP_VERSION <- "2.0 (Field Notebook)"
 BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
 site_table <- if (length(BUNDLED)) {
   m <- neon_sites[match(BUNDLED, neon_sites$site), ]
-  want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots","gu_share","median_visit_interval"), names(SITE_INDEX))
+  want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots","gu_share","median_visit_interval",
+                      "greenup_lc_share","greenup_fallback_share","n_supported_years","n_years_watched",
+                      "greenup_hi","greenup_lo","greenup_status","greenup_autumn_forms"), names(SITE_INDEX))
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), want, drop = FALSE])
 } else neon_sites[0, ]
+
+# The picker opens on this site (and its state) when it is bundled; server.R
+# falls back to the first bundled state/site otherwise.
+DEFAULT_SITE <- "SRER"
 
 # picker offers only the sites we actually bundled (honest UX)
 phe_state_choices <- function() {

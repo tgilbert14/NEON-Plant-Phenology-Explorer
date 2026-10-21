@@ -256,7 +256,12 @@
  * Only rendered server-side when green-up coverage is thin (warm deserts), so
  * it never clutters the default forest view. A small amber chip that opens a
  * popover explaining the bias + pointing to leaf-active. */
-.hero-cov-row { margin-top: 10px; }
+.hero-cov-row { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+/* one plain sentence explaining a green-up range, upper bound or short record */
+.hero-gu-note { margin: 0; flex: 1 1 260px; min-width: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+/* static hero value (a range, "or earlier", or n/a) is text, so it is a size smaller than a count */
+.hero-stat .hs-v.hs-v-static { font-size: 22px; white-space: nowrap; }
+@media (max-width: 420px) { .hero-stat .hs-v.hs-v-static { font-size: 18px; white-space: normal; } }
 .map-cov-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 2px 2px 12px; }
 .gu-cov-badge {
   display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
@@ -641,3 +646,8 @@ table.dataTable td .search-go-btn { margin: 0; }
   .search-mode-wrap .radio-inline, .search-mode-wrap .form-check-inline {
     display: block; margin: 6px 0; }
 }
+
+/* #main wraps everything between the top bar and the footer (one main
+   landmark). Keep the stacked flex column and gap that the page_fillable
+   <body> gave these blocks before they were wrapped. */
+#main { display: flex; flex-direction: column; gap: var(--bslib-spacer, 1rem); min-width: 0; }

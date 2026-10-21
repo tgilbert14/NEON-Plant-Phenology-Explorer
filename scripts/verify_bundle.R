@@ -12,6 +12,8 @@ rows_of <- function(x) {
 }
 
 source("R/site_metadata.R")
+suppressPackageStartupMessages({ library(dplyr); library(tibble) })
+source("R/phe_helpers.R")
 EXPECTED_SITES <- sort(as.character(neon_sites$site))
 EXPECTED_R_PLATFORM <- "4.5.2"
 EXPECTED_REPOSITORY <-
@@ -48,12 +50,17 @@ INDS_REQUIRED <- c(
 SITE_INDEX_REQUIRED <- c(
   "site", "n_individuals", "n_species", "n_obs", "n_plots", "dominant_form",
   "median_greenup", "median_leaf_active", "gu_share", "median_visit_interval",
+  "greenup_hi", "greenup_lo", "greenup_status", "greenup_autumn_forms",
+  "greenup_lc_share", "greenup_fallback_share", "n_supported_years", "n_years_watched",
   "year_min", "year_max", "elevation_m"
 )
 IND_SUMMARY_REQUIRED <- c(
   INDS_REQUIRED, "greenup", "flower", "leaf_off", "leaf_active",
-  "greenup_n_years", "flower_n_years", "leaf_active_n_years", "n_years"
+  "greenup_n_years", "flower_n_years", "leaf_active_n_years", "n_years",
+  "greenup_source", "greenup_lc_years", "n_years_watched"
 )
+GREENUP_SOURCES <- c("bud-break", "young-leaves")
+GREENUP_STATUSES <- c("point", "range", "upper_bound", "short_record", "none")
 TREND_REQUIRED <- c("scientificName", "year", "onset", "n")
 SEARCH_TAXA_REQUIRED <- c(
   "scientificName", "growthForm", "site", "state", "lat", "lng",
@@ -75,6 +82,7 @@ if (!identical(site_codes, EXPECTED_SITES))
                paste(setdiff(site_codes, EXPECTED_SITES), collapse = ",")))
 
 loaded <- 0L
+roster_keys <- character(0)   # every species-level site x scientificName in the bundles
 latest_observation_date <- as.Date(NA)
 for (path in site_files) {
   code <- sub("\\.rds$", "", basename(path))
@@ -109,6 +117,53 @@ for (path in site_files) {
     if (length(observed_dates))
       latest_observation_date <- max(c(latest_observation_date, observed_dates), na.rm = TRUE)
   }
+  # audit 2026-10-18 item 12: a valid date must always carry its dayOfYear
+  if (is.data.frame(bundle$obs) && all(c("dayOfYear", "date") %in% names(bundle$obs)) &&
+      any(is.na(bundle$obs$dayOfYear) & !is.na(bundle$obs$date)))
+    note(sprintf("%s has %d valid-date rows with NA dayOfYear (coalesce from date)", path,
+                 sum(is.na(bundle$obs$dayOfYear) & !is.na(bundle$obs$date))))
+  # the stored per-plant summary and trend must reproduce from obs under the
+  # current helpers (catches the n_years cap, a stale estimand, or a summary
+  # rebuilt without the Young-leaves fallback or the site-year support gate)
+  if (is.data.frame(bundle$obs) && is.data.frame(bundle$inds) && is.data.frame(bundle$ind_summary)) {
+    obs_chr <- bundle$obs
+    for (cc in c("phenophaseName", "status", "intensity", "growthForm"))
+      if (cc %in% names(obs_chr)) obs_chr[[cc]] <- as.character(obs_chr[[cc]])
+    fresh <- tryCatch(individual_summary(obs_chr, bundle$inds), error = function(e) e)
+    if (inherits(fresh, "error")) {
+      note(sprintf("%s individual_summary failed: %s", path, conditionMessage(fresh)))
+    } else if (!is.null(fresh)) {
+      cols <- intersect(c("greenup", "flower", "leaf_off", "leaf_active", "greenup_source", "greenup_n_years",
+                          "flower_n_years", "leaf_active_n_years", "greenup_lc_years", "n_years",
+                          "n_years_watched"), names(bundle$ind_summary))
+      a <- as.data.frame(fresh)[order(fresh$individualID), cols, drop = FALSE]
+      b <- as.data.frame(bundle$ind_summary)[order(bundle$ind_summary$individualID), cols, drop = FALSE]
+      if (nrow(a) != nrow(b) || !isTRUE(all.equal(a, b, check.attributes = FALSE)))
+        note(sprintf("%s ind_summary does not reproduce from obs (stale estimand or n_years bug)", path))
+      # the summarise-reassignment signature: plants with a green-up in several
+      # years, yet the stored count never exceeds 1
+      stored_n <- bundle$ind_summary$greenup_n_years
+      if (!is.null(stored_n) && "greenup_n_years" %in% names(fresh) &&
+          any(fresh$greenup_n_years > 1L, na.rm = TRUE) && max(c(0L, stored_n), na.rm = TRUE) <= 1L)
+        note(sprintf("%s greenup_n_years is capped at 1 (summarise reassignment)", path))
+      if ("greenup_source" %in% names(bundle$ind_summary)) {
+        src <- bundle$ind_summary$greenup_source
+        if (any(!is.na(src) & !src %in% GREENUP_SOURCES))
+          note(sprintf("%s ind_summary has an unknown greenup_source", path))
+        if (any(is.finite(bundle$ind_summary$greenup) & is.na(src)))
+          note(sprintf("%s ind_summary has a green-up value with no greenup_source", path))
+      }
+    }
+    fresh_trend <- tryCatch(onset_trend(obs_chr), error = function(e) e)
+    if (!inherits(fresh_trend, "error") &&
+        !isTRUE(all.equal(as.data.frame(fresh_trend %||% data.frame()),
+                          as.data.frame(bundle$trend %||% data.frame()), check.attributes = FALSE)))
+      note(sprintf("%s trend does not reproduce from obs under the current helpers", path))
+    sup <- site_year_support(obs_chr)
+    if (!is.null(bundle$trend) && is.data.frame(bundle$trend) && "year" %in% names(bundle$trend) &&
+        any(!bundle$trend$year %in% sup$year[sup$year_supported]))
+      note(sprintf("%s trend contains an unsupported site-year", path))
+  }
   if (!is.data.frame(bundle$ind_summary) || rows_of(bundle$ind_summary) <= 0L) {
     note(sprintf("%s has an empty/non-data-frame ind_summary", path))
   } else {
@@ -140,6 +195,10 @@ for (path in site_files) {
         note(sprintf("%s trend contains a year absent from obs", path))
     }
   }
+  if (is.data.frame(bundle$inds) && all(c("scientificName", "is_species") %in% names(bundle$inds))) {
+    sp <- bundle$inds[bundle$inds$is_species %in% TRUE & !is.na(bundle$inds$scientificName), , drop = FALSE]
+    roster_keys <- c(roster_keys, paste(code, sp$scientificName, sep = "\r"))
+  }
   loaded <- loaded + 1L
 }
 cat(sprintf("bundles: %d expected, %d loaded with required container\n",
@@ -165,6 +224,20 @@ if (!is.null(site_index)) {
     if (length(missing)) note(sprintf("site_index lacks: %s", paste(missing, collapse = ",")))
     if (!identical(sort(as.character(site_index$site)), EXPECTED_SITES))
       note("site_index site set does not match R/site_metadata.R")
+    if ("greenup_status" %in% names(site_index)) {
+      st <- as.character(site_index$greenup_status)
+      if (any(!st %in% GREENUP_STATUSES))
+        note("site_index has an unknown greenup_status")
+      # the numeric median is published only for a point or a range; an upper
+      # bound or a short record must stay NA so no map or index reads it as a day
+      shown <- st %in% c("point", "range")
+      if (any(is.finite(site_index$median_greenup) & !shown) || any(!is.finite(site_index$median_greenup) & shown))
+        note("site_index median_greenup disagrees with greenup_status")
+      if (any(st == "range" & !(is.finite(site_index$greenup_lo) & site_index$greenup_lo < site_index$greenup_hi)))
+        note("site_index has a green-up range without a finite lower bound below the upper")
+      if (any(st == "short_record" & is.finite(site_index$median_leaf_active)))
+        note("site_index publishes leaf-active for a short-record site")
+    }
   }
 }
 
@@ -205,8 +278,15 @@ if (!is.null(search)) {
         all(c("site", "scientificName") %in% names(search$taxa))) {
       national_keys <- sort(unique(paste(national$site, national$scientificName, sep = "\r")))
       search_keys <- sort(unique(paste(search$taxa$site, search$taxa$scientificName, sep = "\r")))
-      if (!identical(search_keys, national_keys))
-        note("search_index taxa keys do not match national_onsets")
+      # the search roster is every species-level plant in the bundles (audit item
+      # 13: Prosopis/Larrea were missing because the roster was national_onsets);
+      # every supported national_onsets row must still be findable
+      if (length(setdiff(national_keys, search_keys)))
+        note("search_index taxa lacks site-species rows that national_onsets carries")
+      missing_roster <- setdiff(unique(roster_keys), search_keys)
+      if (length(missing_roster))
+        note(sprintf("search_index cannot find %d species-level plants in the bundles, e.g. %s",
+                     length(missing_roster), sub("\r", " ", missing_roster[1], fixed = TRUE)))
     }
     if (!is.null(site_index) && is.data.frame(site_index) &&
         all(c("site", "median_greenup") %in% names(site_index)) &&
