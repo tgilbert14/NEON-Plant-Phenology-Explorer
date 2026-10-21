@@ -35,8 +35,6 @@
 # (skip_download-safe: reads only committed bundles, never NEON.)
 # ===========================================================================
 suppressWarnings(suppressMessages({ library(dplyr); library(tibble) }))
-if (dir.exists("C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Phenology"))
-  setwd("C:/Users/tsgil/OneDrive/Documents/VGS - R/NEON-Plant-Phenology")
 source("R/site_metadata.R")     # neon_sites (name/state)
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
