@@ -46,7 +46,7 @@ add_suite_basemap <- function(map, basemap = "light_all", noWrap = FALSE) {
       urlTemplate = sprintf(
         "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_%s_Gray_Base/MapServer/tile/{z}/{y}/{x}",
         if (identical(variant, "dark_all")) "Dark" else "Light"),
-      attribution = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
+      attribution = 'Tiles &copy; Esri; sources: Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
       options = leaflet::tileOptions(maxNativeZoom = 16, maxZoom = 19, noWrap = noWrap))
   }
 }
@@ -61,7 +61,7 @@ LIVE_FETCH <- (Sys.getenv("PHE_LIVE", "0") != "0") && requireNamespace(.NEON_PKG
 
 SITE_DIR  <- "data/sites"
 DEMO_PATH <- "data-sample/demo.rds"
-DEMO_META <- list(site = "HARV", label = "HARV · Harvard Forest · demo")
+DEMO_META <- list(site = "SRER", label = "SRER · Santa Rita Experimental Range · demo")
 
 read_bundle <- function(f) {
   if (!file.exists(f)) return(NULL)
@@ -70,7 +70,14 @@ read_bundle <- function(f) {
   if (is.data.frame(out)) return(out)
   if (is.null(out$obs) || !nrow(out$obs)) NULL else out
 }
-load_site_bundle <- function(site) read_bundle(file.path(SITE_DIR, paste0(site, ".rds")))
+# Allowlist before the path is built: the site code can arrive from the client
+# (pickSite, siteSearch, searchGo, the ?site= query string), so only a 4-letter
+# NEON site code from neon_sites may reach file.path()/readRDS().
+load_site_bundle <- function(site) {
+  if (!is.character(site) || length(site) != 1L || is.na(site) || !grepl("^[A-Z]{4}$", site) ||
+      !(site %in% neon_sites$site)) return(NULL)
+  read_bundle(file.path(SITE_DIR, paste0(site, ".rds")))
+}
 load_demo <- function() { b <- load_site_bundle(DEMO_META$site); if (!is.null(b)) b else read_bundle(DEMO_PATH) }
 
 SITE_INDEX <- tryCatch(readRDS("data/site_index.rds"), error = function(e) NULL)
@@ -138,6 +145,9 @@ DDL <- list(
 rubik_stack <- bslib::font_collection(
   "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"
 )
+
+# PDF site report (base grid + cairo_pdf); sourced after DDL so it uses the app palette
+source("R/report_pdf.R", local = FALSE)
 fraunces_stack <- bslib::font_collection(
   "Georgia", "Cambria", "Times New Roman", "serif"
 )
@@ -149,8 +159,11 @@ app_theme <- bs_theme(version = 5, bg = "#f6f3ea", fg = DDL$ink,
 asset_url <- function(path) { f <- file.path("www", path)
   v <- if (file.exists(f)) as.integer(as.numeric(file.mtime(f))) else 0L; sprintf("%s?v=%s", path, v) }
 spin <- function(x, img = NULL) shinycssloaders::withSpinner(x, color = DDL$green, type = 6)
-info_pop <- function(title, ..., placement = "auto")
-  bslib::popover(tags$span(class = "info-dot", bsicons::bs_icon("info-circle")), ..., title = title, placement = placement)
+info_pop <- function(title, ..., placement = "auto") {
+  lab <- if (is.character(title) && length(title) == 1L && nzchar(title)) paste("More about", title) else "More information"
+  bslib::popover(tags$span(class = "info-dot", role = "button", tabindex = "0", `aria-label` = lab,
+                           bsicons::bs_icon("info-circle")), ..., title = title, placement = placement)
+}
 insight_banner <- function(icon, ..., tone = "navy")
   div(class = paste("chart-insight", paste0("ci-", tone)), bsicons::bs_icon(icon), div(class = "ci-text", ...))
 glow_badge <- function(label, color = DDL$primary, glow = color)
@@ -165,15 +178,18 @@ doy_to_month <- function(d) format(as.Date(d - 1, origin = "2021-01-01"), "%b %d
 # the loading spinner, the splash guide, and the celebration hop. Parts are
 # classed so the CSS can wiggle leaves / blink eyes.
 # --- the suite registry (in-app "Explore the NEON series" block) ----------
-# Mirrors the constellation in docs/index.html. Each sibling links to its live
+# Mirrors the constellation in docs/index.html: the hub (the Cross-Product
+# Response Atlas, repo NEON-Driver-Cascade) plus all nine product explorers,
+# this one included. Each URL was checked to return 200 on 2026-10-21. Each sibling links to its live
 # github.io landing (which fronts the Connect Cloud app). Kept here so the About
 # modal + sidebar footer cross-promote the WHOLE suite (suite-cohesion standard).
 SIBLINGS <- list(
-  list(name = "Driver Cascade",   icon = "diagram-3-fill",   url = "https://tgilbert14.github.io/NEON-Driver-Cascade/"),
+  list(name = "NEON Cross-Product Response Atlas", icon = "diagram-3-fill", url = "https://tgilbert14.github.io/NEON-Driver-Cascade/"),
   list(name = "Small Mammals",    icon = "bug-fill",          url = "https://tgilbert14.github.io/NEON-Small-Mammal-Tracker-App/"),
   list(name = "Breeding Birds",   icon = "feather",           url = "https://tgilbert14.github.io/NEON-Breeding-Birds/"),
   list(name = "Ground Beetles",   icon = "bug",               url = "https://tgilbert14.github.io/NEON-Ground-Beetle-Tracker/"),
   list(name = "Plant Diversity",  icon = "flower2",           url = "https://tgilbert14.github.io/NEON-Plant-Diversity/"),
+  list(name = "Plant Phenology",  icon = "flower3",           url = "https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/"),
   list(name = "Veg Structure",    icon = "tree-fill",         url = "https://tgilbert14.github.io/NEON-Vegetation-Structure-Explorer/"),
   list(name = "Water Chemistry",  icon = "droplet-fill",      url = "https://tgilbert14.github.io/NEON-WaterChemistry-Analyte-Viewer-App/"),
   list(name = "Mosquito Pulse",   icon = "bug-fill",          url = "https://tgilbert14.github.io/NEON-Mosquito-Pulse/"),
