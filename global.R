@@ -91,7 +91,8 @@ site_table <- if (length(BUNDLED)) {
   m <- neon_sites[match(BUNDLED, neon_sites$site), ]
   want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots","gu_share","median_visit_interval",
                       "greenup_lc_share","greenup_fallback_share","n_supported_years","n_years_watched",
-                      "greenup_hi","greenup_lo","greenup_status","greenup_autumn_forms"), names(SITE_INDEX))
+                      "greenup_hi","greenup_lo","greenup_status","greenup_autumn_forms",
+                      "greenup_carry_forms","greenup_carry_share"), names(SITE_INDEX))
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), want, drop = FALSE])
 } else neon_sites[0, ]
 

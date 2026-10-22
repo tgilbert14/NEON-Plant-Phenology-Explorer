@@ -61,7 +61,8 @@ server <- function(input, output, session) {
     list(found = nrow(row) > 0 && !is.na(status), status = if (is.na(status)) "none" else status,
          hi = num("greenup_hi"), lo = num("greenup_lo"), med = num("median_greenup"),
          la = num("median_leaf_active"), n_seasons = num("n_years_watched"),
-         forms = chr("greenup_autumn_forms"), fallback = num("greenup_fallback_share"))
+         forms = chr("greenup_autumn_forms"), carry_forms = chr("greenup_carry_forms"),
+         fallback = num("greenup_fallback_share"))
   }
   # "N season(s)" for the short-record sentence
   seasons_txt <- function(n) if (is.finite(n)) sprintf("%d season%s", as.integer(n), if (n == 1) "" else "s") else "too few seasons"
@@ -95,8 +96,8 @@ server <- function(input, output, session) {
     # for older bundles that predate the precompute.
     rv$ind_summary <- b$ind_summary %||% individual_summary(b$obs, b$inds)
     rv$trend <- b$trend %||% onset_trend(b$obs)
-    rv$la_trend <- leaf_active_trend(b$obs)   # desert-safe year-trend; works where green-up is too thin
     rv$support <- site_year_support(normalize_doy(b$obs))   # which years were visited on the usual schedule
+    rv$la_trend <- leaf_active_trend(b$obs, support = rv$support)   # desert-safe year-trend; works where green-up is too thin
     # SMART DEFAULT: at thin-green-up (desert) sites, default every metric toggle to
     # leaf-active — the read that survives where green-up collapses. One app-wide
     # threshold: green-up scored for < GU_COVERAGE_FLOOR (50%) of the roster. Users
@@ -361,12 +362,17 @@ server <- function(input, output, session) {
       short_record = short_record_txt(g$n_seasons),
       NULL)
     if (!is.null(gu_txt)) pts <- c(pts, gu_txt)
-    if (g$found && !is.na(g$forms) && nzchar(g$forms)) {
-      fm <- tolower(trimws(strsplit(g$forms, ";", fixed = TRUE)[[1]])); fm <- fm[nzchar(fm)]
-      fm <- ifelse(grepl("s$", fm), fm, paste0(fm, "s"))   # forb -> forbs, so the sentence reads as a plural
-      fm <- if (length(fm) > 1) paste(paste(fm[-length(fm)], collapse = ", "), "and", fm[length(fm)]) else fm
-      pts <- c(pts, sprintf("Here %s sprout with autumn rain, so they have no calendar-year green-up; read leaf-active days for them.", fm))
+    # growth-form list as a plural phrase: Forb -> forbs, Graminoid -> graminoids,
+    # anything else -> "<form> plants" (semi-evergreen broadleaf plants)
+    forms_phrase <- function(x) {
+      fm <- tolower(trimws(strsplit(x, ";", fixed = TRUE)[[1]])); fm <- fm[nzchar(fm)]
+      fm <- ifelse(fm %in% c("forb", "graminoid"), paste0(fm, "s"), paste(fm, "plants"))
+      if (length(fm) > 1) paste(paste(fm[-length(fm)], collapse = ", "), "and", fm[length(fm)]) else fm
     }
+    if (g$found && !is.na(g$forms) && nzchar(g$forms))
+      pts <- c(pts, sprintf("Here %s sprout with autumn rain, so they have no calendar-year green-up; read leaf-active days for them.", forms_phrase(g$forms)))
+    if (g$found && !is.na(g$carry_forms) && nzchar(g$carry_forms))
+      pts <- c(pts, sprintf("Here %s are still green at the turn of the year in most years, so they have no calendar-year green-up; read leaf-active days for them.", forms_phrase(g$carry_forms)))
     if (g$found && is.finite(g$fallback) && g$fallback > 0)
       pts <- c(pts, "Drought-deciduous shrubs count their first new 'Young leaves' of the year as green-up.")
     pts <- c(pts, "Phenology is recorded on a <b>fixed roster of tagged individuals</b> along transects. It captures <b>timing</b> (when each phenophase happens), not abundance. Open the Phenology Clock to see the year unfold.")
@@ -464,9 +470,11 @@ server <- function(input, output, session) {
       x=0, y=1.06, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))) else list()
     # name the reduced-visit years the trend leaves out (2020 COVID cut, partial
     # first years), so a gap in the line reads as missing effort, not biology
-    gone <- if (!is.null(rv$support)) rv$support$year[!rv$support$year_supported] else integer(0)
+    sup_col <- if (metric == "leaf_active") "leaf_supported" else "greenup_supported"
+    gone <- if (!is.null(rv$support) && sup_col %in% names(rv$support)) rv$support$year[!rv$support[[sup_col]]] else integer(0)
     if (length(gone)) note <- c(note, list(list(
-      text = sprintf("left out, too few visits that year: %s", paste(gone, collapse = ", ")),
+      text = sprintf("left out, visited less than usual or started late after the %s was already underway: %s",
+                     if (metric == "leaf_active") "leaf season" else "green-up", paste(gone, collapse = ", ")),
       x = 0, y = if (length(note)) 1.12 else 1.06, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
       font = list(size = 10.5, color = "#8a988f"))))
     p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Year", dtick=1), yaxis=list(title=yttl),
@@ -478,7 +486,7 @@ server <- function(input, output, session) {
     tr <- if (lf) rv$la_trend else rv$trend
     noun <- if (lf) "leaf-active days" else "green-up"
     sup <- rv$support
-    if (!is.null(sup) && nrow(sup) && "reason" %in% names(sup) && all(sup$reason %in% "short_record"))
+    if (!is.null(sup) && nrow(sup) && "greenup_reason" %in% names(sup) && all(sup$greenup_reason %in% "short_record"))
       return(insight_banner("hourglass-split", tone = "navy",
         "Too few seasons monitored here to check the visit schedule, so no trend is drawn."))
     # where most plants were already greening at the first visit, each year's
@@ -810,7 +818,7 @@ server <- function(input, output, session) {
         ko <- dplyr::left_join(ko, sp, by = "individualID")
         ko <- ko[, intersect(c("individualID","year","scientificName","growthForm",
                                "greenup","greenup_source","left_censored","carryover","flower","leaf_off","leaf_active","leaf_weeks",
-                               "year_supported"), names(ko)), drop=FALSE]
+                               "greenup_supported", "leaf_supported"), names(ko)), drop=FALSE]
       }
       clk <- weekly_yesrate(rv$obs, NULL)
       # individual_summary: the codebook documents taxonRank/is_species + the three
@@ -837,7 +845,7 @@ server <- function(input, output, session) {
         "Data product: NEON DP1.10055.001 (data.neonscience.org). Not affiliated with NEON/Battelle/NSF.", "",
         "FILES:",
         "  obs_long.csv                     one row per individual x visit x phenophase (tidy long)",
-        "  onsets_by_individual_year.csv    per individual-year green-up (+ greenup_source, left_censored, carryover), flower, leaf-off, leaf-active (+ leaf_weeks QC), year_supported",
+        "  onsets_by_individual_year.csv    per individual-year green-up (+ greenup_source, left_censored, carryover), flower, leaf-off, leaf-active (+ leaf_weeks QC), greenup_supported, leaf_supported",
         "  individual_summary.csv           one row per tagged plant (medians across SUPPORTED years; *_n_years are the n behind each median)",
         "  site_year_support.csv            per year: median visited weeks per plant, first visit day, and whether the year passed the support gate",
         "  phenology_clock_weekly.csv       % of scored plant-years 'yes' per phenophase/week (typical-year pool; n>=5)",
@@ -1020,7 +1028,7 @@ server <- function(input, output, session) {
         ": held within one species (<em>%s</em>, %d sites) the latitude slope is %.1f days per degree (95%% CI %.1f to %.1f, R&sup2;=%.2f)%s",
         sub("^([A-Z][a-z]+ [a-z\\-]+).*$", "\\1", ws_la$species), ws_la$n_sites, ws_la$slope, ws_la$lo, ws_la$hi, ws_la$r2,
         if (ws_la$lo < 0 && ws_la$hi > 0) ", not distinguishable from zero" else "") else ""
-      srer_txt <- if (length(srer) && is.finite(srer)) sprintf(", and the Sonoran desert at SRER carries leaves about <b>%d days</b> a year by a different mechanism (rain-driven flushes)", round(srer)) else ""
+      srer_txt <- if (length(srer) && is.finite(srer)) sprintf(", and the Sonoran desert at SRER reads about <b>%d days</b> a year because most of its tagged shrubs are scored in leaf on nearly every visit", round(srer)) else ""
       return(insight_banner("rulers", tone="pine", HTML(sprintf(paste0(
         "<b>Leaf-active days</b> measure growing-season <b>length</b>: how long a plant carries leaves, summed over each run of leafy visits, in years visited on the site's usual schedule. ",
         "They are driven by temperature <em>and</em> water and sorted by biome; this is <b>not</b> Hopkins' bioclimatic law (that governs green-up <em>onset</em>). ",

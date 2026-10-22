@@ -22,22 +22,26 @@
   deciduous broadleaf only (NEON never scores bud-break for that form). Evergreen
   shrubs without leaf buds (Larrea), cacti, leafless evergreens, and forms that
   sprout with autumn rain (SJER and SOAP forbs and graminoids) have no
-  calendar-year green-up. A January 'yes' that was also 'yes' at the plant's last
-  visit within 31 days is carried-over leaves, not an onset. Site and species
+  calendar-year green-up, and neither do forms that are green across the new year
+  in most years (LAJA grasses and semi-evergreen broadleaf). A January 'yes' that
+  was also 'yes' at the plant's last visit within 31 days is carried-over leaves,
+  not an onset. Site and species
   green-up are two-stage medians over supported years with a censoring lower bound;
   the published value is withheld (upper bound) where most plants were already
   greening at the first visit. Leaf-active is the interval-censored span of each
   run of Leaves = yes visits; the earlier weeks x 7 tracked visit effort (median
   within-site correlation 0.73 with visited weeks) and is kept only as `leaf_weeks`.
-- Opportunity and support. A site-year enters any median or trend only when the
-  site was visited on its usual schedule (median visit-weeks >= 0.75 of its
-  typical, first visit <= 30 days after its typical) and the site has >= 3 watched
-  seasons. Result: 265 supported site-years of 369 watched; 76 low effort (36 of
-  them in 2020), 22 late start, 6 short record. Sites: 32 point, 5 range,
-  5 upper-bound (BARR, NIWO, ONAQ, WOOD, YELL), 4 short-record (DCFS, KONA, STEI,
-  STER).
+- Opportunity and support. A site-year enters a metric's medians and trends only
+  when the site has >= 3 watched seasons, was visited on its usual schedule that
+  year (median visit-weeks >= 0.75 of its typical), and was not truncated by a
+  late start for that metric (green-up: >= half of the year's onsets censored or
+  coverage < half the site's typical; leaf: >= half of the plant-years already in
+  leaf at the first visit). Result: of 369 watched site-years, 276 supported for
+  green-up (76 low effort, 36 of them in 2020; 11 late start; 6 short record) and
+  273 for the leaf metrics. Sites: 33 point, 4 range, 5 upper-bound (BARR, NIWO,
+  ONAQ, WOOD, YELL), 4 short-record (DCFS, KONA, STEI, STER).
 - Eligible joins. App-supported finite-green-up site-years fall from 346 across 45
-  sites (39 with >= 6) to 265 across 42 sites (31 with >= 6). Driver-calendar and
+  sites (39 with >= 6) to 272 across 42 sites (33 with >= 6). Driver-calendar and
   eligible adapter rows for the corrected family are `UNMEASURED`; the 346/346
   calendar match belongs to the prior release only.
 - Atlas implication. The Atlas v2 adapter reads these bundles and computes its own

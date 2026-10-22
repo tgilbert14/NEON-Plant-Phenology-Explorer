@@ -7,7 +7,9 @@ _Suite audit — June 2026. NEON DP1.10055.001 (Plant phenology observations)._
 > are scored for Young leaves, not bud-break, and now count that first new flush as
 > green-up, so SRER coverage is 0.64, not 0.19. A January 'yes' that was already
 > 'yes' at the last December visit is now read as carried-over leaves, so SRER's
-> green-up is day 77 to 88, not day 33 or 42, and LAJA's day 5 becomes day 90 to 108.
+> green-up is day 77 to 88, not day 33 or 42. LAJA's grasses and semi-evergreen
+> shrubs are green across the new year in most years and have no calendar-year
+> green-up, so LAJA's day 5 becomes day 156 for the remaining fifth of its plants.
 > Leaf-active is now the interval-censored span of each leafy run over fully visited
 > years (the old weeks x 7 tracked visit effort), so site leaf-active medians rise
 > (SRER 268 to 350 days). Sites watched fewer than three seasons (DCFS, KONA, STEI,

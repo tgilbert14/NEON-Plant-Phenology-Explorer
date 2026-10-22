@@ -202,7 +202,7 @@ check(identical(yg$greenup[yg$individualID == "Y1"], 65) &&
 yl_trend <- bind_rows(lapply(c("Z1", "Z2", "Z3"), function(id) bind_rows(lapply(2019:2021, function(y) bind_rows(
   obs_row(id, y, 60, "no", "Young leaves", growthForm = "Drought deciduous broadleaf"),
   obs_row(id, y, 70, "yes", "Young leaves", growthForm = "Drought deciduous broadleaf"))))))
-check(nrow(greenup_onsets(yl_trend)) == 9L && all(site_year_support(yl_trend)$year_supported) &&
+check(nrow(greenup_onsets(yl_trend)) == 9L && all(site_year_support(yl_trend)$greenup_supported) &&
         is.null(onset_trend(yl_trend)),
       "onset trend excludes Young-leaves first flushes while per-plant green-up keeps them")
 
@@ -215,9 +215,10 @@ sup_fixture <- bind_rows(lapply(c("S1", "S2", "S3"), function(id) bind_rows(
 sup <- site_year_support(sup_fixture)
 ko_sup <- key_onsets(sup_fixture)
 las <- leaf_active_trend(sup_fixture)
-check(identical(sup$reason, c("supported", "low_effort", "supported")) &&
-        identical(sup$year_supported, c(TRUE, FALSE, TRUE)) &&
-        all(!ko_sup$year_supported[ko_sup$year == 2019]) && !2019 %in% las$year,
+check(identical(sup$leaf_reason, c("supported", "low_effort", "supported")) &&
+        identical(sup$greenup_reason, sup$leaf_reason) &&
+        identical(sup$leaf_supported, c(TRUE, FALSE, TRUE)) &&
+        all(!ko_sup$leaf_supported[ko_sup$year == 2019]) && !2019 %in% las$year,
       "site-year support gate excludes a half-effort year from leaf-active medians and trends")
 
 # Partial-year (carry-over) rule. C1: 'yes' at the last December visit and at
@@ -249,6 +250,65 @@ ag <- greenup_onsets(autumn_fixture)
 check(identical(attr(ag, "autumn_forms"), "Graminoid") && identical(ag$individualID, "B1"),
       "autumn-germinating forms are dropped from calendar-year green-up")
 
+# Carry-over-dominated forms: a form whose plant-years are mostly green across
+# the new year (>= 35% of >= 10 carried over) has no calendar-year green-up; its
+# "next flush" (here day 170) is a different event. A deciduous tree stays.
+carry_form <- bind_rows(
+  bind_rows(lapply(1:10, function(i) { id <- paste0("G", i); bind_rows(
+    obs_row(id, 2019, c(5, 360), "yes", "Initial growth", growthForm = "Graminoid"),
+    obs_row(id, 2020, 4, "yes", "Initial growth", growthForm = "Graminoid"),
+    obs_row(id, 2020, 60, "no", "Initial growth", growthForm = "Graminoid"),
+    obs_row(id, 2020, 280, "yes", "Initial growth", growthForm = "Graminoid")) })),
+  obs_row("D1", 2020, 80, "no", "Breaking leaf buds", growthForm = "Deciduous broadleaf"),
+  obs_row("D1", 2020, 90, "yes", "Breaking leaf buds", growthForm = "Deciduous broadleaf"))
+cf <- greenup_onsets(carry_form)
+check(identical(attr(cf, "carry_forms"), "Graminoid") && identical(attr(cf, "autumn_forms"), character(0)) &&
+        identical(unique(cf$individualID), "D1"),
+      "carry-over-dominated forms are dropped from calendar-year green-up")
+
+# Late start: a first visit 40 days late is late_start only when most of that
+# year's onsets were already underway; a late but uncensored year stays.
+late_obs <- function(id, y, days, yes_from) bind_rows(
+  obs_row(id, y, days[days < yes_from], "no", "Initial growth"),
+  obs_row(id, y, days[days >= yes_from], "yes", "Initial growth"))
+normal_days <- seq(10, 200, by = 7); late_days <- seq(50, 225, by = 7)
+late_fixture <- bind_rows(lapply(c("P1", "P2", "P3"), function(id) bind_rows(
+  bind_rows(lapply(2016:2019, function(y) late_obs(id, y, normal_days, 101))),
+  late_obs(id, 2020, late_days, 101),
+  late_obs(id, 2021, late_days, 0))))
+ls_sup <- site_year_support(late_fixture)
+check(identical(ls_sup$greenup_reason, c(rep("supported", 5), "late_start")) &&
+        identical(ls_sup$lc_share, c(0, 0, 0, 0, 0, 1)) &&
+        identical(ls_sup$leaf_reason, c(rep("supported", 4), "late_start", "late_start")),
+      "late start counts per metric, only when that metric was already underway at the first visit")
+
+# Coverage guard: a late year whose few onsets are uncensored but whose green-up
+# coverage collapsed (bud-break ended before the first visit) is still late_start.
+cov_fixture <- bind_rows(
+  bind_rows(lapply(c("P1", "P2", "P3"), function(id)
+    bind_rows(lapply(2016:2019, function(y) late_obs(id, y, normal_days, 101))))),
+  late_obs("P1", 2020, late_days, 101),
+  obs_row("P2", 2020, late_days, "no", "Leaves"), obs_row("P3", 2020, late_days, "no", "Leaves"))
+cv_sup <- site_year_support(cov_fixture)
+check(identical(cv_sup$greenup_reason, c(rep("supported", 4), "late_start")) &&
+        identical(cv_sup$lc_share[5], 0) && cv_sup$greenup_coverage_ratio[5] < LATE_START_COVERAGE,
+      "a late year with collapsed green-up coverage is late_start even when uncensored")
+
+# Leaf metrics: a late year where most plants were already in leaf at the first
+# visit is unsupported for leaf-active (the span is truncated) even when its
+# green-up was observed; a late year that starts before leaf-out stays.
+leaf_late <- function(id, y, days, leaf_from) bind_rows(
+  obs_row(id, y, days[days < leaf_from], "no", "Leaves"),
+  obs_row(id, y, days[days >= leaf_from], "yes", "Leaves"))
+leaf_fixture <- bind_rows(lapply(c("Q1", "Q2", "Q3"), function(id) bind_rows(
+  bind_rows(lapply(2016:2019, function(y) leaf_late(id, y, normal_days, 101))),
+  leaf_late(id, 2020, late_days, 101),
+  leaf_late(id, 2021, late_days, 0))))
+lf_sup <- site_year_support(leaf_fixture)
+check(identical(lf_sup$leaf_reason, c(rep("supported", 5), "late_start")) &&
+        identical(lf_sup$leaf_first_share, c(0, 0, 0, 0, 0, 1)),
+      "a late year already in leaf at the first visit is unsupported for leaf-active only")
+
 # Two-stage bounds: no censoring -> point; some censored plant-years -> range;
 # most plants censored -> upper bound with the numeric value withheld.
 bk <- function(g, lc) tibble(individualID = paste0("P", seq_along(g)), greenup = g, left_censored = lc)
@@ -267,7 +327,8 @@ check(b_point$status == "point" && b_upper$status == "upper_bound" && is.na(b_up
 short_fixture <- bind_rows(obs_row("S1", 2016, c(150, 157), "yes", "Leaves"),
                            obs_row("S1", 2017, c(150, 157), "yes", "Leaves"))
 ss <- site_year_support(short_fixture)
-check(!any(ss$year_supported) && all(ss$reason == "short_record"),
+check(!any(ss$greenup_supported) && !any(ss$leaf_supported) &&
+        all(ss$greenup_reason == "short_record") && all(ss$leaf_reason == "short_record"),
       "fewer than three watched seasons marks every year short_record")
 
 # Production-bundle smoke: the pure helpers must also execute against a committed

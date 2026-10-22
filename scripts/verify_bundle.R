@@ -51,7 +51,9 @@ SITE_INDEX_REQUIRED <- c(
   "site", "n_individuals", "n_species", "n_obs", "n_plots", "dominant_form",
   "median_greenup", "median_leaf_active", "gu_share", "median_visit_interval",
   "greenup_hi", "greenup_lo", "greenup_status", "greenup_autumn_forms",
-  "greenup_lc_share", "greenup_fallback_share", "n_supported_years", "n_years_watched",
+  "greenup_carry_forms", "greenup_carry_share",
+  "greenup_lc_share", "greenup_fallback_share", "n_supported_years", "n_leaf_supported_years",
+  "n_years_watched",
   "year_min", "year_max", "elevation_m"
 )
 IND_SUMMARY_REQUIRED <- c(
@@ -161,7 +163,7 @@ for (path in site_files) {
       note(sprintf("%s trend does not reproduce from obs under the current helpers", path))
     sup <- site_year_support(obs_chr)
     if (!is.null(bundle$trend) && is.data.frame(bundle$trend) && "year" %in% names(bundle$trend) &&
-        any(!bundle$trend$year %in% sup$year[sup$year_supported]))
+        any(!bundle$trend$year %in% sup$year[sup$greenup_supported]))
       note(sprintf("%s trend contains an unsupported site-year", path))
   }
   if (!is.data.frame(bundle$ind_summary) || rows_of(bundle$ind_summary) <= 0L) {
