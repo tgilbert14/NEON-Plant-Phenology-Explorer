@@ -10,6 +10,55 @@
   nor the existing temperature -> green-up vote is authorized to change or vote in
   Driver from this package.
 
+## 2026-10-21 estimand correction (audit 2026-10-18 item 12)
+
+- Decision: `HOLD / NO DRIVER BYTE CHANGE` (`scientific-contract`,
+  `Driver-impacting`). The app-local green-up and leaf-active estimands changed;
+  no Driver artifact, adapter, model, or vote changed, and none is authorized
+  from this package. The application contract returns to `PENDING` until the PR
+  head, merge, Connect deploy, and the post-merge raw refresh pass.
+- Scientific support. Green-up per plant-year is the earliest bud-break onset,
+  with the first new Young leaves as a per-plant-year fallback for Drought
+  deciduous broadleaf only (NEON never scores bud-break for that form). Evergreen
+  shrubs without leaf buds (Larrea), cacti, leafless evergreens, and forms that
+  sprout with autumn rain (SJER and SOAP forbs and graminoids) have no
+  calendar-year green-up, and neither do forms that are green across the new year
+  in most years (LAJA grasses and semi-evergreen broadleaf). A January 'yes' that
+  was also 'yes' at the plant's last visit within 31 days is carried-over leaves,
+  not an onset. Site and species
+  green-up are two-stage medians over supported years with a censoring lower bound;
+  the published value is withheld (upper bound) where most plants were already
+  greening at the first visit. Leaf-active is the interval-censored span of each
+  run of Leaves = yes visits; the earlier weeks x 7 tracked visit effort (median
+  within-site correlation 0.73 with visited weeks) and is kept only as `leaf_weeks`.
+- Opportunity and support. A site-year enters a metric's medians and trends only
+  when the site has >= 3 watched seasons, was visited on its usual schedule that
+  year (median visit-weeks >= 0.75 of its typical), and was not truncated by a
+  late start for that metric (green-up: >= half of the year's onsets censored or
+  coverage < half the site's typical; leaf: >= half of the plant-years already in
+  leaf at the first visit). Result: of 369 watched site-years, 276 supported for
+  green-up (76 low effort, 36 of them in 2020; 11 late start; 6 short record) and
+  273 for the leaf metrics. Sites: 33 point, 4 range, 5 upper-bound (BARR, NIWO,
+  ONAQ, WOOD, YELL), 4 short-record (DCFS, KONA, STEI, STER).
+- Eligible joins. App-supported finite-green-up site-years fall from 346 across 45
+  sites (39 with >= 6) to 272 across 42 sites (33 with >= 6). Driver-calendar and
+  eligible adapter rows for the corrected family are `UNMEASURED`; the 346/346
+  calendar match belongs to the prior release only.
+- Atlas implication. The Atlas v2 adapter reads these bundles and computes its own
+  green-up (bud-break phases only, no carry-over, no Young-leaves fallback) and its
+  own weeks x 7 leaf-active, so the corrected definitions do not reach the Atlas
+  until cass adopts them; its bundle validator passes all 46 rebuilt bundles. The
+  existing HOLD stays.
+- CANNOT (new): a calendar-year green-up for evergreens, cacti or autumn-sprouting
+  annuals; a Young-leaves green-up treated as the same day-for-day event as
+  bud-break; a green-up range read as a confidence interval (it bounds censoring,
+  not sampling error); a green-up where most plants were already greening at the
+  first visit, or from fewer than three seasons.
+- Engineering learning: count summary columns before reassigning their source in
+  one `summarise()`; re-derive stored summaries from `obs` in the index rebuild and
+  gate that they reproduce; locale-independent (`method = "radix"`) ordering for
+  any character key that reaches committed bytes.
+
 ## 2026-08-05 cover-label refinement
 
 - Decision: `NONE / NO DRIVER BYTE CHANGE` (`cover-system`, `suite-platform`).
@@ -49,14 +98,17 @@
 
 ## Candidate trusted signals
 
-1. Plant-year green-up onset, summarized only after plant-year collapse and support
-   gates. Unit: day of year. Earlier values mean earlier observed onset, subject to
-   interval/left censoring.
-2. Leaf-active duration, estimated as distinct weeks with `Leaves = yes` times
-   seven. Unit: approximate active-leaf days; preferred where green-up phenophases
-   are sparsely recorded.
-3. Green-up coverage, the share of monitored tagged plants with a finite green-up
-   onset. This is a support/interpretability signal, not phenological timing.
+1. Plant-year green-up onset (bud-break, or first new Young leaves for drought-
+   deciduous shrubs, with the 31-day carry-over rule), summarized only after
+   plant-year collapse, the site-year support gate, and the censoring bounds.
+   Unit: day of year, published as a point, a range, or withheld as an upper
+   bound. Earlier values mean earlier observed onset.
+2. Leaf-active duration, the interval-censored span of each run of `Leaves = yes`
+   visits summed per plant-year, over supported site-years only. Unit: days. The
+   earlier weeks x 7 estimate is retained only as the `leaf_weeks` QC column.
+3. Green-up coverage, the share of monitored tagged plants with a green-up onset
+   in a supported year. This is a support/interpretability signal, not
+   phenological timing.
 
 These are trusted app-local signals after the fixture, bundle, deterministic-index,
 manifest, offline-source, and public release receipts passed. They remain Driver

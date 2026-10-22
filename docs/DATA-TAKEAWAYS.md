@@ -1,6 +1,23 @@
 # NEON Plant Phenology Explorer — Data Takeaways & Critical Review
 _Suite audit — June 2026. NEON DP1.10055.001 (Plant phenology observations)._
 
+> **Correction, 2026-10-21 (suite audit 2026-10-18, item 12).** Several numbers below
+> describe the earlier green-up and leaf-active definitions and are superseded. The
+> desert "coverage cliff" was mostly the app's definition: drought-deciduous shrubs
+> are scored for Young leaves, not bud-break, and now count that first new flush as
+> green-up, so SRER coverage is 0.64, not 0.19. A January 'yes' that was already
+> 'yes' at the last December visit is now read as carried-over leaves, so SRER's
+> green-up is day 77 to 88, not day 33 or 42. LAJA's grasses and semi-evergreen
+> shrubs are green across the new year in most years and have no calendar-year
+> green-up, so LAJA's day 5 becomes day 156 for the remaining fifth of its plants.
+> Leaf-active is now the interval-censored span of each leafy run over fully visited
+> years (the old weeks x 7 tracked visit effort), so site leaf-active medians rise
+> (SRER 268 to 350 days). Sites watched fewer than three seasons (DCFS, KONA, STEI,
+> STER) and sites where most plants were already greening at the first visit (BARR,
+> NIWO, ONAQ, WOOD, YELL) no longer publish a single green-up day. The current
+> numbers and rules are in `docs/BUILD-TEST-HANDOFF.md` (2026-10-21 entry) and
+> `docs/DRIVER-KNOWLEDGE-PACKAGE.md`.
+
 This is the app that produces the suite's **one robust pooled link** — temperature → green-up onset.
 It is also the cleanest-built sibling reviewed: honest metric definitions, a shipped codebook, n-gates,
 and CI-aware verdicts. The findings below are about sharpening the cascade hand-off and one structural
@@ -37,7 +54,7 @@ coverage trap, not fixing the machinery.
   (40 of 215); JORN 54%, MOAB 61%, ONAQ 63%. Desert drought-deciduous/cactus/evergreen plants rarely
   record a *green-up phenophase* ("Breaking leaf buds" / "Initial growth") — they're scored straight into
   "Leaves"/"Young leaves". So a desert site's `median_greenup` is a small, non-random subset, while
-  **`leaf_active` survives** (SRER 67%, ONAQ 99%).
+  **`leaf_active` survives** (SRER 67%, ONAQ 99%). *(Corrected 2026-10-21: the cause was the app's definition. Drought-deciduous shrubs record Young leaves, which now count as their green-up; cacti and leafless evergreens record no leaf phenophase at all. See the 2026-10-21 handoff entry.)*
 - **`leaf_active` is the honest growing-extent metric and it spans the whole network** (site medians
   **35–266 days**). For multi-flush desert plants, green-up→leaf-off would fabricate a ~300-day season;
   counting distinct leaf-weeks × 7 yields the real ~110. The bundle ships this, not the span.

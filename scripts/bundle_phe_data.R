@@ -44,7 +44,12 @@ build_site <- function(site) {
     dplyr::filter(.data$phenophaseStatus %in% c("yes","no","uncertain"), !is.na(.data$phenophaseName)) %>%
     dplyr::transmute(individualID, plotID,
                      year = as.integer(substr(as.character(date),1,4)), date = as.Date(date),
-                     dayOfYear = as.integer(dayOfYear), phenophaseName, status = phenophaseStatus,
+                     # NEON leaves dayOfYear blank on ~15k valid-date rows (Oct 2016 to Mar
+                     # 2017, eight sites); every onset filters on dayOfYear, so derive it
+                     # from the date rather than drop the visit. transmute() evaluates in
+                     # order, so `date` above is already a Date here.
+                     dayOfYear = dplyr::coalesce(as.integer(dayOfYear), as.integer(format(date, "%j"))),
+                     phenophaseName, status = phenophaseStatus,
                      intensity = phenophaseIntensity) %>%
     dplyr::filter(!is.na(.data$year)) %>%
     # scientificName/growthForm/is_species denormalized onto obs for the analysis

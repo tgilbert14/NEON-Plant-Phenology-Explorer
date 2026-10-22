@@ -62,15 +62,24 @@ requireText(/<source media="\(max-width: 700px\)" srcset="assets\/phenology-seas
 requireText(/src="assets\/phenology-seasonal-hero-v1\.jpg"/, "desktop hero image is missing");
 requireText(/<img[^>]+alt="[^"]+"/, "hero image needs alternative text");
 requireText(/Read the seasons\./i, "poster hook is missing");
+requireText(/<h1>\s*<span>Read the<\/span>\s+<em>seasons\.<\/em>\s*<\/h1>/, "cover h1 must read 'Read the seasons.' with the space");
 requireText(/Follow tagged plants through the turning year\./i, "poster promise is missing");
 requireText(/Pick a place/i, "poster CTA must be contextual");
 for (const [source, surface] of [[html, "Pages"], [ui, "in-app"]]) {
-  if (/Editorial illustration—not a field photograph or data record\./i.test(source)) {
+  if (/Editorial illustration\u2014not a field photograph or data record\./i.test(source)) {
     fail(`${surface} poster must not restore the visible illustration disclaimer`);
   }
   if (/<figcaption\b/i.test(source)) {
     fail(`${surface} poster must not restore a visible art caption`);
   }
+}
+// Copy voice: no em dash (literal or entity) anywhere on the cover or in the
+// in-app ui.R copy. R comment lines are skipped; everything else renders.
+const EM_DASH = /\u2014|&mdash;|&#8212;|&#x2014;/i;
+const uiCode = ui.split("\n").filter((line) => !/^\s*#/.test(line)).join("\n");
+for (const [source, surface] of [[html, "Pages cover (docs/index.html)"], [uiCode, "in-app ui.R copy"]]) {
+  const lines = source.split("\n").filter((line) => EM_DASH.test(line));
+  if (lines.length) fail(`${surface} contains an em dash: ${lines[0].trim().slice(0, 120)}`);
 }
 requireText(/fixed roster of tagged plants/i, "cover must state the observation scope");
 requireText(/not plant abundance, productivity/i, "cover must state the primary claim boundary");
@@ -83,7 +92,7 @@ for (const forbiddenPosterBlock of [/hero-facts/i, /splash-contract/i, /release 
 }
 
 requireText(/phenology_poster\s*<-\s*function/, "in-app Living Poster component is missing", ui);
-requireText(/Read the seasons\./i, "in-app poster hook diverges from Pages", ui);
+requireText(/tags\$span\("Read the "\),\s*tags\$em\("seasons\."\)/, "in-app poster hook diverges from Pages (h1 must read 'Read the seasons.' with the space)", ui);
 requireText(/Follow tagged plants through the turning year\./i, "in-app poster promise diverges from Pages", ui);
 requireText(/href = "#site-picker-start"/, "in-app poster CTA must route to the picker", ui);
 requireText(/id = "site-picker-start"[^\n]+tabindex = "-1"/, "in-app picker target must be focusable", ui);

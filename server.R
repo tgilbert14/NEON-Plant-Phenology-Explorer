@@ -31,8 +31,9 @@ server <- function(input, output, session) {
   GU_COVERAGE_FLOOR <- 0.5
   # a site whose median in-season visit interval exceeds this is "coarse cadence":
   # onset is interval-censored to the visit gap, so its onset carries wide censoring
-  # uncertainty and it is greyed + dropped from the cross-site fit. 10 days ≈ 1.5x
-  # the ~7-day twice-weekly target; bundled sites run 3-15d (one site at 15).
+  # uncertainty and it is greyed + dropped from the cross-site fit. 10 days is about
+  # 1.5x the usual 7-day median gap (NEON visits 2 or 3 times a week while plants
+  # change fast, about weekly otherwise); bundled sites run 3-15d (one site at 15).
   CADENCE_COARSE <- 10
   gu_badge <- function(share, where = "here") {
     if (!is.finite(share) || share >= GU_COVERAGE_FLOOR) return(NULL)
@@ -42,20 +43,68 @@ server <- function(input, output, session) {
         bsicons::bs_icon("exclamation-triangle-fill"),
         sprintf(" green-up scored for %d%% of plants %s", pct, where)),
       title = "Thin green-up coverage",
-      p(HTML(sprintf("Only <b>%d%%</b> of the tagged plants %s ever record a green-up <em>phenophase</em> (“Breaking leaf buds” / “Initial growth”).", pct, where))),
-      p(HTML("In warm deserts, drought-deciduous, cactus and evergreen plants are scored straight into “Leaves”, so this green-up median rests on a <b>small, non-random subset</b>, not a noisy whole-site number.")),
+      p(HTML(sprintf("Only <b>%d%%</b> of the tagged plants %s have a green-up onset in a fully visited year (“Breaking leaf buds” or “Initial growth”, or for drought-deciduous shrubs their first “Young leaves” of the calendar year).", pct, where))),
+      p(HTML("Shrubs that drop their leaves in drought have no bud-break stage in NEON's protocol, so their green-up is the year's first new 'Young leaves'; evergreen shrubs, cacti and annuals that sprout with autumn rain have no calendar-year green-up and are read by leaf-active days.")),
       p(class = "caveat", bsicons::bs_icon("arrow-right-circle"),
-        HTML(" So <b>leaf-active</b> (days carrying leaves) is shown <b>by default</b> here &mdash; it survives where green-up collapses. You can switch back to green-up on the Map, the trend, and Across sites.")),
+        HTML(" So <b>leaf-active</b> (days carrying leaves) is shown <b>by default</b> here, because it survives where green-up collapses. You can switch back to green-up on the Map, the trend, and Across sites.")),
       placement = "bottom")
   }
 
-  observe({ ch <- phe_state_choices(); updateSelectInput(session, "stateSel", choices = ch, selected = if ("MA" %in% ch) "MA" else NULL) })
+  # ---- site-level green-up estimand (status-aware) --------------------------
+  # Reads the loaded site's site_table row: greenup_status is point, range,
+  # upper_bound, short_record or none (see greenup_bounds / greenup_label in
+  # R/phe_helpers.R). Only a point or range carries a numeric median_greenup.
+  site_gu <- function(site) {
+    row <- if (!is.null(site) && nzchar(site %||% "")) site_table[site_table$site == site, , drop = FALSE] else site_table[0, ]
+    num <- function(col) if (nrow(row) && col %in% names(row)) suppressWarnings(as.numeric(row[[col]][1])) else NA_real_
+    chr <- function(col) if (nrow(row) && col %in% names(row)) as.character(row[[col]][1]) else NA_character_
+    status <- chr("greenup_status")
+    list(found = nrow(row) > 0 && !is.na(status), status = if (is.na(status)) "none" else status,
+         hi = num("greenup_hi"), lo = num("greenup_lo"), med = num("median_greenup"),
+         la = num("median_leaf_active"), n_seasons = num("n_years_watched"),
+         forms = chr("greenup_autumn_forms"), carry_forms = chr("greenup_carry_forms"),
+         fallback = num("greenup_fallback_share"))
+  }
+  # "N season(s)" for the short-record sentence
+  seasons_txt <- function(n) if (is.finite(n)) sprintf("%d season%s", as.integer(n), if (n == 1) "" else "s") else "too few seasons"
+  short_record_txt <- function(n) sprintf("Green-up and leaf-active days are unavailable here: %s monitored, too few to check the visit schedule.", seasons_txt(n))
+
+  # ---- NEON release provenance (PHE_RELEASE + the search index's data-through date)
+  # Guarded: a missing PHE_RELEASE field or SEARCH_INDEX$built drops that part
+  # instead of printing NA.
+  rel_field <- function(k) { v <- if (exists("PHE_RELEASE")) PHE_RELEASE[[k]] else NULL
+    if (is.null(v) || !length(v) || is.na(v[1]) || !nzchar(v[1])) NULL else as.character(v[1]) }
+  data_through <- function(fmt) {
+    b <- if (!is.null(SEARCH_INDEX)) SEARCH_INDEX$built else NULL
+    d <- tryCatch(as.Date(b), error = function(e) NA)
+    if (!length(d) || is.na(d[1])) NULL else format(d[1], fmt)
+  }
+  release_sentence <- function() {
+    prod <- rel_field("product"); nm <- rel_field("product_name"); tag <- rel_field("tag"); thr <- data_through("%B %Y")
+    if (is.null(prod) || is.null(tag)) return(NULL)
+    if (is.null(thr)) sprintf("NEON %s %s (%s).", prod, nm %||% "", tag)
+    else sprintf("NEON %s %s (%s), observations through %s.", prod, nm %||% "", tag, thr)
+  }
+  release_short <- function() {
+    tag <- rel_field("tag"); thr <- data_through("%b %Y")
+    if (is.null(tag)) return(NULL)
+    if (is.null(thr)) sprintf("NEON %s", tag) else sprintf("NEON %s · data through %s", tag, thr)
+  }
+
+  # Open on DEFAULT_SITE's state (SRER, Arizona) when that site is bundled;
+  # otherwise keep the earlier Massachusetts default.
+  default_state <- if (DEFAULT_SITE %in% site_table$site) site_table$state[match(DEFAULT_SITE, site_table$site)] else NA_character_
+  observe({ ch <- phe_state_choices()
+    sel <- if (!is.na(default_state) && default_state %in% ch) default_state else if ("MA" %in% ch) "MA" else NULL
+    updateSelectInput(session, "stateSel", choices = ch, selected = sel) })
   # When the state changes, refill the site dropdown. If a map/browse pick is
   # pending, keep THAT site selected (so the sidebar mirrors the dot the user
-  # tapped); otherwise fall back to the first site in the state.
+  # tapped); otherwise DEFAULT_SITE when it is in this state, else the first
+  # site in the state.
   observeEvent(input$stateSel, {
     sites <- phe_sites_in_state(input$stateSel)
     sel <- if (!is.null(rv$pendingSite) && rv$pendingSite %in% sites) rv$pendingSite
+           else if (DEFAULT_SITE %in% sites) DEFAULT_SITE
            else if (length(sites)) sites[[1]] else NULL
     rv$pendingSite <- NULL
     updateSelectInput(session, "site", choices = sites, selected = sel)
@@ -70,7 +119,8 @@ server <- function(input, output, session) {
     # for older bundles that predate the precompute.
     rv$ind_summary <- b$ind_summary %||% individual_summary(b$obs, b$inds)
     rv$trend <- b$trend %||% onset_trend(b$obs)
-    rv$la_trend <- leaf_active_trend(b$obs)   # desert-safe year-trend; works where green-up is too thin
+    rv$support <- site_year_support(normalize_doy(b$obs))   # which years were visited on the usual schedule
+    rv$la_trend <- leaf_active_trend(b$obs, support = rv$support)   # desert-safe year-trend; works where green-up is too thin
     # SMART DEFAULT: at thin-green-up (desert) sites, default every metric toggle to
     # leaf-active — the read that survives where green-up collapses. One app-wide
     # threshold: green-up scored for < GU_COVERAGE_FLOOR (50%) of the roster. Users
@@ -82,6 +132,9 @@ server <- function(input, output, session) {
     updateSelectInput(session, "xsMetric",    selected = def_metric)
     rv$label <- label; rv$site <- b$meta$site; rv$is_demo <- is_demo; rv$ind <- NULL
     yrs <- range(b$obs$year, na.rm=TRUE); rv$ctx <- paste0(b$meta$site, " · ", if (yrs[1]==yrs[2]) yrs[1] else paste0(yrs[1],"–",yrs[2]))
+    # close any picker popup left open on the national map before the splash hides,
+    # so it is not still open when the user comes back via "change site"
+    leaflet::leafletProxy("nationalMap", session) %>% leaflet::clearPopups()
     shinyjs::show("mainTabsWrap"); shinyjs::show("spPickerWrap"); shinyjs::hide("splash")
     # plant picker (one row per tagged individual)
     is_ <- rv$ind_summary
@@ -100,13 +153,21 @@ server <- function(input, output, session) {
     nav_select("tabs", "overview"); session$sendCustomMessage("countUp", list()); session$sendCustomMessage("loadDone", list())
     invisible(TRUE)
   }
-  load_site <- function(site){ if (is.null(site)||site=="") { session$sendCustomMessage("loadDone", list()); return() }
-    b <- load_site_bundle(site); if (is.null(b)) { session$sendCustomMessage("loadDone", list()); showNotification("That site isn't bundled in this demo.", type="error"); return() }
-    row <- site_table[site_table$site==site,]; ingest(b, sprintf("%s · %s", site, if (nrow(row)) row$name else site)) }
+  load_site <- function(site, push = TRUE){ if (is.null(site)||identical(site, "")) { session$sendCustomMessage("loadDone", list()); return() }
+    # allowlist: only a bundled site code goes on to the bundle loader
+    not_bundled <- function() { session$sendCustomMessage("loadDone", list()); showNotification("That site isn't bundled in this demo.", type="error"); invisible() }
+    if (!is.character(site) || length(site) != 1L || !(site %in% site_table$site)) return(not_bundled())
+    b <- load_site_bundle(site); if (is.null(b)) return(not_bundled())
+    row <- site_table[site_table$site==site,]
+    ok <- ingest(b, sprintf("%s · %s", site, if (nrow(row)) row$name else site))
+    # the loaded site goes into the URL, so Back returns to the picker and a
+    # shared link reopens this site
+    if (isTRUE(ok) && push) updateQueryString(paste0("?site=", site), mode = "push", session = session)
+    invisible(ok) }
   # The map popup, the browse list, and the site-search all pick a site OFF the
   # sidebar. Route them through here so the sidebar's state + site dropdowns end
   # up reading the site that was picked (not the previous one) before the load.
-  load_site_full <- function(code){ if (is.null(code) || code=="") return()
+  load_site_full <- function(code, push = TRUE){ if (is.null(code) || code=="") return()
     m <- neon_sites[neon_sites$site == code, ]
     if (nrow(m)) {
       rv$pendingSite <- code
@@ -121,22 +182,40 @@ server <- function(input, output, session) {
         updateSelectInput(session, "stateSel", selected = m$state[1])
       }
     }
-    load_site(code) }
+    load_site(code, push = push) }
   observeEvent(input$loadBtn, load_site(input$site)); observeEvent(input$pickSite, { removeModal(); load_site_full(input$pickSite) })
+  # The URL follows the loaded site: ?site=CODE at start or after Back/Forward
+  # opens that site (when it is bundled); a URL with no site while a site is
+  # loaded (Back from a site) returns to the picker. Shiny updates url_search on
+  # pushState and popstate, so our own pushes land here too and are no-ops.
+  observeEvent(session$clientData$url_search, {
+    q <- tryCatch(parseQueryString(session$clientData$url_search %||% "")$site, error = function(e) NULL)
+    if (is.character(q) && length(q) == 1L && q %in% site_table$site) {
+      if (!identical(q, rv$site)) {
+        session$sendCustomMessage("smtLoadStart", list(label = q))
+        load_site_full(q, push = FALSE)   # the URL already names this site
+      }
+    } else if (!is.null(rv$site)) {
+      show_picker(push = FALSE)
+    }
+  }, ignoreNULL = TRUE)
   # v2 flow: the Harvard Forest demo path is gone — users pick a real site on
   # the map, the Browse-all-sites list, or the by-name select panel. The demoBtn
   # / demoBtn2 inputs and their observers were removed with the demo CTAs.
 
   # "Change site" (in the hero band) -> back to the picker-map landing.
-  observeEvent(input$changeSite, {
+  show_picker <- function(push = TRUE) {
     rv$obs <- NULL; rv$inds <- NULL; rv$ind_summary <- NULL; rv$trend <- NULL; rv$la_trend <- NULL
     rv$label <- NULL; rv$site <- NULL; rv$ind <- NULL; rv$ctx <- NULL; rv$is_demo <- FALSE
+    rv$support <- NULL
     shinyjs::hide("mainTabsWrap"); shinyjs::hide("spPickerWrap"); shinyjs::show("splash")
+    if (push) updateQueryString("?", mode = "push", session = session)
     # the picker map was hidden while a site was loaded; nudge it across several
     # frames to re-measure now that it's visible again, so it never paints blank
     # / half-width on return (page_fillable settles its width a beat late).
     session$sendCustomMessage("kickMaps", list())
-  })
+  }
+  observeEvent(input$changeSite, show_picker(push = TRUE))
 
   # ---- national site-picker map (the splash landing) --------------------
   # STATIC leafletOutput in ui (never inside renderUI — avoids the re-bind race).
@@ -151,8 +230,24 @@ server <- function(input, output, session) {
     pal <- greenup_pal(gv, gu_share = gs0)
     gv_col <- gp_clamp(pal, gv)
     mx <- max(st$n_individuals, 1, na.rm=TRUE); st$radius <- 6 + 12 * sqrt(pmax(st$n_individuals, 1)) / sqrt(mx)
-    elev <- ifelse(is.finite(st$elevation_m), paste0(st$elevation_m, " m"), "—")
-    gtxt <- ifelse(is.finite(gv), paste0(" · green-up day ", gv, " (", doy_to_month(gv), ")"), "")
+    elev <- ifelse(is.finite(st$elevation_m), paste0(st$elevation_m, " m"), "n/a")
+    # NEON-sourced strings go into popup HTML, so escape them first
+    esc <- function(x) htmltools::htmlEscape(ifelse(is.na(x), "", as.character(x)))
+    st_state <- ifelse(is.na(state_names[st$state]), st$state, state_names[st$state])
+    # green-up text follows the site's estimand status: a point keeps its day and
+    # date; a range, an upper bound or a short record uses greenup_label() wording.
+    gstat <- if ("greenup_status" %in% names(st)) as.character(st$greenup_status) else rep(NA_character_, nrow(st))
+    ghi <- if ("greenup_hi" %in% names(st)) suppressWarnings(as.numeric(st$greenup_hi)) else rep(NA_real_, nrow(st))
+    glo <- if ("greenup_lo" %in% names(st)) suppressWarnings(as.numeric(st$greenup_lo)) else rep(NA_real_, nrow(st))
+    gtxt <- vapply(seq_len(nrow(st)), function(i) {
+      s_i <- gstat[i]
+      if (identical(s_i, "range") && is.finite(ghi[i]) && is.finite(glo[i]))
+        return(paste0(" · green-up ", greenup_label(ghi[i], glo[i], "range")))
+      if (identical(s_i, "upper_bound") && is.finite(ghi[i]))
+        return(paste0(" · green-up ", greenup_label(ghi[i], glo[i], "upper_bound")))
+      if (identical(s_i, "short_record")) return(" · green-up unavailable, too few seasons")
+      if (is.finite(gv[i])) paste0(" · green-up day ", gv[i], " (", doy_to_month(gv[i]), ")") else ""
+    }, character(1))
     # green-up COVERAGE share per site (gu_share). Sites where green-up is scored
     # for < ~half the roster (warm deserts) carry a biased median_greenup, so they
     # READ as thin — a muted, hollow marker (no always-on text), with the why in the
@@ -170,16 +265,16 @@ server <- function(input, output, session) {
       "<button class='sp-btn sp-go' onclick=\"smtLoadStart('%s');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;\">Explore this site &rarr;</button>",
       "<button class='sp-btn sp-info' onclick=\"Shiny.setInputValue('siteInfo','%s',{priority:'event'});return false;\">About this site</button>",
       "</div></div>"),
-      st$name, st$site, ifelse(is.na(state_names[st$state]), st$state, state_names[st$state]), st$domain, elev, st$bio,
-      st$n_individuals, st$n_species, gtxt, covtxt, gsub("'", "", st$name), st$site, st$site)
-    lab <- sprintf("<b>%s</b> · %s<br>%s plants%s · tap for details", st$site, st$name, st$n_individuals,
+      esc(st$name), st$site, esc(st_state), esc(st$domain), elev, esc(st$bio),
+      st$n_individuals, st$n_species, gtxt, covtxt, esc(gsub("['\"\\\\]", "", st$name)), st$site, st$site)
+    lab <- sprintf("<b>%s</b> · %s<br>%s plants%s · tap for details", st$site, esc(st$name), st$n_individuals,
       ifelse(thin, " · thin green-up coverage", ""))
     leaflet::leaflet(st) %>% add_suite_basemap("CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng=~lng, lat=~lat, radius=~radius, layerId=~site,
         fillColor=pal(gv_col), color=mk_stroke, weight=1, fillOpacity=mk_opacity,
         label=lapply(lab, htmltools::HTML), popup=pop,
-        popupOptions=leaflet::popupOptions(className="pm-pop-card")) %>%
-      leaflet::addLegend("bottomright", pal=pal, values=gp_clamp(pal, gv[is.finite(gv)]), title="median green-up DOY", na.label="—")
+        popupOptions=leaflet::popupOptions(className="pm-pop-card", keepInView=FALSE)) %>%
+      leaflet::addLegend("bottomright", pal=pal, values=gp_clamp(pal, gv[is.finite(gv)]), title="median green-up DOY", na.label="n/a")
   })
   observe({ updateSelectizeInput(session, "siteSearch", server=TRUE, selected="",
     choices = c("Jump to a site…" = "", stats::setNames(site_table$site,
@@ -197,27 +292,27 @@ server <- function(input, output, session) {
     if (!nrow(m))
       return(modalDialog(title = "Site info", easyClose = TRUE, footer = modalButton("Close"),
                          p("No details are available for this site.")))
-    dash <- function(x) if (length(x) == 0 || is.na(x) || !nzchar(as.character(x))) "—" else as.character(x)
-    coords <- if (!is.na(m$lat[1]) && !is.na(m$lng[1])) sprintf("%.3f, %.3f", m$lat[1], m$lng[1]) else "—"
+    dash <- function(x) if (length(x) == 0 || is.na(x) || !nzchar(as.character(x))) "n/a" else as.character(x)
+    coords <- if (!is.na(m$lat[1]) && !is.na(m$lng[1])) sprintf("%.3f, %.3f", m$lat[1], m$lng[1]) else "n/a"
     n_pl <- if (nrow(row)) suppressWarnings(as.integer(row$n_individuals[1])) else NA_integer_
     n_sp <- if (nrow(row)) suppressWarnings(as.integer(row$n_species[1])) else NA_integer_
     gv   <- if (nrow(row) && "median_greenup" %in% names(row)) suppressWarnings(as.numeric(row$median_greenup[1])) else NA_real_
     stat <- function(v, lab) div(class = "si-stat",
-      div(class = "si-stat-n", if (length(v) == 0 || is.na(v)) "—" else format(v, big.mark = ",")),
+      div(class = "si-stat-n", if (length(v) == 0 || is.na(v)) "n/a" else format(v, big.mark = ",")),
       div(class = "si-stat-l", lab))
     modalDialog(
-      title = HTML(sprintf("\U0001F33F %s <span class='si-code'>(%s)</span>", dash(m$name[1]), code)),
+      title = HTML(sprintf("\U0001F33F %s <span class='si-code'>(%s)</span>", htmltools::htmlEscape(dash(m$name[1])), code)),
       easyClose = TRUE, size = "m",
       footer = tagList(
         modalButton("Close"),
         tags$button(type = "button", class = "btn btn-primary",
           onclick = sprintf("smtLoadStart('%s');Shiny.setInputValue('pickSite','%s',{priority:'event'});",
-                            gsub("'", "", dash(m$name[1])), code),
+                            gsub("['\"\\\\<>]", "", dash(m$name[1])), code),
           HTML("Explore this site &rarr;"))),
       div(class = "site-info",
         div(class = "si-sec",
           div(class = "si-h", "Where"),
-          div(class = "si-row", dash(m$state[1]), HTML(sprintf(" · NEON %s", dash(m$domain[1])))),
+          div(class = "si-row", dash(m$state[1]), sprintf(" · NEON %s", dash(m$domain[1]))),
           if (!is.na(m$bio[1])) div(class = "si-row si-bio", m$bio[1]),
           div(class = "si-coords", "\U0001F4CD ", coords,
               if (!is.na(m$elevation_m[1])) sprintf(" · %s m", m$elevation_m[1]) else NULL)),
@@ -237,7 +332,11 @@ server <- function(input, output, session) {
   observeEvent(input$qcCardRequest, if (nzchar(input$qcCardRequest %||% "")) pick_individual(input$qcCardRequest, navigate=TRUE), ignoreInit=TRUE)
   observeEvent(input$surpriseBtn, { req(rv$ind_summary); pick_individual(sample(rv$ind_summary$individualID, 1), navigate=TRUE) })
   observeEvent(input$goClock, nav_select("tabs","clock")); observeEvent(input$goOnset, nav_select("tabs","onset"))
-  observeEvent(input$goProfile, { if (is.null(rv$ind) && !is.null(rv$ind_summary)) rv$ind <- rv$ind_summary$individualID[1]; nav_select("tabs","profile") })
+  # route the default pick through pick_individual() so the "Open a plant's
+  # profile" picker shows the plant that opens, not its placeholder
+  observeEvent(input$goProfile, {
+    if (is.null(rv$ind) && !is.null(rv$ind_summary) && nrow(rv$ind_summary)) pick_individual(rv$ind_summary$individualID[1], navigate=TRUE)
+    else nav_select("tabs","profile") })
   observeEvent(input$goMap, nav_select("tabs","map"))
 
   # ---- hero ----
@@ -247,24 +346,62 @@ server <- function(input, output, session) {
     n_pl <- dplyr::n_distinct(inds$plotID)
     gu <- suppressWarnings(stats::median(rv$ind_summary$greenup, na.rm=TRUE))
     gu_share <- greenup_coverage(rv$ind_summary)
-    hero <- function(v,l,suf="",icon,tone,ttl=NULL) div(class=paste0("hero-stat hero-",tone), title=ttl,
-      div(class="hs-icon", bs_icon(icon)), div(div(class="hs-v count-up", `data-target`=v, `data-suffix`=suf, "0"), div(class="hs-l", l)))
+    # static = text shown as-is (no count-up), for a green-up range, bound or n/a
+    hero <- function(v,l,suf="",icon,tone,ttl=NULL,static=NULL) div(class=paste0("hero-stat hero-",tone), title=ttl,
+      div(class="hs-icon", bs_icon(icon)),
+      div(if (!is.null(static)) div(class="hs-v hs-v-static", static)
+          else div(class="hs-v count-up", `data-target`=v, `data-suffix`=suf, "0"),
+          div(class="hs-l", l)))
     cov <- gu_badge(gu_share, where = "here")
+    g <- site_gu(rv$site)
+    gu_ttl <- "Typical day-of-year the average plant first breaks leaf, a within-site timing signal pooled across years."
+    # thin green-up coverage (same gate as the metric defaults in ingest): the
+    # gold tile leads with median leaf-active days; green-up stays in the story
+    # with its coverage clause
+    thin_gu <- is.finite(gu_share) && gu_share < GU_COVERAGE_FLOOR
+    gu_tile <- if (thin_gu && is.finite(g$la)) {
+      hero(round(g$la), "days carrying leaves (median)", icon="sun", tone="gold",
+           ttl=sprintf("Median days a plant carries leaves per year, in years visited on the usual schedule. Shown first here because green-up is scored for only %d%% of plants.", round(gu_share * 100)))
+    } else if (!g$found || identical(g$status, "point")) {
+      v <- if (g$found && is.finite(g$hi)) g$hi else gu
+      if (is.finite(v)) hero(round(v), "median green-up (day-of-year)", icon="clock-history", tone="gold", ttl=gu_ttl)
+      else hero(NA, "median green-up", icon="clock-history", tone="gold", ttl=gu_ttl, static="n/a")
+    } else if (identical(g$status, "range") && is.finite(g$lo) && is.finite(g$hi)) {
+      hero(NA, "median green-up (day-of-year range)", icon="clock-history", tone="gold", ttl=gu_ttl,
+           static=sprintf("%d to %d", round(g$lo), round(g$hi)))
+    } else if (identical(g$status, "upper_bound") && is.finite(g$hi)) {
+      hero(NA, "median green-up (day-of-year, upper bound)", icon="clock-history", tone="gold", ttl=gu_ttl,
+           static=sprintf("%d or earlier", round(g$hi)))
+    } else hero(NA, "median green-up", icon="clock-history", tone="gold", ttl=gu_ttl, static="n/a")
+    gu_note <- if (!g$found) NULL else switch(g$status,
+      range = if (is.finite(g$lo) && is.finite(g$hi)) sprintf("Some onsets were already underway at the first visit, so the median lies between day %d and day %d. The range bounds that censoring, not sampling error.", round(g$lo), round(g$hi)),
+      upper_bound = if (is.finite(g$hi)) sprintf("Most plants were already greening at the first visit, so the true median is day %d or earlier and no single day is shown.", round(g$hi)),
+      short_record = short_record_txt(g$n_seasons),
+      NULL)
     div(class="hero-band",
       div(class="hero-title",
         bs_icon("flower3"), tags$b(rv$label),
+        span(class = "scope-chip scope-site", bs_icon("geo-alt"), rv$site),
         actionLink("changeSite", tagList(bs_icon("arrow-left-circle"), " change site"),
                    class = "hero-change"),
-        downloadLink("reportCard", tagList(bs_icon("file-earmark-arrow-down"), " report card"),
+        downloadLink("reportPdf", tagList(bs_icon("file-earmark-pdf"), " report (PDF)"),
+                     class = "hero-report"),
+        downloadLink("reportCard", tagList(bs_icon("filetype-csv"), " site summary (CSV)"),
                      class = "hero-report")),
       div(class="hero-grid",
         hero(nrow(inds), "tagged plants", icon="flower1", tone="pine"),
         hero(n_sp, "species", icon="tree", tone="navy"),
-        hero(n_pl, "phenology plots", icon="geo", tone="terra"),
-        hero(if (is.finite(gu)) round(gu) else 0, "median green-up (day-of-year)", icon="clock-history", tone="gold",
-             ttl="Typical day-of-year the average plant first breaks leaf, a within-site timing signal pooled across years.")),
-      if (!is.null(cov)) div(class="hero-cov-row", cov))
+        hero(n_pl, if (n_pl == 1) "phenology plot" else "phenology plots", icon="geo", tone="terra"),
+        gu_tile),
+      if (!is.null(cov) || !is.null(gu_note)) div(class="hero-cov-row", cov,
+        if (!is.null(gu_note)) tags$p(class="hero-gu-note", gu_note)),
+      { rs <- release_short(); if (!is.null(rs)) tags$p(class="hero-release", rs) })
   })
+  # #heroStats:empty is display:none (saves phone space before a site loads),
+  # and Shiny suspends hidden outputs, so render it while hidden or it would
+  # never fill (and never unhide).
+  outputOptions(output, "heroStats", suspendWhenHidden = FALSE)
+
 
   # ---- Overview ----
   output$formBar <- renderPlotly({
@@ -287,10 +424,46 @@ server <- function(input, output, session) {
     yrs <- sort(unique(obs$year))
     pts <- c(sprintf("Over <b>%d</b> years (%s), observers logged <b>%s</b> phenophase records on <b>%d</b> tagged plants.",
       length(yrs), paste0(min(yrs),"–",max(yrs)), format(nrow(obs), big.mark=","), nrow(inds)))
-    if (is.finite(gu)) pts <- c(pts, sprintf("The typical plant breaks leaf around <b>%s</b> (day %d)%s.",
-      doy_to_month(gu), round(gu), if (is.finite(la)) sprintf(" and carries leaves about <b>%d</b> days a year", round(la)) else ""))
+    g <- site_gu(rv$site)
+    if (g$found) la <- g$la   # the site index median (supported years); NA for a short record
+    la_txt <- if (is.finite(la)) sprintf(" and carries leaves about <b>%d</b> days a year", round(la)) else ""
+    # the green-up date phrase for the site's estimand status (NULL when none)
+    gu_phrase <- if (!g$found) {
+      if (is.finite(gu)) sprintf("around <b>%s</b> (day %d)", doy_to_month(gu), round(gu))
+    } else switch(g$status,
+      point = if (is.finite(g$hi)) sprintf("around <b>%s</b> (day %d)", doy_to_month(g$hi), round(g$hi)),
+      range = if (is.finite(g$lo) && is.finite(g$hi)) sprintf("between <b>%s</b> and <b>%s</b> (day %d to %d)",
+        doy_to_month(g$lo), doy_to_month(g$hi), round(g$lo), round(g$hi)),
+      upper_bound = if (is.finite(g$hi)) sprintf("by <b>%s</b> or earlier (day %d or earlier)", doy_to_month(g$hi), round(g$hi)),
+      NULL)
+    # thin green-up coverage: lead with leaf-active days, keep green-up with its
+    # coverage clause (same gate as the hero tile and the metric defaults)
+    gu_share <- greenup_coverage(rv$ind_summary)
+    thin_gu <- is.finite(gu_share) && gu_share < GU_COVERAGE_FLOOR
+    gu_txt <- if (g$found && identical(g$status, "short_record")) short_record_txt(g$n_seasons)
+      else if (thin_gu && is.finite(la)) {
+        paste0(sprintf("The typical plant carries leaves about <b>%d</b> days a year.", round(la)),
+          if (!is.null(gu_phrase)) sprintf(" Green-up is scored for only <b>%d%%</b> of plants here; among those, the typical plant greens up %s.", round(gu_share * 100), gu_phrase)
+          else sprintf(" Green-up is scored for only <b>%d%%</b> of plants here.", round(gu_share * 100)))
+      } else if (!is.null(gu_phrase)) sprintf("The typical plant greens up %s%s.", gu_phrase, la_txt)
+      else NULL
+    if (!is.null(gu_txt)) pts <- c(pts, gu_txt)
+    # growth-form list as a plural phrase: Forb -> forbs, Graminoid -> graminoids,
+    # anything else -> "<form> plants" (semi-evergreen broadleaf plants)
+    forms_phrase <- function(x) {
+      fm <- tolower(trimws(strsplit(x, ";", fixed = TRUE)[[1]])); fm <- fm[nzchar(fm)]
+      fm <- ifelse(fm %in% c("forb", "graminoid"), paste0(fm, "s"), paste(fm, "plants"))
+      if (length(fm) > 1) paste(paste(fm[-length(fm)], collapse = ", "), "and", fm[length(fm)]) else fm
+    }
+    if (g$found && !is.na(g$forms) && nzchar(g$forms))
+      pts <- c(pts, sprintf("Here %s sprout with autumn rain, so they have no calendar-year green-up; read leaf-active days for them.", forms_phrase(g$forms)))
+    if (g$found && !is.na(g$carry_forms) && nzchar(g$carry_forms))
+      pts <- c(pts, sprintf("Here %s are still green at the turn of the year in most years, so they have no calendar-year green-up; read leaf-active days for them.", forms_phrase(g$carry_forms)))
+    if (g$found && is.finite(g$fallback) && g$fallback > 0)
+      pts <- c(pts, "Drought-deciduous shrubs count their first new 'Young leaves' of the year as green-up.")
     pts <- c(pts, "Phenology is recorded on a <b>fixed roster of tagged individuals</b> along transects. It captures <b>timing</b> (when each phenophase happens), not abundance. Open the Phenology Clock to see the year unfold.")
-    div(class="insight-list", lapply(pts, function(t) div(class="il-item", bs_icon("dot"), HTML(t))))
+    # one span per item, so the bold runs stay inline instead of each becoming a flex column
+    div(class="insight-list", lapply(pts, function(t) div(class="il-item", bs_icon("dot"), span(HTML(t)))))
   })
 
   # ---- Phenology Clock (flagship) ----
@@ -324,7 +497,7 @@ server <- function(input, output, session) {
       is_gu   <- pn %in% GREENUP
       is_leaf <- identical(pn, "Leaves")
       if (leaf_lead && is_gu) { ln <- list(color = col, width = 1, dash = "dot"); fa <- 0.06; nm <- paste0(pn, " (thin coverage)") }
-      else if (leaf_lead && is_leaf) { ln <- list(color = col, width = 3.4); fa <- 0.34; nm <- paste0(pn, " — desert-safe read") }
+      else if (leaf_lead && is_leaf) { ln <- list(color = col, width = 3.4); fa <- 0.34; nm <- paste0(pn, ", desert-safe read") }
       else { ln <- list(color = col, width = 2); fa <- 0.22; nm <- pn }
       p <- p %>% plotly::add_trace(type="scatterpolar", mode="lines", name=nm,
         r = r, theta = th, fill = "toself",
@@ -342,7 +515,7 @@ server <- function(input, output, session) {
     if (leaf_lead) {
       gpct <- round(greenup_coverage(rv$ind_summary) * 100)
       anns <- c(anns, list(list(
-        text = sprintf("green-up scored for %d%% of plants here — the bold leaf-presence ring is the desert-safe read", gpct),
+        text = sprintf("green-up scored for %d%% of plants here; the bold leaf-presence ring is the desert-safe read", gpct),
         x = 0, y = 1.07, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
         font = list(color = "#b5481f", size = 10.5))))
     }
@@ -382,6 +555,15 @@ server <- function(input, output, session) {
         hovertemplate=paste0("<b>",s,"</b><br>%{x}: ", vlab, "<extra></extra>")) }
     note <- if (n_all > 8) list(list(text=sprintf("showing the 8 most-monitored of %d species (the banner above pools all %d)", n_all, n_all),
       x=0, y=1.06, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))) else list()
+    # name the reduced-visit years the trend leaves out (2020 COVID cut, partial
+    # first years), so a gap in the line reads as missing effort, not biology
+    sup_col <- if (metric == "leaf_active") "leaf_supported" else "greenup_supported"
+    gone <- if (!is.null(rv$support) && sup_col %in% names(rv$support)) rv$support$year[!rv$support[[sup_col]]] else integer(0)
+    if (length(gone)) note <- c(note, list(list(
+      text = sprintf("left out, visited less than usual or started late after the %s was already underway: %s",
+                     if (metric == "leaf_active") "leaf season" else "green-up", paste(gone, collapse = ", ")),
+      x = 0, y = if (length(note)) 1.12 else 1.06, xref = "paper", yref = "paper", showarrow = FALSE, xanchor = "left",
+      font = list(size = 10.5, color = "#8a988f"))))
     p %>% plotly_theme() %>% plotly::layout(xaxis=list(title="Year", dtick=1), yaxis=list(title=yttl),
       legend=list(font=list(size=9)), annotations=note)
   })
@@ -390,6 +572,15 @@ server <- function(input, output, session) {
     lf <- metric == "leaf_active"
     tr <- if (lf) rv$la_trend else rv$trend
     noun <- if (lf) "leaf-active days" else "green-up"
+    sup <- rv$support
+    if (!is.null(sup) && nrow(sup) && "greenup_reason" %in% names(sup) && all(sup$greenup_reason %in% "short_record"))
+      return(insight_banner("hourglass-split", tone = "navy",
+        "Too few seasons monitored here to check the visit schedule, so no trend is drawn."))
+    # where most plants were already greening at the first visit, each year's
+    # green-up median is only an upper bound, so no green-up verdict is given
+    if (!lf && identical(site_gu(rv$site)$status, "upper_bound"))
+      return(insight_banner("hourglass-split", tone = "navy",
+        HTML("Most plants here were already greening at the first visit, so each year's green-up median is only an upper bound and no green-up trend verdict is given. Switch <b>Show</b> to <b>Leaf-active days</b> for a season-length series.")))
     # green-up too-thin nudge: when green-up has no/short series here but the
     # leaf-active trend does, point the desert user to the metric that works.
     if (!lf && (is.null(tr) || nrow(tr) < 3) && !is.null(rv$la_trend) && nrow(rv$la_trend) >= 3) {
@@ -400,11 +591,11 @@ server <- function(input, output, session) {
     req(!is.null(tr) && nrow(tr) >= 3)
     site_yr <- tr %>% dplyr::group_by(.data$year) %>% dplyr::summarise(onset = stats::median(.data$onset), .groups="drop")
     ny <- nrow(site_yr)
-    # never fit a trend to fewer than 5 annual points — and never extrapolate a
+    # never fit a trend to fewer than 6 annual points (suite doctrine), and never extrapolate a
     # 3–7 year line to "per decade". Report days/YEAR with a 95% CI; if the CI
     # spans zero, say so instead of printing a directional verdict.
-    if (ny < 5) return(insight_banner("hourglass-split", tone = "navy",
-      HTML(sprintf("Only <b>%d</b> year%s of %s are recorded here. Too short to fit a trend. Phenology shifts need ~5+ years before a slope means anything.", ny, if (ny==1) "" else "s", noun))))
+    if (ny < 6) return(insight_banner("hourglass-split", tone = "navy",
+      HTML(sprintf("Only <b>%d</b> year%s of %s are recorded here. Too short to fit a trend. Phenology shifts need about 6 or more years before a slope means anything.", ny, if (ny==1) "" else "s", noun))))
     fit <- stats::lm(onset ~ year, data = site_yr); co <- summary(fit)$coefficients
     slope <- co[2,1]; se <- co[2,2]; tcrit <- stats::qt(0.975, df = ny - 2)
     lo <- slope - tcrit*se; hi <- slope + tcrit*se
@@ -454,6 +645,10 @@ server <- function(input, output, session) {
       xcol <- "greenup"; xttl <- "Green-up onset (day-of-year) · earlier ← → later"
     }
     n_total <- nrow(is_); n_placed <- nrow(d)
+    g <- site_gu(rv$site)
+    if (!n_placed && identical(g$status, "short_record")) return(note_plot(sprintf(
+      "Too few seasons monitored here (%s) to place plants.<br>The Phenology Clock and Plant Profile still show every record.",
+      if (is.finite(g$n_seasons)) as.integer(g$n_seasons) else "under three")))
     if (!n_placed) return(note_plot(if (leaf_mode) "No plants yet have any leaf-active days recorded"
                                     else "No plants yet have both leaf-out and leaf-active days recorded"))
     # generic placement vars so all the downstream machinery (colour-by, pins,
@@ -472,14 +667,16 @@ server <- function(input, output, session) {
     pal <- capped_pal(lv, cap = 8L)
     grps <- intersect(c(utils::head(lv, 8L), "Other"), unique(d$grp))   # keep frequency order; Other last
     gu_tip <- ifelse(is.finite(d$greenup), paste0("green-up day ", d$greenup, " (", vapply(d$greenup, doy_to_month, ""), ")"),
-                     "<span style='color:#b5481f'>no green-up scored (logged straight into Leaves)</span>")
-    d$tip <- paste0("<span class='smt-pin-emoji'>\U0001F33F</span> <b>", d$scientificName, "</b><br/>",
-      "<em>", d$growthForm, " · plot ", short_plot(d$plotID), "</em><br/>",
+                     "<span style='color:#b5481f'>no green-up phase in a fully visited year</span>")
+    # NEON-sourced strings reach the pin card's innerHTML, so escape them
+    esc <- function(x) htmltools::htmlEscape(ifelse(is.na(x), "", as.character(x)))
+    d$tip <- paste0("<span class='smt-pin-emoji'>\U0001F33F</span> <b>", esc(d$scientificName), "</b><br/>",
+      "<em>", esc(d$growthForm), " · plot ", esc(short_plot(d$plotID)), "</em><br/>",
       "<span class='smt-pin-stats'>", gu_tip, "<br/>",
       "carries leaves ~", d$leaf_active, " days/yr",
       ifelse(is.finite(d$flower), paste0(" · flowers day ", d$flower), ""), "<br/>",
       d$n_years, " yr watched (any metric)</span>",
-      "<br/><span class='smt-open' role='button' tabindex='0' data-tag='", d$individualID, "'>\U0001F50E Open plant profile &rarr;</span>",
+      "<br/><span class='smt-open' role='button' tabindex='0' data-tag='", htmltools::htmlEscape(d$individualID, attribute = TRUE), "'>\U0001F50E Open plant profile &rarr;</span>",
       "<br/><em class='smt-pin-hint'>Tap the dot to pin this card</em>")
     qcol <- if (is_dark()) "#7e8da0" else "#9aa6b2"; muted <- if (is_dark()) "#9fb0c4" else "#6b7a85"
     htmpl <- if (leaf_mode) "%{text}<br>carries leaves ~%{x} d/yr · %{y} yr watched<extra></extra>"
@@ -527,7 +724,7 @@ server <- function(input, output, session) {
     r <- rv$ind_summary[rv$ind_summary$individualID == rv$ind,]; if (!nrow(r)) return(NULL)
     div(class="lab-sel", span(class="ls-emoji","\U0001F50E"),
       div(class="ls-body", div(class="ls-id", tags$b(r$scientificName), sprintf(" · green-up day %s · carries leaves ~%s d/yr",
-        ifelse(is.finite(r$greenup), r$greenup, "—"), ifelse(is.finite(r$leaf_active), r$leaf_active, "—"))),
+        ifelse(is.finite(r$greenup), r$greenup, "n/a"), ifelse(is.finite(r$leaf_active), r$leaf_active, "n/a"))),
         div(class="ls-dom", em(sprintf("%s · plot %s", r$growthForm, short_plot(r$plotID))))),
       actionButton("goProfFromCard", tagList(bs_icon("arrows-fullscreen"), " Open full profile"), class="btn-outline-dark btn-sm"))
   })
@@ -559,7 +756,7 @@ server <- function(input, output, session) {
     n_yr <- if (!is.null(h)) dplyr::n_distinct(h$year) else 0
     tile <- function(v,l) div(class="qc-tile", div(class="qc-tile-v", v), div(class="qc-tile-l", l))
     # day-of-year tile that shows the calendar date in its label (no bare DOY)
-    gtile <- function(v,l) tile(ifelse(is.finite(v), v, "—"), if (is.finite(v)) paste0(l, " · ", doy_to_month(v)) else l)
+    gtile <- function(v,l) tile(ifelse(is.finite(v), v, "n/a"), if (is.finite(v)) paste0(l, " · ", doy_to_month(v)) else l)
     # only flags whose offending rows were actually found are clickable; a 0-row
     # flag (e.g. the "no yes recorded" info note) is shown but not a link.
     has_problem <- any(vapply(flags, function(f) f$level %in% c("high","warn") && f$n > 0, logical(1)))
@@ -568,6 +765,7 @@ server <- function(input, output, session) {
       clickable <- isTRUE(f$n > 0) && f$key %in% names(q$sets)
       div(class = paste0("qc-flag qc-flag-", f$level, if (clickable) " qc-flag-click" else ""),
         role = if (clickable) "button" else NULL, tabindex = if (clickable) "0" else NULL,
+        `aria-label` = if (clickable) f$title else NULL,
         onclick = if (clickable) sprintf("Shiny.setInputValue('pheQcInspect','%s',{priority:'event'})", f$key) else NULL,
         bs_icon(qc_icon(f$level)),
         div(class="qcf-body",
@@ -581,13 +779,13 @@ server <- function(input, output, session) {
     body <- div(id="qcCardNode", class="qc-card", `data-short`=gsub("[^A-Za-z]","",substr(r$scientificName,1,20)),
       div(class="qc-head", span(class="qc-emoji","\U0001F33F"),
         div(div(class="qc-id", r$scientificName), div(class="qc-sci", em(sprintf("%s · %s · plot %s",
-          r$growthForm, switch(as.character(r$nativeStatusCode), "N"="native", "I"="introduced", "NI"="native & introduced", as.character(r$nativeStatusCode) %||% "—"), short_plot(r$plotID))))),
+          r$growthForm, switch(as.character(r$nativeStatusCode), "N"="native", "I"="introduced", "NI"="native & introduced", as.character(r$nativeStatusCode) %||% "n/a"), short_plot(r$plotID))))),
         div(class="qc-head-badges", glow_badge(paste0(short_ind(r$individualID)), DDL$green))),
       div(class="qc-tiles",
         gtile(r$greenup, "green-up"),
         gtile(r$flower, "first flower"),
         gtile(r$leaf_off, "last leaf-week"),
-        tile(ifelse(is.finite(r$leaf_active), paste0(r$leaf_active,"d"), "—"), "days carrying leaves"),
+        tile(ifelse(is.finite(r$leaf_active), paste0(r$leaf_active,"d"), "n/a"), "days carrying leaves"),
         tile(n_yr, "years watched"), tile(n_ph, "phenophases")),
       div(class="qc-section-h", bs_icon("calendar3-range"), " Phenophase calendar · when each phase happens"),
       plotlyOutput("phenoSpark", height="240px"),
@@ -595,8 +793,11 @@ server <- function(input, output, session) {
         tags$span(class="qcf-sub", "· verify, not errors")),
       div(class="qc-flags", flag_ui),
       if (has_problem) div(class="qcf-hint", bs_icon("hand-index-thumb"), " tap a flag to list the exact records behind it"),
+      if (identical(as.character(r$growthForm), "Drought deciduous broadleaf"))
+        p(class="qc-cap-note", style="margin-top:8px", bs_icon("info-circle"),
+          " This shrub's green-up is its first 'Young leaves' after a 'no' this year, a slightly later stage than tree bud-break; leaves carried over from December are not a new green-up."),
       p(class="qc-cap-note", style="margin-top:8px", bs_icon("info-circle"),
-        HTML(" Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years. <b>Last leaf-week</b> is the last week leaves were recorded, not measured senescence (a plant that flushes twice a year carries no single leaf-off date), so read <b>days carrying leaves</b> for growing extent.")))
+        HTML(" Onset dates are interval-censored to the midpoint between the last 'no' and first 'yes' observation, then taken as the median across monitored years. <b>Last leaf-week</b> is the last week leaves were recorded, not measured senescence (a plant that flushes twice a year carries no single leaf-off date), so read <b>days carrying leaves</b> for growing extent: they are summed over each run of leafy visits, midpoint to midpoint, in fully visited years.")))
     div(div(class="plot-profile-wrap", body), div(class="qc-toolbar",
       tags$button(class="smt-snap-btn", type="button", onclick="smtSaveQcCard()", bsicons::bs_icon("download"), " Save plant card (PNG)"),
       downloadButton("indCsv", "Download history (CSV)", class="smt-clear-btn"),
@@ -639,10 +840,25 @@ server <- function(input, output, session) {
       if (is.null(rep)) rep <- data.frame(note="No data-quality flags for this plant.")
       rep <- cbind(site = rv$site %||% NA_character_, individualID = rv$ind %||% NA_character_, rep)
       utils::write.csv(rep, file, row.names=FALSE, na="") }, contentType="text/csv")
-  # ---- site report card (hero band downloadLink) --------------------------
-  # Every v2 app ships a Report from the top bar / hero. This app has no PDF
-  # render path, so the report is a tidy, well-formed site-summary CSV: one
-  # block of headline metrics for the loaded site (and date span), plus a
+  # ---- site report PDF (hero band downloadLink) ----------------------------
+  # Three-page vector PDF (R/report_pdf.R): headline tiles with the green-up
+  # status and coverage, composition, season bands, trends with the years left
+  # out, caveats and the CAN / CANNOT claims, NEON citation on every page.
+  output$reportPdf <- downloadHandler(
+    filename = function() sprintf("NEON-Phenology_Report_%s_%s.pdf",
+      rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) {
+      req(rv$obs, rv$inds, rv$site)
+      phe_report_pdf(file, site = rv$site, label = rv$label, inds = rv$inds, obs = rv$obs,
+        ind_summary = rv$ind_summary, site_row = site_table[site_table$site == rv$site, , drop = FALSE],
+        release = if (exists("PHE_RELEASE")) PHE_RELEASE else NULL,
+        data_through = if (!is.null(SEARCH_INDEX)) SEARCH_INDEX$built else NULL,
+        app_version = APP_VERSION)
+    }, contentType = "application/pdf")
+
+  # ---- site summary CSV (hero band downloadLink) ----------------------------
+  # A tidy site-summary CSV beside the PDF: one block of headline metrics for
+  # the loaded site (with the green-up status and its bounds), plus a
   # growth-form roster, generated from the same reactives the rest of the app
   # reads. Self-describing filename so a folder of them stays legible.
   output$reportCard <- downloadHandler(
@@ -653,20 +869,27 @@ server <- function(input, output, session) {
       yrs <- range(obs$year, na.rm = TRUE)
       n_sp <- dplyr::n_distinct(species_level_only(inds)$scientificName)
       n_pl <- dplyr::n_distinct(inds$plotID)
-      gu   <- suppressWarnings(stats::median(rv$ind_summary$greenup, na.rm = TRUE))
-      la   <- suppressWarnings(stats::median(rv$ind_summary$leaf_active, na.rm = TRUE))
+      # the same status-aware numbers the hero shows (site index), never a bare
+      # median where the green-up is only an upper bound or the record too short
+      sg   <- site_gu(rv$site)
+      gu   <- sg$med
+      la   <- sg$la
       gu_share <- greenup_coverage(rv$ind_summary)
       cb <- comp_by(inds, "growthForm"); cb <- cb[!is.na(cb$growthForm), , drop = FALSE]
       hdr <- data.frame(
         metric = c("site", "site_name", "label", "year_first", "year_last",
                    "tagged_plants", "species", "phenology_plots",
-                   "median_greenup_doy", "median_leaf_active_days",
+                   "median_greenup_doy", "greenup_lower_bound_doy", "greenup_upper_doy", "greenup_status",
+                   "greenup_label", "median_leaf_active_days",
                    "greenup_coverage_share", "phenophase_records",
                    "data_product", "generated", "app_version", "source"),
         value = c(rv$site %||% "", { r <- site_table[site_table$site == (rv$site %||% ""), ]
                     if (nrow(r)) r$name[1] else "" }, rv$label %||% "",
                   yrs[1], yrs[2], nrow(inds), n_sp, n_pl,
-                  if (is.finite(gu)) round(gu) else NA, if (is.finite(la)) round(la) else NA,
+                  if (is.finite(gu)) round(gu) else NA,
+                  if (is.finite(sg$lo)) round(sg$lo) else NA, if (is.finite(sg$hi)) round(sg$hi) else NA,
+                  sg$status, greenup_label(sg$hi, sg$lo, sg$status, sg$n_seasons) %||% NA,
+                  if (is.finite(la)) round(la) else NA,
                   if (is.finite(gu_share)) round(gu_share, 3) else NA,
                   nrow(obs), NEON_DPID, as.character(Sys.Date()), APP_VERSION,
                   "Desert Data Labs · not affiliated with NEON/Battelle/NSF"),
@@ -684,6 +907,12 @@ server <- function(input, output, session) {
       utils::write.csv(h, file, row.names=FALSE, na="") },
     contentType="text/csv")
 
+  # standalone codebook (the same table the analysis zip ships)
+  output$codebookCsv <- downloadHandler(
+    filename = function() sprintf("NEON-Phenology_codebook_%s_%s.csv", rv$site %||% "all-sites", format(Sys.Date(), "%Y%m%d")),
+    content = function(file) utils::write.csv(phe_codebook_csv(site = rv$site, app_version = APP_VERSION), file, row.names = FALSE, na = ""),
+    contentType = "text/csv")
+
   # ---- analysis-ready data bundle: tidy CSVs + a shipped codebook (zip) ----
   output$siteBundle <- downloadHandler(
     filename = function() sprintf("NEON-phe_%s_%s.zip", rv$site %||% "site", format(Sys.Date(), "%Y%m%d")),
@@ -698,7 +927,8 @@ server <- function(input, output, session) {
         sp <- as.data.frame(rv$inds)[, c("individualID","scientificName","growthForm")]
         ko <- dplyr::left_join(ko, sp, by = "individualID")
         ko <- ko[, intersect(c("individualID","year","scientificName","growthForm",
-                               "greenup","flower","leaf_off","leaf_active","left_censored"), names(ko)), drop=FALSE]
+                               "greenup","greenup_source","left_censored","carryover","flower","leaf_off","leaf_active","leaf_weeks",
+                               "greenup_supported", "leaf_supported"), names(ko)), drop=FALSE]
       }
       clk <- weekly_yesrate(rv$obs, NULL)
       # individual_summary: the codebook documents taxonRank/is_species + the three
@@ -707,7 +937,8 @@ server <- function(input, output, session) {
       # backfill from a fresh individual_summary() (re-derives all five) when any
       # are missing. A rebuilt bundle already carries them and this is a no-op.
       ind_s <- as.data.frame(rv$ind_summary)
-      need <- c("taxonRank","is_species","greenup_n_years","flower_n_years","leaf_active_n_years")
+      need <- c("taxonRank","is_species","greenup_source","greenup_n_years","flower_n_years",
+                "leaf_active_n_years","greenup_lc_years","n_years_watched")
       if (!all(need %in% names(ind_s))) {
         fresh <- individual_summary(rv$obs, rv$inds)
         if (!is.null(fresh)) ind_s <- as.data.frame(fresh)
@@ -715,6 +946,7 @@ server <- function(input, output, session) {
       w <- function(df, nm) if (!is.null(df) && nrow(df)) utils::write.csv(df, file.path(td, nm), row.names=FALSE, na="")
       w(obs, "obs_long.csv"); w(ko, "onsets_by_individual_year.csv")
       w(ind_s, "individual_summary.csv")
+      w(as.data.frame(site_year_support(normalize_doy(rv$obs))), "site_year_support.csv")
       w(clk, "phenology_clock_weekly.csv"); w(as.data.frame(rv$trend), "onset_trend_by_species_year.csv")
       w(phe_codebook_csv(site = rv$site, app_version = APP_VERSION), "codebook.csv")
       writeLines(c(
@@ -723,10 +955,11 @@ server <- function(input, output, session) {
         "Data product: NEON DP1.10055.001 (data.neonscience.org). Not affiliated with NEON/Battelle/NSF.", "",
         "FILES:",
         "  obs_long.csv                     one row per individual x visit x phenophase (tidy long)",
-        "  onsets_by_individual_year.csv    per individual-year green-up/flower/leaf-off/leaf-active + left_censored flag",
-        "  individual_summary.csv           one row per tagged plant (medians across years)",
+        "  onsets_by_individual_year.csv    per individual-year green-up (+ greenup_source, left_censored, carryover), flower, leaf-off, leaf-active (+ leaf_weeks QC), greenup_supported, leaf_supported",
+        "  individual_summary.csv           one row per tagged plant (medians across SUPPORTED years; *_n_years are the n behind each median)",
+        "  site_year_support.csv            per year: median visited weeks per plant, first visit day, and whether the year passed the support gate",
         "  phenology_clock_weekly.csv       % of scored plant-years 'yes' per phenophase/week (typical-year pool; n>=5)",
-        "  onset_trend_by_species_year.csv  median green-up per species per year (n>=3 individuals)",
+        "  onset_trend_by_species_year.csv  median bud-break green-up per species per supported year (n>=3 individuals)",
         "  codebook.csv                     every column's type/units/definition + _phenophase_decode + _provenance", "",
         "Unit of analysis: tagged plant individual (repeated measures); plotID = spatial block.",
         "TIMING, not abundance. Onset is interval-censored. The clock pools plant-year opportunities; repeat visits collapse within year and years stay separate.",
@@ -753,7 +986,7 @@ server <- function(input, output, session) {
       dom <- if (sum(has) && diff(range(val[has])) > 0) range(val[has]) else c(0, max(val[has], 1))
       pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "median leaf-active days/yr"; nalab <- "no leaf record" }
     else { dom <- if (sum(has) && diff(range(val[has])) > 0) range(val[has]) else c(0, max(val[has], 1))
-           pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "plants tagged"; nalab <- "—" }
+           pal <- leaflet::colorNumeric("YlGn", domain = dom, na.color = "#c4c0b2"); legtitle <- "plants tagged"; nalab <- "n/a" }
     mx <- max(ps$n_ind, 1); ps$radius <- 8 + 13 * sqrt(pmax(ps$n_ind, 1)) / sqrt(mx)   # area ∝ plants
     # The popup LEADS WITH the selected metric, so it matches the dot colour (at
     # desert sites green-up is scored for ~0-19% of plants, so leaf-active is the
@@ -768,14 +1001,14 @@ server <- function(input, output, session) {
     # at a 0%-coverage desert plot, "scored for 0% of plants" reads like a broken
     # zero — say "not scored at this plot" instead, and always point to leaf-active.
     covtxt <- ifelse(thin, ifelse(gp_pct <= 0,
-        "<br><span style='color:#b5481f'>green-up not scored at this plot &mdash; read leaf-active.</span>",
-        sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants here &mdash; read leaf-active.</span>", gp_pct)), "")
+        "<br><span style='color:#b5481f'>green-up not scored at this plot; read leaf-active.</span>",
+        sprintf("<br><span style='color:#b5481f'>green-up scored for %d%% of plants here; read leaf-active.</span>", gp_pct)), "")
     lead_la <- sprintf("<b>leaf-active %s</b><br><span class='pm-pop-sub'>green-up %s</span>%s", la_str, gu_str, covtxt)
     lead_gu <- sprintf("<b>green-up %s</b>%s<br><span class='pm-pop-sub'>carries leaves %s</span>", gu_str, covtxt, la_str)
     lead_n  <- sprintf("<span class='pm-pop-sub'>green-up %s%s · leaf-active %s</span>", gu_str,
                  ifelse(thin & gp_pct > 0, sprintf(" (%d%% of plants)", gp_pct), ""), la_str)
     metric_line <- if (metric == "leaf_active") lead_la else if (metric == "greenup") lead_gu else lead_n
-    lab <- sprintf("<b>%s</b> · %d plants<br>%s", short_plot(ps$plotID), ps$n_ind, metric_line)
+    lab <- sprintf("<b>%s</b> · %d plants<br>%s", htmltools::htmlEscape(short_plot(ps$plotID)), ps$n_ind, metric_line)
     leaflet::leaflet(ps) %>% add_suite_basemap(input$view %||% "CartoDB.Positron") %>%
       leaflet::addCircleMarkers(lng = ~lng, lat = ~lat, radius = ~radius, fillColor = pal(val), color = "#fff", weight = 1, fillOpacity = 0.85,
         label = lapply(lab, htmltools::HTML), popup = lapply(lab, htmltools::HTML)) %>%
@@ -801,11 +1034,11 @@ server <- function(input, output, session) {
     if (identical(input$xsMetric %||% "greenup", "leaf_active"))
       div(class = "xs-nudge", style = "margin:4px 0 2px",
         insight_banner("info-circle", tone = "pine", HTML(sprintf(
-          "Showing <b>leaf-active days</b> by default &mdash; green-up is scored for only <b>%d%%</b> of plants at <b>%s</b>, so it's the honest read here.", pct, where))))
+          "Showing <b>leaf-active days</b> by default: green-up is scored for only <b>%d%%</b> of plants at <b>%s</b>, so leaf-active is the steadier read here.", pct, htmltools::htmlEscape(where)))))
     else
       div(class = "xs-nudge", style = "margin:4px 0 2px",
         insight_banner("arrow-right-circle", tone = "gold", HTML(sprintf(
-          "<b>%s</b> scores green-up for only <b>%d%%</b> of its plants &mdash; switch <b>Show</b> to <b>Leaf-active days</b> for the honest read.", where, pct))))
+          "<b>%s</b> scores green-up for only <b>%d%%</b> of its plants. Switch <b>Show</b> to <b>Leaf-active days</b> for the steadier read.", htmltools::htmlEscape(where), pct))))
   })
   output$gradientPlot <- renderPlotly({
     metric <- input$xsMetric %||% "greenup"
@@ -831,7 +1064,10 @@ server <- function(input, output, session) {
         text=paste0(d$site, " · ", d$name), customdata=~n_species,
         marker=list(size=11, color=pal(d$la), line=list(color=rim, width=0.8)),
         hovertemplate="<b>%{text}</b><br>lat %{x:.1f}°N · ~%{y} leaf-active days/yr (%{customdata} species)<extra></extra>")
-      ann <- list(list(text="markers only, no latitude fit: leaf-active is growing-season length (temperature + water), so it sorts by biome, not a clean poleward law · all 46 sites shown, none excluded",
+      n_off <- nrow(st) - nrow(d)
+      shown <- if (n_off > 0) sprintf("%d of %d sites shown; the other %d have no leaf-active median (fewer than three seasons or under five plants)", nrow(d), nrow(st), n_off)
+               else sprintf("all %d sites shown, none excluded", nrow(st))
+      ann <- list(list(text=paste0("markers only, no latitude fit: leaf-active is growing-season length (temperature + water), so it sorts by biome, not a clean poleward law · ", shown),
         x=0, y=1.06, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", align="left", font=list(size=10.5, color=muted)))
       return(p %>% plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE, annotations=ann,
         xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median leaf-active days per year")))
@@ -871,6 +1107,12 @@ server <- function(input, output, session) {
     n_grey <- sum(!d$well)
     ann <- if (n_grey > 0) list(list(text=sprintf("grey = thin green-up coverage (<50%% of plants) or coarse visit cadence (>%dd); %d site%s excluded from the fit", CADENCE_COARSE, n_grey, if (n_grey==1) "" else "s"),
       x=0, y=1.05, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))) else list()
+    # sites with no green-up day at all (upper bound or short record) are not drawn;
+    # say how many, so a missing dot reads as withheld, not lost
+    n_np <- if ("greenup_status" %in% names(st)) sum(st$greenup_status %in% c("upper_bound", "short_record", "none")) else 0L
+    if (n_np > 0) ann <- c(ann, list(list(
+      text=sprintf("not plotted: %d site%s (most plants already greening at the first visit, or fewer than three seasons)", n_np, if (n_np == 1) "" else "s"),
+      x=0, y=if (length(ann)) 1.10 else 1.05, xref="paper", yref="paper", showarrow=FALSE, xanchor="left", font=list(size=10.5, color="#8a988f"))))
     p %>% plotly_theme(legend=FALSE) %>% plotly::layout(showlegend=FALSE, annotations=ann,
       xaxis=list(title="Site latitude (°N)"), yaxis=list(title="Median green-up (day-of-year)"))
   })
@@ -879,8 +1121,30 @@ server <- function(input, output, session) {
     st <- site_table
     if (metric == "leaf_active") {
       if (!("median_leaf_active" %in% names(st))) return(NULL)
-      return(insight_banner("rulers", tone="pine", HTML(paste0(
-        "<b>Leaf-active days</b> measure growing-season <b>length</b> &mdash; how long a plant actually carries leaves &mdash; driven by temperature <em>and</em> water and sorted by biome. This is <b>not</b> Hopkins' bioclimatic law (that governs green-up <em>onset</em>). Across the 46 sites leaf-active falls about <b>3.4 days per degree north</b>, but that's a biome-sorting echo, not a controlled gradient: held within a single species (red maple, 10 sites) the latitude trend is <b>not significant</b> (R&sup2;=0.17), and arid deserts like <b>SRER carry as many leaf-days (266)</b> as humid Gulf-coast forests by the opposite mechanism. Read it as season length, never as abundance or productivity."))))
+      # every number below is computed from the shipped site_index and
+      # national_onsets, never typed in, so a rebuild cannot leave stale copy
+      la_d <- st[is.finite(st$median_leaf_active) & is.finite(st$lat), , drop = FALSE]
+      if (nrow(la_d) < 4) return(NULL)
+      la_slope <- unname(stats::coef(stats::lm(median_leaf_active ~ lat, data = la_d))[2])
+      ws_la <- {
+        no <- NATIONAL_ONSETS
+        if (is.null(no) || !nrow(no) || !"leaf_active" %in% names(no)) NULL else {
+          no <- no[is.finite(no$leaf_active) & is.finite(no$lat), , drop = FALSE]
+          names(no)[names(no) == "greenup"] <- "greenup_doy"; names(no)[names(no) == "leaf_active"] <- "greenup"
+          within_species_gradient(no, min_sites = 4) }
+      }
+      srer <- la_d$median_leaf_active[la_d$site == "SRER"]
+      ws_txt <- if (!is.null(ws_la)) sprintf(
+        ": held within one species (<em>%s</em>, %d sites) the latitude slope is %.1f days per degree (95%% CI %.1f to %.1f, R&sup2;=%.2f)%s",
+        sub("^([A-Z][a-z]+ [a-z\\-]+).*$", "\\1", ws_la$species), ws_la$n_sites, ws_la$slope, ws_la$lo, ws_la$hi, ws_la$r2,
+        if (ws_la$lo < 0 && ws_la$hi > 0) ", not distinguishable from zero" else "") else ""
+      srer_txt <- if (length(srer) && is.finite(srer)) sprintf(", and the Sonoran desert at SRER reads about <b>%d days</b> a year because most of its tagged shrubs are scored in leaf on nearly every visit", round(srer)) else ""
+      return(insight_banner("rulers", tone="pine", HTML(sprintf(paste0(
+        "<b>Leaf-active days</b> measure growing-season <b>length</b>: how long a plant carries leaves, summed over each run of leafy visits, in years visited on the site's usual schedule. ",
+        "They are driven by temperature <em>and</em> water and sorted by biome; this is <b>not</b> Hopkins' bioclimatic law (that governs green-up <em>onset</em>). ",
+        "Across the %d sites leaf-active changes about <b>%.1f days per degree north</b>. That is a biome-sorting echo, not a controlled gradient%s%s. ",
+        "Read it as season length, never as abundance or productivity."),
+        nrow(la_d), la_slope, ws_txt, srer_txt))))
     }
     if (!("median_greenup" %in% names(st))) return(NULL)
     d <- st[is.finite(st$median_greenup) & is.finite(st$lat), , drop=FALSE]
@@ -912,7 +1176,7 @@ server <- function(input, output, session) {
         sp_short, abs(ws$slope), if (ws$slope >= 0) "later" else "earlier", ws$n_sites, ws$lo, ws$hi, ws$r2, abs(net_slope)))), cad_badge))
     }
     tagList(insight_banner(if (net_slope >= 0) "graph-up-arrow" else "graph-down-arrow", tone="pine", HTML(sprintf(
-      "Across <b>%d</b> sites, median green-up differs by roughly <b>%.0f days %s per degree of latitude north</b>. <em>Each point mixes species and visit schedules (n as few as 4), so this is a descriptive space-for-time gradient—not a controlled comparison or a temperature effect.</em>",
+      "Across <b>%d</b> sites, median green-up differs by roughly <b>%.0f days %s per degree of latitude north</b>. <em>Each point mixes species and visit schedules (n as few as 4), so this is a descriptive space-for-time gradient, not a controlled comparison or a temperature effect.</em>",
       nrow(d), abs(net_slope), if (net_slope >= 0) "later" else "earlier"))), cad_badge)
   })
   observe({ if (is.null(NATIONAL_ONSETS) || !nrow(NATIONAL_ONSETS)) {
@@ -954,12 +1218,34 @@ server <- function(input, output, session) {
   })
 
   output$aboutPanel <- renderUI({
+    # visit cadence: the loaded site's median gap between visits (site index),
+    # else the typical gap across the bundled sites
+    mvi_all <- if ("median_visit_interval" %in% names(site_table)) suppressWarnings(as.numeric(site_table$median_visit_interval)) else numeric(0)
+    mvi_site <- if (!is.null(rv$site) && length(mvi_all)) mvi_all[match(rv$site, site_table$site)] else NA_real_
+    cadence_txt <- if (length(mvi_site) == 1L && is.finite(mvi_site))
+      sprintf(" At %s the median gap between visits is about %d days, so a date is only as precise as that gap.", rv$site, as.integer(round(mvi_site)))
+      else if (any(is.finite(mvi_all)))
+        sprintf(" Across the bundled sites the median gap between visits is about %d days (%d to %d), so a date is only as precise as that gap.",
+          as.integer(round(stats::median(mvi_all, na.rm = TRUE))), as.integer(min(mvi_all, na.rm = TRUE)), as.integer(max(mvi_all, na.rm = TRUE)))
+      else " A date is only as precise as the gap between visits."
+    rel <- release_sentence(); doi <- rel_field("doi")
     div(class="about-wrap",
       div(class="about-card", h4("\U0001F33F What this is"),
-        p("An (unofficial) explorer for NEON's ", tags$b("Plant phenology observations"), " (", tags$code("DP1.10055.001"), "). A fixed roster of tagged plants along transects is checked ", tags$b("up to twice a week"), " through the growing season; for each, observers record which ", tags$b("phenophases"), " are active: breaking leaf buds, leaves, open flowers, colored leaves, falling leaves.")),
+        p("An (unofficial) explorer for NEON's ", tags$b("Plant phenology observations"), " (", tags$code("DP1.10055.001"), "). A fixed roster of tagged plants along transects is checked ", tags$b("2 or 3 times a week while plants are changing fast, about weekly the rest of the year"), "; for each, observers record which ", tags$b("phenophases"), " are active: breaking leaf buds, leaves, open flowers, colored leaves, falling leaves.")),
       div(class="about-card", h4(bs_icon("clock-history"), " Timing, not abundance"),
         p("Phenology is a ", tags$b("timing signal"), ": when a plant wakes, blooms, and senesces. Because the roster is fixed, it is not a measure of how common a species is. It tracks the ", tags$b("calendar of the canopy"), ", and how that calendar shifts year to year."),
-        p("Onset is ", tags$b("interval-censored"), ": the true first-leaf day lies between the last 'no' and first 'yes' visit, so we use the midpoint, honest about the twice-weekly resolution.")),
+        p("Onset is ", tags$b("interval-censored"), ": the true first-leaf day lies between the last 'no' and first 'yes' visit, so we use the midpoint.", cadence_txt)),
+      div(class="about-card", h4(bs_icon("flower1"), " Green-up, carefully"),
+        p(tags$b("Green-up"), " is a plant's first ", tags$b("bud-break"), " of the year. Drought-deciduous shrubs have no bud-break stage in NEON's protocol, so for them it is the first new ", tags$b("Young leaves"), "."),
+        p("A 'yes' that was already 'yes' at the plant's last December visit is leaves carried over from last year, not a new green-up."),
+        p("When some plants were already greening at the first visit of the year, the median is shown as a ", tags$b("range"), " or as ", tags$b("\"day N or earlier\""), ", because the true onset came before anyone looked."),
+        p("Years visited less than usual (such as 2020) and sites with fewer than three seasons are left out of medians and trends."),
+        p(tags$b("This app cannot:")),
+        tags$ul(
+          tags$li("give a calendar-year green-up for evergreens, cacti or annuals that sprout with autumn rain;"),
+          tags$li("treat a Young-leaves green-up as the same day-for-day event as bud-break;"),
+          tags$li("read a green-up range as a confidence interval: it bounds censoring, not sampling error;"),
+          tags$li("give a green-up where most plants were already greening at the first visit, or from fewer than three seasons."))),
       div(class="about-card", h4(bs_icon("graph-down-arrow"), " Why it matters"),
         p("Green-up and bloom timing can respond to climate and can alter overlap with pollinators or migrating birds. This app exposes timing and support; it does not estimate those drivers, causal effects, or species mismatches."),
         p(bs_icon("envelope"), " ", tags$a(href="mailto:desertdatalabs@gmail.com","desertdatalabs@gmail.com"), " · ",
@@ -968,9 +1254,14 @@ server <- function(input, output, session) {
         p(class="caveat",
           "Built with data from the National Ecological Observatory Network (NEON), a U.S. National Science Foundation program operated by Battelle. NEON data are provided under a Creative Commons Attribution 4.0 International (CC BY 4.0) license (",
           tags$a(href="https://creativecommons.org/licenses/by/4.0/", target="_blank", "creativecommons.org/licenses/by/4.0"),
-          "). This app aggregates and derives summary metrics from the raw NEON data products; the underlying measurements are unaltered. It is an independent, unofficial tool and is not endorsed by NEON, Battelle, or the NSF.")),
+          "). This app aggregates and derives summary metrics from the raw NEON data products; the underlying measurements are unaltered. It is an independent, unofficial tool and is not endorsed by NEON, Battelle, or the NSF."),
+        if (!is.null(rel)) p(class="about-release", rel,
+          if (!is.null(doi)) tagList(" ", tags$a(href=doi, target="_blank", rel="noopener", doi)))),
+      div(class="about-card", h4(bs_icon("journal-text"), " Codebook"),
+        p("Every exported column with its type, units and definition, plus the phenophase decode and the provenance of this build. It is also inside the analysis zip."),
+        downloadButton("codebookCsv", "Download the codebook (CSV)", class="btn-outline-dark btn-sm")),
       div(class="about-card", h4(bs_icon("grid-3x3-gap-fill"), " The NEON series"),
-        p("This is one of a family of explorers, each built on a different NEON data product, that share the same look and the same honest-stats approach."),
+        p("This is one of a family of explorers, each built on a different NEON data product, that share the same look and state what each number can and cannot support."),
         series_block(footer = FALSE)))
   })
   observeEvent(input$help, showModal(modalDialog(easyClose=TRUE, title=tagList(bs_icon("question-circle"), " How it works"),
@@ -989,11 +1280,11 @@ server <- function(input, output, session) {
   # pickSite -> load_site_full() path the picker-map popup uses, so the jump is
   # instant (loads from the bundle) and lands the user on the Overview tab.
   # =========================================================================
-  doy_lab <- function(d) ifelse(is.finite(d), sprintf("%s (%s)", d, doy_to_month(d)), "—")
+  doy_lab <- function(d) ifelse(is.finite(d), sprintf("%s (%s)", d, doy_to_month(d)), "n/a")
   # leaf_active is a COUNT of days a plant carries leaves per year (distinct
   # leaf-weeks x 7), NOT a day-of-year. It must read as a duration ("110 days"),
   # never as a calendar date (doy_to_month would turn 110 into a fake "Apr 20").
-  days_lab <- function(d) ifelse(is.finite(d), sprintf("%s days", round(d)), "—")
+  days_lab <- function(d) ifelse(is.finite(d), sprintf("%s days", round(d)), "n/a")
   # a per-row "Go to site →" button: sets input$searchGo to the site code.
   go_btn <- function(codes) vapply(codes, function(cd) as.character(
     tags$button(class = "sp-btn sp-go search-go-btn", type = "button",
@@ -1018,7 +1309,7 @@ server <- function(input, output, session) {
     sp <- input$searchTaxon %||% ""
     if (!nzchar(sp) || is.null(SEARCH_TAXA)) return(SEARCH_TAXA[0, , drop = FALSE])
     d <- SEARCH_TAXA[SEARCH_TAXA$scientificName == sp, , drop = FALSE]
-    d[order(d$greenup, d$site), , drop = FALSE]
+    d[order(d$greenup, d$site, na.last = TRUE), , drop = FALSE]
   })
   output$searchTaxonCaption <- renderUI({
     sp <- input$searchTaxon %||% ""
@@ -1030,18 +1321,21 @@ server <- function(input, output, session) {
     ng <- sum(is.finite(d$greenup))
     div(class = "search-cap",
       glow_badge(sprintf("%d %s", n, if (n == 1) "site" else "sites"), DDL$primary),
-      tags$em(sprintf(" monitor %s. ", sp)),
-      tags$span(class = "muted", sprintf("Green-up day shown for %d; the rest are scored straight into leaves.", ng)))
+      tags$em(sprintf(" monitor %s%s ", sp, if (grepl("[.]$", sp)) "" else ".")),
+      tags$span(class = "muted", if (ng == n)
+        "Green-up day shown for every site."
+        else sprintf("%s fewer than three plants of this species have a green-up in fully visited years, most were already greening at the first visit, or the species has no calendar-year green-up (evergreen shrubs, cacti, annuals that sprout with autumn rain).",
+          if (ng == 0) "No green-up day here:" else sprintf("Green-up day shown for %d. At the others", ng))))
   })
   output$searchTaxonTbl <- DT::renderDT({
     d <- taxon_rows(); if (!nrow(d)) return(NULL)
     out <- data.frame(
-      Site = sprintf("<b>%s</b> · %s", d$site, d$name %||% d$site),
+      Site = sprintf("<b>%s</b> · %s", d$site, htmltools::htmlEscape(d$name %||% d$site)),
       State = d$state,
       `Green-up day` = vapply(d$greenup, doy_lab, character(1)),
       `Days carrying leaves` = vapply(d$leaf_active, days_lab, character(1)),
       Plants = d$n_ind,
-      Years = ifelse(is.na(d$year_min), "—", ifelse(d$year_min == d$year_max,
+      Years = ifelse(is.na(d$year_min), "n/a", ifelse(d$year_min == d$year_max,
         as.character(d$year_min), sprintf("%s–%s", d$year_min, d$year_max))),
       ` ` = go_btn(d$site),
       check.names = FALSE, stringsAsFactors = FALSE)
@@ -1084,12 +1378,15 @@ server <- function(input, output, session) {
   output$searchThresholdTbl <- DT::renderDT({
     d <- threshold_rows(); if (is.null(d) || !nrow(d)) return(NULL)
     out <- data.frame(
-      Site = sprintf("<b>%s</b> · %s", d$site, d$name %||% d$site),
+      Site = sprintf("<b>%s</b> · %s", d$site, htmltools::htmlEscape(d$name %||% d$site)),
       State = d$state,
-      `Median green-up day` = vapply(d$median_greenup, doy_lab, character(1)),
+      `Median green-up day` = ifelse(
+        if ("greenup_status" %in% names(d)) d$greenup_status %in% "range" & is.finite(d$greenup_lo) else FALSE,
+        sprintf("day %d to %d", as.integer(round(d$greenup_lo)), as.integer(round(d$median_greenup))),
+        vapply(d$median_greenup, doy_lab, character(1))),
       Species = d$n_species,
       Plants = d$n_individuals,
-      Years = ifelse(is.na(d$year_min), "—", sprintf("%s–%s", d$year_min, d$year_max)),
+      Years = ifelse(is.na(d$year_min), "n/a", sprintf("%s–%s", d$year_min, d$year_max)),
       ` ` = go_btn(d$site),
       check.names = FALSE, stringsAsFactors = FALSE)
     DT::datatable(out, escape = FALSE, rownames = FALSE, selection = "none",
