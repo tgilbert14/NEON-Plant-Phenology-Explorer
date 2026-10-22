@@ -96,6 +96,42 @@ jobs:
           fi
           echo "NEON token probe: HTTP 200, $files files from $PROBE_URL." | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Watch the NEON release and issue log
+        if: steps.check.outputs.run == 'true'
+        shell: bash
+        run: |
+          # The fetch pins one NEON release (PHE_RELEASE in R/site_metadata.R).
+          # Warn, never fail, when NEON publishes a newer release (RELEASE-2027 is
+          # expected in late January) or logs product issues after the pinned
+          # release was generated, so a person decides whether to re-pin.
+          set -euo pipefail
+          pinned=$(grep -oE 'tag = "RELEASE-[0-9]{4}"' R/site_metadata.R | grep -oE 'RELEASE-[0-9]{4}')
+          body=$(mktemp)
+          if ! curl -sS --retry 3 --retry-all-errors --max-time 60 -o "$body" \
+               https://data.neonscience.org/api/v0/products/DP1.10055.001; then
+            echo "::warning title=NEON release watch::could not read the product API; the watch did not run."
+            exit 0
+          fi
+          generated=$(jq -r --arg p "$pinned" '.data.releases[] | select(.release == $p) | .generationDate' "$body")
+          newer=$(jq -r --arg p "$pinned" '[.data.releases[].release | select(. > $p)] | join(", ")' "$body")
+          {
+            echo "### NEON release watch"
+            echo "- Pinned release: ${pinned} (generated ${generated:-unknown})"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$newer" ]; then
+            echo "::warning title=NEON release watch::${newer} is published; ${pinned} is still pinned. Re-pin PHE_RELEASE in R/site_metadata.R and run a full refresh."
+            echo "- Newer release published: ${newer}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "$generated" ]; then
+            jq -r --arg g "$generated" '.data.changeLogs[] | select((.issueDate // "") > $g)
+              | "\(.issueDate[0:10])\t\((.issue // "") | gsub("[\r\n]+"; " ") | .[0:200])"' "$body" |
+            while IFS=$'\t' read -r day text; do
+              echo "::warning title=NEON issue log ${day}::${text}"
+              echo "- Issue log ${day}: ${text}" >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+          rm -f "$body"
+
   fetch_raw:
     needs: gate
     if: needs.gate.outputs.run == 'true' && github.event.inputs.skip_download != 'true'
@@ -123,10 +159,10 @@ jobs:
       - name: Install fetch-only dependencies
         uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          packages: neonUtilities, dplyr, tibble, tidyr, stringr, RColorBrewer
+          packages: neonUtilities@4.0.1, dplyr, tibble, tidyr, stringr, RColorBrewer
           pak-version: stable
           dependencies: '"hard"'
-          cache-version: plant-phenology-fetch-r411-2024-12-31-v1
+          cache-version: plant-phenology-fetch-r411-2024-12-31-v2
           install-pandoc: 'false'
           install-quarto: 'false'
 
@@ -136,6 +172,9 @@ jobs:
           PHE_RAW_OUT_DIR: ${{ runner.temp }}/phe-raw
         run: |
           set -euo pipefail
+          # The RSPM snapshot env does not pin a direct pak request, so assert
+          # the exact fetch runtime before any download.
+          Rscript --vanilla -e 'stopifnot(packageVersion("neonUtilities") == "4.0.1")'
           mkdir -p "$PHE_RAW_OUT_DIR"
           Rscript --vanilla scripts/fetch_all_phe.R
           count=$(find "$PHE_RAW_OUT_DIR" -maxdepth 1 -name '*_raw.rds' -type f | wc -l)
@@ -263,6 +302,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -312,7 +352,7 @@ jobs:
             git push origin "$branch:refs/heads/$branch"
           fi
           pushed_commit=""
-          for attempt in 1 2 3 4 5; do
+          for _ in 1 2 3 4 5; do
             pushed_commit=$(git ls-remote --heads origin "refs/heads/$branch" | awk '{print $1}')
             [[ "$pushed_commit" == "$published_commit" ]] && break
             sleep 2
@@ -338,11 +378,27 @@ jobs:
               echo "- [Open the reviewer-authenticated PR](${compare_url})"
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::notice title=Validated review branch ready::Open a reviewer-authenticated PR from $branch to master after reviewing run ${GITHUB_RUN_ID}; that PR event is the exact-head CI trigger."
+            # A green run with a notice is easy to miss: keep one open issue as
+            # the signal (exact-title match, never a fuzzy --search). post-deploy.yml
+            # closes it once the recorded candidate head is live in master.
+            export ISSUE_TITLE="Phenology refresh ready for review"
+            issue_body=$(printf '%s\n\n%s\n%s\n%s\n' \
+              "A validated Plant Phenology refresh is waiting on branch ${branch}." \
+              "Candidate head: ${published_commit}" \
+              "Validator run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+              "Open the PR: ${compare_url}")
+            number=$(gh issue list --state open --limit 200 --json number,title \
+              --jq '[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty')
+            if [ -n "$number" ]; then
+              gh issue comment "$number" --body "$issue_body"
+            else
+              gh issue create --title "$ISSUE_TITLE" --body "$issue_body"
+            fi
             exit 0
           fi
 
           pr_record=""
-          for attempt in 1 2 3 4 5; do
+          for _ in 1 2 3 4 5; do
             pr_record=$(gh pr list --head "$branch" --base master --state open \
               --json url,baseRefName,headRefName,headRefOid \
               --jq 'if length == 1 then .[0] | [.url,.baseRefName,.headRefName,.headRefOid] | @tsv else "" end')
