@@ -38,7 +38,7 @@ ui <- bslib::page_fillable(
   # in its signature leaks onto <body> as an attribute. title sets <title>.
   theme = app_theme, title = "NEON Plant Phenology Explorer", lang = "en",
   tags$head(
-    tags$meta(name = "ddl-app-ready", content = "plant-phenology-v1"),
+    tags$meta(name = "ddl-app-ready", content = paste0("plant-phenology-v1 build-", APP_BUILD)),
     tags$link(rel = "stylesheet", href = asset_url("styles.css")),
     tags$link(rel = "stylesheet", href = asset_url("phe.css")),
     tags$script(src = asset_url("app.js")),

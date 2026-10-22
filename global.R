@@ -86,6 +86,11 @@ SEARCH_SITES <- if (!is.null(SEARCH_INDEX)) SEARCH_INDEX$sites else NULL
 # distinct species roster for the autocomplete (sorted; only species the network monitors)
 SEARCH_SPECIES <- if (!is.null(SEARCH_TAXA)) sort(unique(SEARCH_TAXA$scientificName)) else character(0)
 APP_VERSION <- "2.0 (Field Notebook)"
+# Build fingerprint for the post-deploy smoke: the first 12 hex of the manifest's
+# md5. manifest.json lists a checksum for every runtime file and is regenerated
+# by the pinned validator, so any code or data change moves it, and the smoke
+# can tell a fresh deploy from a stale one (it greps "build-<id>").
+APP_BUILD <- if (file.exists("manifest.json")) substr(unname(tools::md5sum("manifest.json")), 1, 12) else "unknown"
 BUNDLED <- if (!is.null(SITE_INDEX)) SITE_INDEX$site else character(0)
 site_table <- if (length(BUNDLED)) {
   m <- neon_sites[match(BUNDLED, neon_sites$site), ]
