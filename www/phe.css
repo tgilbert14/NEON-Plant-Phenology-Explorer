@@ -151,7 +151,7 @@
   max-width: 510px;
   margin: 18px 0 0;
   color: rgba(243, 237, 218, .68);
-  font-size: 10.5px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 .phe-poster-art {
@@ -208,19 +208,26 @@
   .phe-poster { width: calc(100% - 20px); margin-bottom: 20px; border-radius: 0 0 18px 18px; }
   .phe-poster-copy { padding: 24px 20px 27px; }
   .phe-poster-topline { gap: 10px; margin-bottom: 18px; padding-bottom: 10px; }
-  .phe-poster-brand, .phe-poster-suite-link { font-size: 8.3px; }
-  .phe-poster-suite-link { max-width: 124px; line-height: 1.2; white-space: normal; text-align: right; }
-  .phe-poster-app { margin-bottom: 13px; font-size: 9px; }
+  .phe-poster-brand, .phe-poster-suite-link { font-size: 11px; }
+  /* phones: brand on the first line, the suite link on its own full-width
+     line, so the full Atlas name reads as one phrase (min-height keeps 44px) */
+  .phe-poster-topline { flex-wrap: wrap; row-gap: 2px; }
+  .phe-poster-nav { flex-basis: 100%; }
+  .phe-poster-suite-link { max-width: none; line-height: 1.3; white-space: normal; text-align: left; }
+  .phe-poster-app { margin-bottom: 13px; font-size: 11px; }
   .phe-poster h1 { font-size: clamp(48px, 15vw, 62px); }
   .phe-poster .phe-poster-promise { margin-top: 18px; font-size: 15px; }
   .phe-poster-cta { width: 100%; margin-top: 21px; }
-  .phe-poster .phe-poster-note { margin-top: 14px; font-size: 9.5px; }
-  .phe-poster-art, .phe-poster-art img { min-height: 270px; height: 38svh; }
+  .phe-poster .phe-poster-note { margin-top: 14px; font-size: 12.5px; }
+  .phe-poster-art, .phe-poster-art img { min-height: 220px; height: 32svh; }
+  /* the short phone crop would land on the dark empty centre of the tall
+     mobile art; anchor it on the flowers and the valley instead */
+  .phe-poster-art img { object-position: 50% 72%; }
 }
 @media (max-width: 340px) {
-  .phe-poster-brand { font-size: 7.8px; }
+  .phe-poster-brand { font-size: 10.5px; }
   .phe-poster-brand::before { width: 22px; height: 22px; margin-right: 5px; }
-  .phe-poster-suite-link { max-width: 114px; font-size: 7.8px; }
+  .phe-poster-suite-link { font-size: 10.5px; }
   .phe-poster h1 { font-size: 45px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -436,7 +443,7 @@
   background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
   box-shadow: 0 4px 14px -6px var(--shadow);
 }
-.picker-list-link { display: block; padding: 7px 9px; border-radius: 8px; color: var(--ink); font-size: 13px; text-decoration: none; min-height: 34px; }
+.picker-list-link { display: flex; align-items: center; padding: 7px 9px; border-radius: 8px; color: var(--ink); font-size: 13px; text-decoration: none; min-height: 44px; }
 .picker-list-link:hover { background: var(--bg); color: var(--green); }
 .picker-list-link b { color: var(--green); }
 .pll-meta { color: var(--muted); font-size: 11.5px; }
@@ -510,8 +517,8 @@
   border-radius: 999px; padding: 6px 9px; white-space: nowrap; }
 [data-bs-theme="dark"] .top-bar-brand .tb-title { color: #8fdca8; }
 .top-bar-actions { display: flex; align-items: center; gap: 12px; }
-.top-bar-actions .tb-help { min-height: 44px; display: inline-flex; align-items: center;
-  font-weight: 700; }
+.top-bar-actions .tb-help { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center;
+  justify-content: center; gap: 6px; font-weight: 700; }
 .top-bar-actions .tb-help:hover { background: var(--pine); color: #fff; border-color: var(--pine); }
 .tb-theme { display: flex; align-items: center; gap: 6px; }
 .tb-theme-lab { color: var(--muted); font-size: 15px; display: inline-flex; align-items: center; }
@@ -520,8 +527,49 @@
   .top-bar { padding: 7px 10px; }
   .top-bar-brand .tb-title { font-size: 14px; }
   .top-bar-brand .tb-role { display: none; }
-  .top-bar-actions .tb-help .bi + * { display: none; } /* icon-only help on tiny screens */
+  /* icon-only help on tiny screens: the label is a real span (a bare text node
+     cannot be matched), and the button keeps aria-label="How it works". The
+     top bar stays on one row so the poster CTA lands above the fold. */
+  .top-bar { flex-wrap: nowrap; }
+  .top-bar-brand .tb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .top-bar-actions { flex: none; gap: 8px; }
+  .top-bar-actions .tb-help .tb-help-lab { display: none; }
 }
+
+/* ---- skip link (first body child; visible only on keyboard focus) ------ */
+.skip { position: absolute; left: -9999px; top: 8px; z-index: 2000; }
+.skip:focus { left: 12px; background: var(--paper); color: var(--pine); font-weight: 700;
+  padding: 8px 12px; border-radius: 8px; box-shadow: 0 6px 20px var(--shadow);
+  outline: 2px solid var(--green); outline-offset: 2px; }
+
+/* ---- empty hero band takes no room (no gap before the poster) --------- */
+#heroStats:empty { display: none; }
+@media (max-width: 560px) {
+  body.bslib-page-fill { padding: 8px; gap: 8px; }
+  #main { gap: 10px; }
+}
+
+/* ---- data vintage line under "Pick a place" ---------------------------- */
+.picker-vintage { margin: 0 0 6px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.picker-vintage a { color: var(--pine); font-weight: 700; text-underline-offset: 3px; }
+[data-bs-theme="dark"] .picker-vintage a { color: #8fdca8; }
+
+/* ---- scope chips: which data a view covers (all sites vs one site) ----- */
+.tab-scope { margin-bottom: 6px; }
+.scope-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px;
+  border-radius: 999px; font-size: 12px; font-weight: 700; line-height: 1.3; white-space: nowrap;
+  color: #3f4d44; background: color-mix(in srgb, var(--muted) 10%, var(--paper));
+  border: 1px solid var(--line); vertical-align: middle; }
+.scope-chip .bi { flex: none; color: var(--pine); }
+.scope-chip.scope-site { color: #6b2f14; background: #fbeee6; border-color: #efcdb9; }
+.scope-chip.scope-site .bi { color: var(--terra); }
+[data-bs-theme="dark"] .scope-chip { color: #d6e3da; background: rgba(255,255,255,.05); border-color: var(--line); }
+[data-bs-theme="dark"] .scope-chip .bi { color: #8fdca8; }
+[data-bs-theme="dark"] .scope-chip.scope-site { color: #f6d2bf; background: rgba(232,137,95,.12); border-color: #5a3424; }
+[data-bs-theme="dark"] .scope-chip.scope-site .bi { color: #e8895f; }
+
+/* ---- loading overlay close control ------------------------------------- */
+.load-close { margin-top: 14px; min-height: 44px; padding: 0 18px; font-weight: 700; }
 
 /* ---- product contract on the site picker ----------------------------- */
 .app-role { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 7px;
@@ -651,3 +699,28 @@ table.dataTable td .search-go-btn { margin: 0; }
    landmark). Keep the stacked flex column and gap that the page_fillable
    <body> gave these blocks before they were wrapped. */
 #main { display: flex; flex-direction: column; gap: var(--bslib-spacer, 1rem); min-width: 0; }
+
+/* ---- phone legibility, touch floor, iOS focus-zoom --------------------- */
+/* 16px on every text input and select under 768px so iOS Safari does not
+   zoom the page on focus. Kept separate from the 44px min-height rules. Never
+   add maximum-scale to the viewport: it blocks user zoom. */
+@media (max-width: 767px) {
+  .selectize-input, .selectize-input input, .selectize-dropdown,
+  .form-control, .form-select { font-size: 16px; }
+}
+/* 44px touch floor: export buttons, the inspector download, Leaflet zoom. */
+.qc-toolbar .btn, .qc-toolbar button, .qci-dl, .smt-snap-btn, .smt-clear-btn {
+  min-height: 44px; display: inline-flex; align-items: center; gap: 5px; }
+.leaflet-container.leaflet-touch .leaflet-bar a { width: 44px; height: 44px; line-height: 44px; }
+/* phone body text: story bullets, caveats and answer banners at 15px; the
+   metric selects take the full row so their labels do not run under the caret. */
+@media (max-width: 576px) {
+  .il-item, .caveat, .chart-insight { font-size: 15px; }
+  .sizelab-controls .shiny-input-container,
+  .map-controls .shiny-input-container { width: 100% !important; max-width: 100%; }
+}
+
+/* NEON release and data-vintage lines (hero band and About) */
+.hero-release { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-2, #4b5a50); }
+.about-release { font-size: 13.5px; color: var(--ink-2, #4b5a50); }
+[data-bs-theme="dark"] .hero-release, [data-bs-theme="dark"] .about-release { color: var(--ink-2, #c5d3ca); }

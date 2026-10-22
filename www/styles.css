@@ -1,3 +1,4 @@
+/* copied from tgilbert14/NEON-Small-Mammal-Tracker-App@62457f6 (www/styles.css), the nearest commit to the 2026-06-19 working-tree copy; restyled for Plant Phenology since. */
 /* =========================================================================
    NEON Plant Phenology Explorer — styles.css
    "Field Notebook" theme (Desert Data Labs). A naturalist's seasonal journal:
@@ -21,6 +22,7 @@
   --terra: #b5481f;  --gold: #d98014;  --gold-ink: #9a5b0e;
   --sky: #2f8f87;    --green: #1f7a3f; --accent: #c8417a;
   --ink: #24302a;    --muted: #5f6f64;
+  --ink-2: #4b5a50;  /* secondary text: 4.5:1+ on white and on --bg */
   --bg: #f6f3ea;     --paper: #fffdf7; --line: #e2ddcd;
   --shadow: rgba(36, 48, 42, 0.10);
   /* phenophase ramp (mirror of R pheno_palette) */
@@ -36,6 +38,7 @@
    ========================================================================= */
 [data-bs-theme="dark"] {
   --ink: #e7f0ea;  --muted: #9fb3a6;
+  --ink-2: #c5d3ca;
   --bg: #0f1c16;   --paper: #16261d;  --line: #2a3d31;
   --gold-ink: #e8b15a;                 /* brighter amber for icons/text on dark */
   --shadow: rgba(0, 0, 0, 0.45);

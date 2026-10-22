@@ -1,5 +1,5 @@
 # ===========================================================================
-# NEON Plant Phenology Explorer — ui.R
+# NEON Plant Phenology Explorer: ui.R
 # ===========================================================================
 
 phenology_poster <- function() {
@@ -13,16 +13,15 @@ phenology_poster <- function() {
           tags$a(class = "phe-poster-suite-link",
             href = "https://tgilbert14.github.io/NEON-Driver-Cascade/",
             target = "_blank", rel = "noopener",
-            "Whole suite: ", tags$strong("Driver Cascade"), tags$span("↗")))),
+            "Whole suite: ", tags$strong("NEON Cross-Product Response Atlas"), tags$span(`aria-hidden` = "true", "↗")))),
       div(class = "phe-poster-app", "NEON Plant Phenology Explorer · unofficial"),
-      h1(id = "phe-poster-title", `aria-label` = "Read the seasons.",
-        tags$span("Read the"), tags$em("seasons.")),
+      h1(id = "phe-poster-title", tags$span("Read the "), tags$em("seasons.")),
       p(class = "phe-poster-promise", "Follow tagged plants through the turning year."),
       tags$a(class = "phe-poster-cta", href = "#site-picker-start",
         onclick = "window.setTimeout(function(){var target=document.getElementById('site-picker-start');if(target){target.focus({preventScroll:true});}},0)",
         "Pick a place ", bs_icon("arrow-down")),
       p(class = "phe-poster-note",
-        "Public NEON DP1.10055.001 · monitored timing on tagged plants—not abundance, productivity, or a causal climate signal.")),
+        "Public NEON DP1.10055.001 · monitored timing on tagged plants, not abundance, productivity, or a causal climate signal.")),
     tags$figure(class = "phe-poster-art",
       tags$picture(
         tags$source(media = "(max-width: 700px)",
@@ -37,6 +36,8 @@ ui <- bslib::page_fillable(
   # page_fillable() has no window_title or fillable argument: anything unnamed
   # in its signature leaks onto <body> as an attribute. title sets <title>.
   theme = app_theme, title = "NEON Plant Phenology Explorer", lang = "en",
+  # Skip link: the first body child, so it is the first focusable element.
+  tags$a(class = "skip", href = "#main", "Skip to main content"),
   tags$head(
     tags$meta(name = "ddl-app-ready", content = paste0("plant-phenology-v1 build-", APP_BUILD)),
     tags$link(rel = "stylesheet", href = asset_url("styles.css")),
@@ -49,24 +50,24 @@ ui <- bslib::page_fillable(
   # ---- persistent top bar (theme + help) ---------------------------------
   # v2 flow: the sidebar is gone. The picker map IS the site selector (its
   # by-name fallback + Browse list live on the splash). The two controls that
-  # must stay reachable everywhere — the theme toggle and the How-it-works
-  # dialog — live in this slim top-right bar above the hero.
+  # must stay reachable everywhere (the theme toggle and the How-it-works
+  # dialog) live in this slim top-right bar above the hero.
   div(class = "top-bar",
     div(class = "top-bar-brand",
       tags$span(class = "tb-mark", "\U0001F33F"),
       tags$span(class = "tb-title", "Plant Phenology Explorer"),
       tags$span(class = "tb-role", "Plant timing · NEON suite")),
     div(class = "top-bar-actions",
-      actionButton("help", tagList(bs_icon("question-circle"), " How it works"),
-                   class = "btn-outline-dark btn-sm tb-help"),
+      actionButton("help", tagList(bs_icon("question-circle"), tags$span(class = "tb-help-lab", " How it works")),
+                   class = "btn-outline-dark btn-sm tb-help", `aria-label` = "How it works"),
       div(class = "tb-theme",
         tags$span(class = "tb-theme-lab", bs_icon("circle-half")),
         input_dark_mode(id = "colorMode", mode = "light")))
   ),
 
   # One main landmark: everything after the top bar, up to the footer.
-  tags$main(id = "main", class = "bslib-gap-spacing",
-  # "Open a plant's profile" picker — was in the sidebar, now a hidden body
+  tags$main(id = "main", class = "bslib-gap-spacing", tabindex = "-1",
+  # "Open a plant's profile" picker: was in the sidebar, now a hidden body
   # block revealed on site load (server: shinyjs::show("spPickerWrap")). Same
   # ids (indSel, surpriseBtn) so the server logic is untouched.
   hidden(div(id = "spPickerWrap", class = "indiv-picker-wrap",
@@ -81,7 +82,9 @@ ui <- bslib::page_fillable(
   div(id = "loadOverlay", class = "load-overlay", div(class = "load-card",
     div(class = "load-spin mascot-spin", MASCOT_CRITTER), div(class = "load-title", "Loading site data"),
     div(id = "loadSite", class = "load-site"), div(class = "load-bar"),
-    div(class = "load-note", "Building the phenology clock, onset board, and plant careers."))),
+    div(class = "load-note", "Building the phenology clock, onset board, and plant careers."),
+    tags$button(type = "button", class = "btn btn-outline-dark btn-sm load-close",
+                onclick = "smtLoadDone()", "Close"))),
   uiOutput("heroStats"),
   div(id = "splash",
     phenology_poster(),
@@ -89,9 +92,22 @@ ui <- bslib::page_fillable(
     div(class = "picker-start-head",
       div(class = "picker-start-kicker", "START HERE"),
       h2("Pick a place"),
-      p("Tap a site on the map. ", tags$b("Bigger dots"), " carry more tagged plants; ", tags$b("color"), " is median green-up (green = early spring, amber = late). Or pick one by name below.")),
+      local({
+        # Data vintage, built once at UI time from the bundled release identity
+        # and the search index build date. Either can be absent; the UI still builds.
+        rel <- if (exists("PHE_RELEASE", inherits = TRUE)) PHE_RELEASE else NULL
+        built <- if (exists("SEARCH_INDEX", inherits = TRUE) && !is.null(SEARCH_INDEX))
+          suppressWarnings(tryCatch(as.Date(SEARCH_INDEX$built), error = function(e) as.Date(NA)))
+          else as.Date(NA)
+        if (is.null(rel) || is.null(rel$product) || is.null(rel$tag) ||
+            length(built) != 1 || is.na(built)) NULL
+        else p(class = "picker-vintage",
+          sprintf("NEON %s (%s), observations through %s. ", rel$product, rel$tag, format(built, "%B %Y")),
+          if (!is.null(rel$doi) && nzchar(rel$doi))
+            tags$a(href = rel$doi, target = "_blank", rel = "noopener", "Data citation (DOI)"))
+      }),
+      p("Tap a site on the map. ", tags$b("Bigger dots"), " carry more tagged plants; ", tags$b("color"), " is median green-up (green = early spring, amber = late).")),
     div(class = "picker-map-wrap", leafletOutput("nationalMap", height = "460px")),
-    div(class = "picker-map-hint", bs_icon("hand-index-thumb"), " tap a dot, then ", tags$b("Explore this site"), ", or pick a site by name below"),
 
     # ---- relocated select panel (was the sidebar) ----------------------
     # Same input ids the server's cascade + load path depend on (stateSel,
@@ -129,11 +145,12 @@ ui <- bslib::page_fillable(
             tags$a(class = "picker-list-link", href = "#",
               onclick = sprintf("smtLoadStart('%s · loading…');Shiny.setInputValue('pickSite','%s',{priority:'event'});return false;",
                                 gsub("'", "\\\\'", ord$name[i]), ord$site[i]),
-              tags$b(ord$site[i]), sprintf(" · %s ", ord$name[i]),
-              tags$span(class = "pll-meta",
-                if (!is.na(n_plants[i]))
-                  sprintf("%s · %s plants", ord$state[i], format(n_plants[i], big.mark = ","))
-                else ord$state[i]))))) }))),
+              tags$span(class = "pll-text",
+                tags$b(ord$site[i]), sprintf(" · %s ", ord$name[i]),
+                tags$span(class = "pll-meta",
+                  if (!is.na(n_plants[i]))
+                    sprintf("%s · %s plants", ord$state[i], format(n_plants[i], big.mark = ","))
+                  else ord$state[i])))))) }))),
   div(id = "mainTabsWrap", class = "main-tabs-wrap",
     navset_card_tab(id = "tabs",
       nav_panel(title = tagList(bs_icon("compass"), " Overview"), value = "overview",
@@ -149,12 +166,12 @@ ui <- bslib::page_fillable(
               p(class="caveat", bs_icon("exclamation-triangle"), " Phenology is monitored on a ", tags$b("fixed roster of tagged individuals"), " along transects. It is a within-site timing signal, not a site-wide census of abundance."))),
           uiOutput("overviewInsight"),
           spin(plotlyOutput("formBar", height = "380px"))),
-        card(card_head("stars", "The story so far", info_pop("Story", p("Written from this site's live data."))),
+        card(card_head("stars", "The story so far"),
           uiOutput("siteInsights")),
         card(card_head("download", "Take the data with you",
           info_pop("Analysis-ready export",
             p("A zip of tidy CSVs: the long observation table, per-plant-year onsets (with a ", tags$b("left-censored"), " flag), per-plant summaries, the weekly clock table, and the species green-up trend, plus a ", tags$b("codebook"), " decoding every column, the phenophases, and the methods."),
-            p(class="caveat", bs_icon("check-circle"), " Built to load straight into R or Python; documented so it's still usable in five years."))),
+            p(class="caveat", bs_icon("check-circle"), " Plain CSV with a codebook for every column."))),
           div(style = "padding:2px 2px 4px",
             p(style = "color:var(--muted);font-size:13.5px;margin-bottom:10px",
               "Everything this site computes, as documented CSVs you can analyze yourself."),
@@ -181,7 +198,7 @@ ui <- bslib::page_fillable(
             card_head("graph-down-arrow", "Is the timing shifting?",
               info_pop("Year trend", p("Per year, across plants of each species (need ", tags$b("≥3 plants"), " in a species-year to show): median ", tags$b("green-up onset"), " (when plants leaf out), or median ", tags$b("leaf-active days"), " (how long they carry leaves, the desert-safe read that works where green-up is too thin). Use ", tags$b("Show"), " to switch."))),
             div(class = "sizelab-controls", style = "margin-bottom:8px",
-              selectInput("trendMetric", tagList(bs_icon("palette"), " Show"), width = "230px",
+              selectInput("trendMetric", tagList(bs_icon("palette"), " Show"), width = "280px",
                           choices = c("Green-up onset (DOY)" = "greenup", "Leaf-active days (desert-safe)" = "leaf_active"))),
             uiOutput("trendInsight"), spin(plotlyOutput("trendPlot", height = "360px"))))),
 
@@ -214,7 +231,7 @@ ui <- bslib::page_fillable(
           h4("Phenology plots across the site"),
           p("Each marker is a NEON phenology plot, sized by how many plants are tagged there and coloured by your chosen metric.")),
           div(class = "map-controls",
-            selectInput("mapMetric", "Colour by", width = "210px", choices = c("Median green-up (DOY)" = "greenup", "Leaf-active days (desert-safe)" = "leaf_active", "Plants tagged" = "n_ind")),
+            selectInput("mapMetric", "Colour by", width = "280px", choices = c("Median green-up (DOY)" = "greenup", "Leaf-active days (desert-safe)" = "leaf_active", "Plants tagged" = "n_ind")),
             selectInput("view", "Basemap", width = "160px", choices = c("Light" = "CartoDB.Positron", "Terrain" = "Esri.WorldTopoMap", "Satellite" = "Esri.WorldImagery")))),
         uiOutput("mapCoverage"),
         card(full_screen = TRUE, spin(leafletOutput("map", height = "620px")))),
@@ -222,13 +239,14 @@ ui <- bslib::page_fillable(
       nav_panel(title = tagList(bs_icon("globe-americas"), " Across sites"), value = "cross",
         div(class = "tab-head",
           div(class = "tab-head-text",
+            div(class = "tab-scope", span(class = "scope-chip scope-all", bs_icon("globe-americas"), paste("All", nrow(site_table), "sites"))),
             h4("Across the network",
                info_pop("Across-site views",
                  p("Each point is a ", tags$b("bundled site"), ". Use ", tags$b("Show"), " to switch between ", tags$b("median green-up day"), " (when plants leaf out) and ", tags$b("leaf-active days"), " (how long they carry leaves, the desert-safe read)."),
                  p(class="caveat", bs_icon("exclamation-triangle"), " Sites differ in which species they monitor and how often they're visited, so read these as a ", tags$b("gradient across the network"), ", not a controlled experiment. Green-up leads with the ", tags$b("within-species"), " slope (species held constant); leaf-active is shown markers-only because it sorts by ", tags$b("biome"), ", not by a clean latitude law."))),
             p("Forty-six sites from desert to tundra, and how the calendar of the canopy shifts across the continent.")),
           div(class = "sizelab-controls",
-            selectInput("xsMetric", tagList(bs_icon("palette"), " Show"), width = "240px",
+            selectInput("xsMetric", tagList(bs_icon("palette"), " Show"), width = "280px",
               choices = c("Median green-up (DOY)" = "greenup", "Leaf-active days (desert-safe)" = "leaf_active")))),
         uiOutput("xsNudge"),
         uiOutput("gradientInsight"),
@@ -243,9 +261,10 @@ ui <- bslib::page_fillable(
 
       nav_panel(title = tagList(bs_icon("search"), " Search"), value = "search",
         div(class = "tab-head", div(class = "tab-head-text",
+          div(class = "tab-scope", span(class = "scope-chip scope-all", bs_icon("globe-americas"), paste("All", nrow(site_table), "sites"))),
           h4("Search the network",
              info_pop("Search the network",
-               p("Search across every bundled site at once, with no waiting. The whole index is packed into the app, so a search is instant."),
+               p("Search every bundled site by species or by green-up day."),
                p(class="caveat", bs_icon("exclamation-triangle"), " The measure is each site's ", tags$b("median green-up day"), " for a species, a within-site index, not an absolute ranking. Sites differ in which species they monitor and how often they visit, so read the numbers as approximate."))),
           p("Find which sites monitor a plant, or pull the sites whose spring lands before or after a day you choose."))),
         div(class = "search-mode-wrap",
@@ -285,9 +304,7 @@ ui <- bslib::page_fillable(
       nav_panel(title = tagList(bs_icon("info-circle"), " About"), value = "about", uiOutput("aboutPanel"))
     ))),
   div(class = "ddl-footer",
-    div(tags$a(class = "custom-cta", href = "mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Phenology%20Explorer",
-      span(class = "hand", "\U0001F44B"), "Questions or feedback? Get in touch with Desert Data Labs.")),
-    p(style = "margin-top:12px", HTML("Built by <strong>Desert Data Labs</strong> · Tucson, AZ · get in touch →"),
+    p(tags$strong("Desert Data Labs"), " · Tucson, AZ · ",
       tags$a(href = "mailto:desertdatalabs@gmail.com?subject=NEON%20Plant%20Phenology%20Explorer", "desertdatalabs@gmail.com")),
-    p(style = "font-size:12px;opacity:.85", "Data: NEON Plant Phenology Observations (DP1.10055.001). Not affiliated with NEON, Battelle, or the NSF. An educational data-exploration tool."))
+    p(style = "font-size:12px;color:var(--ink-2)", "Data: NEON Plant Phenology Observations (DP1.10055.001). Not affiliated with NEON, Battelle, or the NSF. An educational data-exploration tool."))
 )

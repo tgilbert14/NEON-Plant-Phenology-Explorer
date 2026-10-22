@@ -1,3 +1,4 @@
+// copied from tgilbert14/NEON-Small-Mammal-Tracker-App@22ae61c (www/app.js); adapted for Plant Phenology since.
 /* =========================================================================
    app.js — count-up stat counters, the loading overlay, popover dismissal,
    and the Shiny custom-message handlers for the Plant Phenology Explorer.
@@ -55,7 +56,7 @@ function smtLoadStart(label) {
   clearTimeout(smtSafetyTimer);
   smtSafetyTimer = setTimeout(function () {  // safety net so it can never stick
     var note = document.querySelector(".load-note");
-    if (note) note.textContent = "Still working — a large site or a slow NEON Portal can take a bit. You can close this and try again.";
+    if (note) note.textContent = "Still working. A large site or a slow NEON Portal can take a while. Close this and try again.";
     setTimeout(smtLoadDone, 5000);
   }, 90000);
 }
