@@ -54,7 +54,7 @@ coverage trap, not fixing the machinery.
   (40 of 215); JORN 54%, MOAB 61%, ONAQ 63%. Desert drought-deciduous/cactus/evergreen plants rarely
   record a *green-up phenophase* ("Breaking leaf buds" / "Initial growth") — they're scored straight into
   "Leaves"/"Young leaves". So a desert site's `median_greenup` is a small, non-random subset, while
-  **`leaf_active` survives** (SRER 67%, ONAQ 99%).
+  **`leaf_active` survives** (SRER 67%, ONAQ 99%). *(Corrected 2026-10-21: the cause was the app's definition. Drought-deciduous shrubs record Young leaves, which now count as their green-up; cacti and leafless evergreens record no leaf phenophase at all. See the 2026-10-21 handoff entry.)*
 - **`leaf_active` is the honest growing-extent metric and it spans the whole network** (site medians
   **35–266 days**). For multi-flush desert plants, green-up→leaf-off would fabricate a ~300-day season;
   counting distinct leaf-weeks × 7 yields the real ~110. The bundle ships this, not the span.

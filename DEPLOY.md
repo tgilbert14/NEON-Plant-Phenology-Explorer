@@ -29,7 +29,8 @@ representative interaction.
    selected the merge. Record the deployed full commit, not just a seven-character
    display prefix.
 7. Verify the public app is not a host error page, contains
-   `ddl-app-ready=plant-phenology-v1`, establishes a Shiny session, loads a
+   `ddl-app-ready=plant-phenology-v1 build-<id>` where `<id>` is the first 12 hex
+   of the merged `manifest.json` md5, establishes a Shiny session, loads a
    representative bundled site, changes one analysis control, and produces no
    unexpected first-party console error.
 8. Verify the Pages cover at desktop and 390 px: no persistent horizontal
@@ -40,14 +41,23 @@ representative interaction.
    risks into `docs/BUILD-TEST-HANDOFF.md` before declaring recovery.
 
 `.github/workflows/post-deploy.yml` adds a cold-start-aware first line of defense:
-it rejects common Posit host error pages and requires the app-specific static
-identity marker. That HTTP check cannot prove a WebSocket-backed Shiny session;
-step 7 remains mandatory.
+it rejects common Posit host error pages and requires the app marker carrying this
+commit's build fingerprint (`global.R` `APP_BUILD`, the first 12 hex of the
+manifest md5), the page `<title>` and `lang="en"`, so a stale deploy of an older
+commit does not pass. It also closes the "Phenology refresh ready for review"
+issue that `refresh-data.yml` opens, once the recorded candidate head is live.
+That HTTP check cannot prove a WebSocket-backed Shiny session; step 7 remains
+mandatory.
 
 ## Manifest and runtime
 
 The deployed app starts entirely from committed bundles. `neonUtilities` and
 `arrow` are refresh/build inputs only and must not enter the runtime manifest.
+
+Connect Cloud content variable required: `CARTO_BASEMAP_KEY` (the suite CARTO
+key). Without it every "Light" map falls back to the Esri grey canvas. Set it in
+Connect Cloud, Settings, Variables, then republish. Shinyapps.io is retired for
+this app; `scripts/deploy.R` was removed (no mirror, no secrets behind it).
 
 `scripts/write_manifest.R` is the sole manifest generator. It:
 

@@ -109,8 +109,8 @@ Two ideas that make it robust:
 
 ## Deploy: the files travel with the app
 
-The deploy bundles the `.rds` files alongside the code (here `scripts/deploy.R` adds
-`data/sites/*.rds` to the file list). Because they're committed to the repo, they're versioned with
+The deploy bundles the `.rds` files alongside the code (here the validator-generated
+`manifest.json` lists every `data/sites/*.rds` with its checksum; Connect Cloud deploys from it). Because they're committed to the repo, they're versioned with
 the code and reproducible. Keep raw downloads out of the bundle (`.gitignore` the neon cache /
 `filesToProcess`) — only the trimmed `.rds` ship.
 
