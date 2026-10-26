@@ -52,7 +52,9 @@ function smtLoadStart(label) {
   var siteEl = document.getElementById("loadSite");
   if (siteEl) siteEl.textContent = siteText;
   ov.style.display = "flex";
-  if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+  // haptic tick only after a tap: a ?site= deep link loads with no user gesture
+  var tapped = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (navigator.vibrate && tapped) { try { navigator.vibrate(12); } catch (e) {} }
   clearTimeout(smtSafetyTimer);
   smtSafetyTimer = setTimeout(function () {  // safety net so it can never stick
     var note = document.querySelector(".load-note");
