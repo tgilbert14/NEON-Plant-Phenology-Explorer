@@ -178,3 +178,124 @@ first_phenology_identity_rows <- function(x, site = "<unknown>") {
   rownames(out) <- NULL
   out
 }
+
+# ---- deterministic bundle bytes --------------------------------------------
+# A bundle rebuilt from the same observations must serialize to the same bytes,
+# so a refresh that changes nothing produces no diff and a manifest checksum
+# moves only when content moves. Row order from the raw fetch, from dplyr joins
+# and from group-wise summaries is not promised, so every stored table is put in
+# one canonical order here. Character keys sort with method = "radix", which
+# compares bytes (C locale) and so cannot drift with the build machine's locale.
+
+# Sort key for one column: factors compare by their labels (not their codes, so
+# a different level set cannot reorder rows), dates by their numeric value.
+.canonical_key <- function(x, column) {
+  if (is.factor(x)) return(enc2utf8(as.character(x)))
+  if (is.list(x) || is.complex(x) || is.raw(x)) {
+    stop(sprintf("Cannot canonicalize column %s of type %s.", column, typeof(x)),
+         call. = FALSE)
+  }
+  if (is.character(x)) return(enc2utf8(as.vector(x)))
+  out <- unclass(x)
+  attributes(out) <- NULL
+  out
+}
+
+# Reindex rows of a data frame while keeping its class, every column's type,
+# factor levels and attributes, and compact row names.
+.reindex_frame <- function(x, idx) {
+  out <- x[idx, , drop = FALSE]
+  for (column in names(x)) {
+    value <- x[[column]][idx]
+    kept <- attributes(x[[column]])
+    kept$names <- NULL
+    attributes(value) <- kept
+    out[[column]] <- value
+  }
+  attr(out, "row.names") <- .set_row_names(length(idx))
+  out
+}
+
+.require_frame_columns <- function(x, table, columns) {
+  if (!is.data.frame(x)) {
+    stop(sprintf("Bundle table %s is not a data frame.", table), call. = FALSE)
+  }
+  missing <- setdiff(columns, names(x))
+  if (length(missing)) {
+    stop(sprintf("Bundle table %s is missing sort columns: %s.",
+                 table, paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  invisible(x)
+}
+
+.order_frame_by <- function(x, table, columns) {
+  .require_frame_columns(x, table, columns)
+  if (nrow(x) < 2L) return(.reindex_frame(x, seq_len(nrow(x))))
+  keys <- lapply(columns, function(column) .canonical_key(x[[column]], column))
+  idx <- do.call(order, c(unname(keys), list(na.last = TRUE, method = "radix")))
+  .reindex_frame(x, idx)
+}
+
+# Drop exact duplicate rows (every column equal, NA equal to NA), then order the
+# rows by every column in the table's column order. Sorting first makes the
+# duplicate test a vectorized comparison of adjacent rows.
+canonical_obs <- function(obs) {
+  if (!is.data.frame(obs)) {
+    stop("Bundle table obs is not a data frame.", call. = FALSE)
+  }
+  columns <- names(obs)
+  if (anyDuplicated(columns)) {
+    stop(sprintf("Bundle table obs has duplicate columns: %s.",
+                 paste(unique(columns[duplicated(columns)]), collapse = ", ")),
+         call. = FALSE)
+  }
+  n <- nrow(obs)
+  if (n < 2L || !length(columns)) return(.reindex_frame(obs, seq_len(n)))
+  keys <- lapply(columns, function(column) .canonical_key(obs[[column]], column))
+  ord <- do.call(order, c(unname(keys), list(na.last = TRUE, method = "radix")))
+  same <- rep(TRUE, n - 1L)
+  for (key in keys) {
+    sorted <- key[ord]
+    a <- sorted[-1L]
+    b <- sorted[-n]
+    a_na <- is.na(a)
+    b_na <- is.na(b)
+    equal <- (a_na & b_na) | (!a_na & !b_na & a == b)
+    equal[is.na(equal)] <- FALSE
+    same <- same & equal
+  }
+  .reindex_frame(obs, ord[!c(FALSE, same)])
+}
+
+# Put every stored table of a site bundle in canonical order. Member names and
+# order are kept; a NULL trend stays a named NULL member.
+canonical_bundle <- function(b) {
+  if (!is.list(b) || is.data.frame(b)) {
+    stop("A phenology bundle must be a list.", call. = FALSE)
+  }
+  required <- c("obs", "inds", "ind_summary", "trend")
+  missing <- setdiff(required, names(b))
+  if (length(missing)) {
+    stop(sprintf("Phenology bundle is missing members: %s.",
+                 paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  b[["obs"]] <- canonical_obs(b[["obs"]])
+  b[["inds"]] <- .order_frame_by(b[["inds"]], "inds", "individualID")
+  b[["ind_summary"]] <- .order_frame_by(b[["ind_summary"]], "ind_summary", "individualID")
+  if (!is.null(b[["trend"]])) {
+    b["trend"] <- list(.order_frame_by(b[["trend"]], "trend", c("scientificName", "year")))
+  }
+  b
+}
+
+# Content-keyed write: leave the file (and its mtime) alone when it already holds
+# an identical object, so an unchanged rebuild touches nothing. Returns TRUE when
+# the file was written.
+write_rds_if_changed <- function(x, path) {
+  if (file.exists(path)) {
+    current <- tryCatch(readRDS(path), error = function(e) e)
+    if (!inherits(current, "error") && identical(current, x)) return(invisible(FALSE))
+  }
+  saveRDS(x, path, compress = "xz")
+  invisible(TRUE)
+}

@@ -208,4 +208,126 @@ check(
   "raw consumer fails closed on a nonempty length-zero key column"
 )
 
+# ---- deterministic bundle bytes ---------------------------------------------
+# The same observations must serialize to the same bytes whatever order the raw
+# fetch or a join delivered them in, and exact duplicate rows must not survive.
+obs_fixture <- data.frame(
+  individualID = c("NEON.PLA.B", "NEON.PLA.A", "NEON.PLA.B", "NEON.PLA.A",
+                   "NEON.PLA.A", "NEON.PLA.C"),
+  year = c(2020L, 2020L, 2020L, 2019L, 2020L, NA),
+  date = as.Date(c("2020-04-02", "2020-04-01", "2020-04-02", "2019-05-01",
+                   "2020-04-01", NA)),
+  phenophaseName = factor(c("Leaves", "Breaking leaf buds", "Leaves", "Leaves",
+                            "Breaking leaf buds", "Leaves")),
+  status = factor(c("yes", "no", "yes", "uncertain", "no", NA),
+                  levels = c("no", "uncertain", "yes")),
+  is_species = c(TRUE, TRUE, TRUE, TRUE, TRUE, NA),
+  stringsAsFactors = FALSE
+)
+shuffled <- obs_fixture[c(6L, 3L, 1L, 5L, 2L, 4L), , drop = FALSE]
+canon_a <- canonical_obs(obs_fixture)
+canon_b <- canonical_obs(shuffled)
+check(identical(canon_a, canon_b),
+      "canonical_obs gives an identical table for a row-shuffled copy")
+check(nrow(canon_a) == 4L && !anyDuplicated(canon_a) &&
+        identical(canon_a$individualID,
+                  c("NEON.PLA.A", "NEON.PLA.A", "NEON.PLA.B", "NEON.PLA.C")) &&
+        identical(canon_a$year, c(2019L, 2020L, 2020L, NA)),
+      "canonical_obs drops exact duplicates and orders by every column, NA last")
+check(is.factor(canon_a$status) &&
+        identical(levels(canon_a$status), c("no", "uncertain", "yes")) &&
+        inherits(canon_a$date, "Date") && is.integer(canon_a$year) &&
+        is.logical(canon_a$is_species) &&
+        identical(attr(canon_a, "row.names"), 1:4) &&
+        identical(class(canon_a), class(obs_fixture)),
+      "canonical_obs keeps column types, factor levels, class and resets row names")
+check(identical(canonical_obs(canon_a), canon_a),
+      "canonical_obs is idempotent")
+labels_fixture <- data.frame(
+  phenophaseName = factor(c("Leaves", "Breaking leaf buds"),
+                          levels = c("Leaves", "Breaking leaf buds")),
+  stringsAsFactors = FALSE
+)
+check(identical(as.character(canonical_obs(labels_fixture)$phenophaseName),
+                c("Breaking leaf buds", "Leaves")),
+      "canonical_obs orders factor columns by label, not by level code")
+local({
+  path_a <- tempfile(fileext = ".rds")
+  path_b <- tempfile(fileext = ".rds")
+  on.exit(unlink(c(path_a, path_b)), add = TRUE)
+  saveRDS(canon_a, path_a, compress = "xz")
+  saveRDS(canon_b, path_b, compress = "xz")
+  check(identical(unname(tools::md5sum(path_a)), unname(tools::md5sum(path_b))),
+        "canonical obs from shuffled inputs serialize to identical md5")
+})
+# Committed bundles store obs as a tibble; the canonical form must stay one.
+if (requireNamespace("tibble", quietly = TRUE)) {
+  tbl_a <- canonical_obs(tibble::as_tibble(obs_fixture))
+  tbl_b <- canonical_obs(tibble::as_tibble(shuffled))
+  check(inherits(tbl_a, "tbl_df") && identical(tbl_a, tbl_b) &&
+          identical(as.data.frame(tbl_a), canon_a),
+        "canonical_obs keeps a tibble a tibble with the same rows")
+}
+check(errors_with(canonical_obs(list(a = 1)), "obs is not a data frame"),
+      "canonical_obs fails closed on a non-data-frame")
+
+inds_fixture <- data.frame(
+  individualID = c("NEON.PLA.B", "NEON.PLA.C", "NEON.PLA.A"),
+  scientificName = c("Beta", "Gamma", "Alpha"),
+  stringsAsFactors = FALSE
+)
+bundle_fixture <- list(
+  obs = obs_fixture,
+  inds = inds_fixture,
+  meta = list(site = "TEST"),
+  ind_summary = inds_fixture[c(2L, 1L, 3L), , drop = FALSE],
+  trend = data.frame(scientificName = c("Beta", "Alpha", "Alpha"),
+                     year = c(2020L, 2021L, 2020L), onset = c(100, 101, 99),
+                     n = c(3L, 3L, 4L), stringsAsFactors = FALSE)
+)
+bundle_reordered <- bundle_fixture
+bundle_reordered$obs <- shuffled
+bundle_reordered$inds <- inds_fixture[c(3L, 1L, 2L), , drop = FALSE]
+bundle_reordered$trend <- bundle_fixture$trend[c(3L, 1L, 2L), , drop = FALSE]
+canon_bundle <- canonical_bundle(bundle_fixture)
+check(identical(canon_bundle, canonical_bundle(bundle_reordered)) &&
+        identical(names(canon_bundle), names(bundle_fixture)) &&
+        identical(canon_bundle$inds$individualID,
+                  c("NEON.PLA.A", "NEON.PLA.B", "NEON.PLA.C")) &&
+        identical(canon_bundle$ind_summary$individualID,
+                  c("NEON.PLA.A", "NEON.PLA.B", "NEON.PLA.C")) &&
+        identical(canon_bundle$trend$year, c(2020L, 2021L, 2020L)) &&
+        identical(canon_bundle$trend$scientificName, c("Alpha", "Alpha", "Beta")),
+      "canonical_bundle orders obs, inds, ind_summary and trend and keeps member order")
+null_trend <- bundle_fixture
+null_trend["trend"] <- list(NULL)
+canon_null <- canonical_bundle(null_trend)
+check("trend" %in% names(canon_null) && is.null(canon_null$trend) &&
+        identical(names(canon_null), names(bundle_fixture)),
+      "canonical_bundle keeps a NULL trend as a named NULL member")
+no_key <- bundle_fixture
+no_key$inds$individualID <- NULL
+check(errors_with(canonical_bundle(no_key),
+                  "Bundle table inds is missing sort columns: individualID"),
+      "canonical_bundle fails closed when a sort key is absent")
+
+local({
+  path <- tempfile(fileext = ".rds")
+  on.exit(unlink(path), add = TRUE)
+  first <- write_rds_if_changed(canon_bundle, path)
+  # Push the mtime into the past so an unwanted rewrite is detectable at any
+  # file-system timestamp resolution.
+  Sys.setFileTime(path, as.POSIXct("2001-01-01 00:00:00", tz = "UTC"))
+  before <- file.info(path)$mtime
+  second <- write_rds_if_changed(canonical_bundle(bundle_reordered), path)
+  after <- file.info(path)$mtime
+  check(isTRUE(first) && identical(second, FALSE) && identical(before, after),
+        "write_rds_if_changed writes once and skips an identical rewrite without touching mtime")
+  changed <- canon_bundle
+  changed$meta$site <- "OTHER"
+  check(isTRUE(write_rds_if_changed(changed, path)) &&
+          identical(readRDS(path)$meta$site, "OTHER"),
+        "write_rds_if_changed rewrites when the content changes")
+})
+
 cat(sprintf("All %d bundle-identity fixtures passed.\n", passed))
