@@ -59,7 +59,7 @@ SITE_INDEX_REQUIRED <- c(
   "greenup_carry_forms", "greenup_carry_share",
   "greenup_lc_share", "greenup_fallback_share", "n_supported_years", "n_leaf_supported_years",
   "n_years_watched", "leaf_active_hi", "leaf_edge_share", "leaf_active_status",
-  "year_min", "year_max", "elevation_m"
+  "uncertain_share", "year_min", "year_max", "elevation_m"
 )
 IND_SUMMARY_REQUIRED <- c(
   INDS_REQUIRED, "greenup", "flower", "leaf_off", "leaf_active",
@@ -243,6 +243,7 @@ if (!identical(site_codes, EXPECTED_SITES))
 
 loaded <- 0L
 roster_keys <- character(0)   # every species-level site x scientificName in the bundles
+uncertain_by_site <- numeric(0)   # independent uncertain_share per site, from obs
 latest_observation_date <- as.Date(NA)
 for (path in site_files) {
   code <- sub("\\.rds$", "", basename(path))
@@ -443,6 +444,13 @@ for (path in site_files) {
     sp <- bundle$inds[bundle$inds$is_species %in% TRUE & !is.na(bundle$inds$scientificName), , drop = FALSE]
     roster_keys <- c(roster_keys, paste(code, sp$scientificName, sep = "\r"))
   }
+  # the uncertain share recomputed here in base R from the stored obs, never through
+  # the helpers, so site_index$uncertain_share has an independent check
+  if (is.data.frame(bundle$obs) && "status" %in% names(bundle$obs)) {
+    st <- as.character(bundle$obs$status)
+    n_scored <- sum(st %in% c("yes", "no", "uncertain"))
+    uncertain_by_site[[code]] <- if (n_scored) sum(st %in% "uncertain") / n_scored else NA_real_
+  }
   loaded <- loaded + 1L
 }
 cat(sprintf("bundles: %d expected, %d loaded with required container\n",
@@ -514,6 +522,19 @@ if (!is.null(site_index)) {
       if (any(bad))
         note(sprintf("site_index leaf_edge_share must be within [0, 1] or NA; fails at: %s",
                      show_keys(as.character(site_index$site)[bad])))
+    }
+    if ("uncertain_share" %in% names(site_index)) {
+      us <- suppressWarnings(as.numeric(site_index$uncertain_share))
+      keys <- as.character(site_index$site)
+      bad_range <- !(is.finite(us) & us >= 0 & us <= 1)
+      if (any(bad_range))
+        note(sprintf("site_index uncertain_share must be within [0, 1]; fails at: %s",
+                     show_keys(keys[bad_range])))
+      want <- unname(uncertain_by_site[keys])
+      bad_eq <- !bad_range & !(is.finite(want) & us == want)
+      if (any(bad_eq))
+        note(sprintf("site_index uncertain_share differs from the share of stored obs rows recorded 'uncertain'; fails at: %s",
+                     show_keys(keys[bad_eq])))
     }
   }
 }

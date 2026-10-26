@@ -33,8 +33,8 @@ build_site <- function(site) {
   f <- file.path(RAW, paste0(site,"_raw.rds")); if(!file.exists(f)){cat("  MISSING",f,"\n"); return(NULL)}
   r <- readRDS(f)
   validate_phenology_raw_result(r, site)
-  # TODO(identity-order review): the order of identity rows that
-  # first_phenology_identity_rows() keeps first is pending review; leave it unchanged.
+  # one identity row per plant: the latest record wins (newest editedDate, then
+  # date, then uid; see first_phenology_identity_rows in scripts/bundle_identity.R)
   pind <- first_phenology_identity_rows(r$phe_perindividual, site)
   pind <- tibble::as_tibble(pind); si <- tibble::as_tibble(r$phe_statusintensity)
   num <- function(x) suppressWarnings(as.numeric(x))
@@ -58,8 +58,10 @@ build_site <- function(site) {
     # layer; nativeStatusCode intentionally NOT carried (lives on inds — re-joined
     # only at CSV export) to save memory at the 46-site scale.
     dplyr::left_join(dplyr::select(ident, "individualID","scientificName","growthForm","is_species"), by = "individualID")
-  # TODO(raw-duplicate review): raw rows that repeat a plant x phenophase x date with a
-  # different editedDate are not yet resolved here; the rule is pending review.
+  # Status rows that repeat a plant x phenophase x date are kept, never thinned to the
+  # latest editedDate: NEON's duplicates are mostly commissioning checks (two observers
+  # scoring the same phenophase), and 'yes' already wins a same-visit conflict in the
+  # estimand (iris, 2026-10-21). Only rows identical in every bundled column collapse.
   # Canonical order and exact-duplicate removal: the same raw rows always give the
   # same obs bytes. Labels sort the same before and after the factor encoding below.
   obs <- canonical_obs(obs)

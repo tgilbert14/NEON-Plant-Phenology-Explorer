@@ -151,6 +151,14 @@ materialize_phenology_raw_result <- function(x, site = "<unknown>") {
   x
 }
 
+# One identity row per tagged plant. When NEON lists a plant more than once (a
+# later re-identification or plot correction), the latest record wins, as NEON's
+# phenology tutorial does for phe_perindividual: the newest editedDate, then the
+# newest date, then the smallest uid, so the same raw table always keeps the same
+# row whatever order it arrives in (iris, 2026-10-21). The three ordering columns
+# are required, and a raw table without them fails closed. Rows come back ordered
+# by individualID (radix).
+IDENTITY_ORDER_KEYS <- c("editedDate", "date", "uid")
 first_phenology_identity_rows <- function(x, site = "<unknown>") {
   required <- c(
     "individualID", "scientificName", "growthForm", "taxonRank",
@@ -158,11 +166,11 @@ first_phenology_identity_rows <- function(x, site = "<unknown>") {
   )
   site_label <- .phenology_site_label(site)
   .validate_phenology_frame(
-    x, "phe_perindividual", site, required = required, nonempty = TRUE
+    x, "phe_perindividual", site, required = c(required, IDENTITY_ORDER_KEYS),
+    nonempty = TRUE
   )
 
   out <- as.data.frame(x, stringsAsFactors = FALSE)
-  out <- out[, required, drop = FALSE]
   ids <- enc2utf8(as.character(out$individualID))
   invalid <- is.na(ids) | !nzchar(trimws(ids))
   if (any(invalid)) {
@@ -173,7 +181,11 @@ first_phenology_identity_rows <- function(x, site = "<unknown>") {
     ), call. = FALSE)
   }
 
-  out$individualID <- ids
+  sort_key <- function(v) if (is.factor(v)) as.character(v) else v
+  ord <- order(ids, sort_key(out$editedDate), sort_key(out$date), sort_key(out$uid),
+               decreasing = c(FALSE, TRUE, TRUE, FALSE), method = "radix", na.last = TRUE)
+  out <- out[ord, required, drop = FALSE]
+  out$individualID <- ids[ord]
   out <- out[!duplicated(out$individualID), , drop = FALSE]
   rownames(out) <- NULL
   out
