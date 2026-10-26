@@ -332,7 +332,7 @@ check(b_upper$status == "upper_bound" && is.na(b_upper$value) && is.na(b_upper$l
         is.na(greenup_label(NA, NA, NA, "none")),
       "an upper-bound green-up withholds the number and reads 'or earlier'")
 
-# --- estimand sign-off 2026-10-21 fixtures (iris; rules.md sections 2 to 9) ---
+# --- estimand sign-off 2026-10-21 fixtures (iris; scripts/headline_rules.md sections 2 to 9) ---
 # 1. Per-plant-year brackets. C1 carried over: the later no-to-yes pair [60, 74];
 # C2 bridged: [1, 10] (the December 'no' clamps to day 1); C3 left-censored: no
 # lo, hi = the first 'yes'; C4 standard: [100, 107].
@@ -464,7 +464,7 @@ check(identical(names(ie), c(names(ie_inds), "greenup", "flower", "leaf_off", "l
         e3$leaf_active == 100 && e3$leaf_active_hi == 100 && identical(e3$leaf_active_lower_bound, FALSE),
       "individual summary carries leaf_active_hi, leaf_edge_years and the lower-bound flag")
 
-# --- within-species gradient amendments (hk, rules.md section 10) -------------
+# --- within-species gradient amendments (hk, scripts/headline_rules.md section 10) -------------
 gr_rows <- function(sp, sites, lat, value, n_years, leaf_n_years = n_years)
   tibble(scientificName = sp, site = sites, lat = lat, greenup = value, leaf_active = value,
          n_years = n_years, leaf_n_years = leaf_n_years)

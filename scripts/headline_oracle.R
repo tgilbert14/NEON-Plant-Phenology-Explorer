@@ -3,7 +3,7 @@
 #
 # Why this file exists: the release gate used to re-run the app's own helpers on the
 # observations, so a bug in a helper reproduced itself and passed. This oracle is written
-# from the signed-off written rules only (the rules.md contract, sections 0 to 8b and 10) and does
+# from the signed-off written rules only (the scripts/headline_rules.md contract, sections 0 to 8b and 10) and does
 # not call or copy anything in R/. Two separate implementations must agree for the gate to
 # pass. Base R only, so it cannot inherit a package-level behaviour from the app either.
 #

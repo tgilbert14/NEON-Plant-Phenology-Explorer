@@ -131,7 +131,7 @@ show_keys <- function(keys, limit = 10L) {
   shown
 }
 
-# The green-up bracket (rules.md section 6): a point or a range carries a finite
+# The green-up bracket (scripts/headline_rules.md section 6): a point or a range carries a finite
 # lo <= value <= hi, a point is narrower than BOUND_POINT_TOL and a range is not;
 # an upper bound publishes only hi.
 check_greenup_bracket <- function(x, label, value_col, keys) {
@@ -213,6 +213,9 @@ compare_oracle <- function(app, oracle, keys, columns, app_label) {
 }
 oracle_mismatches <- list(site = character(0), support = character(0),
                           plant_years = character(0), species = character(0))
+# oracle rows compared per level, printed as a receipt so a passing log shows the
+# comparison ran rather than staying silent
+oracle_rows <- c(site = 0L, support = 0L, plant_years = 0L, species = 0L)
 add_oracle_mismatches <- function(level, lines)
   oracle_mismatches[[level]] <<- c(oracle_mismatches[[level]], lines)
 
@@ -354,6 +357,8 @@ for (path in site_files) {
     } else {
       oracle_site_rows[[code]] <- tables$site
       oracle_species_rows[[code]] <- tables$species
+      oracle_rows[["support"]] <- oracle_rows[["support"]] + nrow(tables$support)
+      oracle_rows[["plant_years"]] <- oracle_rows[["plant_years"]] + nrow(tables$plant_years)
       obs_cmp <- bundle$obs
       for (cc in c("phenophaseName", "status", "intensity", "growthForm"))
         if (cc %in% names(obs_cmp)) obs_cmp[[cc]] <- as.character(obs_cmp[[cc]])
@@ -662,6 +667,11 @@ if (!is.null(oracle_env)) {
     for (line in utils::head(lines, ORACLE_LINES_PER_LEVEL))
       note(sprintf("headline oracle, %s: %s", level, line))
   }
+  oracle_rows[["site"]] <- sum(vapply(oracle_site_rows, nrow, integer(1)))
+  oracle_rows[["species"]] <- sum(vapply(oracle_species_rows, function(x) if (is.null(x)) 0L else nrow(x), integer(1)))
+  cat(sprintf("headline oracle: compared %s rows; mismatches %s\n",
+              paste(sprintf("%s %d", names(oracle_rows), oracle_rows), collapse = ", "),
+              paste(sprintf("%s %d", names(oracle_mismatches), lengths(oracle_mismatches)), collapse = ", ")))
 }
 
 # ---- manifest ---------------------------------------------------------------
