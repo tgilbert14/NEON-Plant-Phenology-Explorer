@@ -1403,7 +1403,9 @@ server <- function(input, output, session) {
           tags$a(href="https://creativecommons.org/licenses/by/4.0/", target="_blank", "creativecommons.org/licenses/by/4.0"),
           "). This app aggregates and derives summary metrics from the raw NEON data products; the underlying measurements are unaltered. It is an independent, unofficial tool and is not endorsed by NEON, Battelle, or the NSF."),
         if (!is.null(rel)) p(class="about-release", rel,
-          if (!is.null(doi)) tagList(" ", tags$a(href=doi, target="_blank", rel="noopener", doi)))),
+          if (!is.null(doi)) tagList(" ", tags$a(href=doi, target="_blank", rel="noopener", doi))),
+        # NEON issue log entries of 2026-01-28 and 2026-01-29, after RELEASE-2026
+        p(class="about-release", "NEON's issue log records two changes after RELEASE-2026: from 2026, plant phenology is observed only at NEON's core sites, and observations at Dead Lake (DELA) ended on December 31, 2025. Data collected before then stay on the NEON Data Portal; releases covering 2026 onward add years only at core sites.")),
       div(class="about-card", h4(bs_icon("journal-text"), " Codebook"),
         p("Every exported column with its type, units and definition, plus the phenophase decode and the provenance of this build. It is also inside the analysis zip."),
         downloadButton("codebookCsv", "Download the codebook (CSV)", class="btn-outline-dark btn-sm")),
