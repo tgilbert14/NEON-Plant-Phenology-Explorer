@@ -117,7 +117,7 @@ SUPPORT_MIN_YEARS <- 3
 # against a site median of 357).
 LATE_START_LC <- 0.5
 LATE_START_COVERAGE <- 0.5
-# Visit-interval bounds (iris sign-off 2026-10-21, rules.md sections 6 to 9). A
+# Visit-interval bounds (iris sign-off 2026-10-21, scripts/headline_rules.md sections 6 to 9). A
 # green-up is bracketed by the last 'no' (lo) and the first 'yes' (hi) around it;
 # the site value is a two-stage median of the midpoints and lies between the
 # two-stage medians of lo and hi. BOUND_POINT_TOL is one weekly visit interval for
@@ -292,7 +292,7 @@ onset <- function(obs, phenophases = NULL) {
 # clamped midpoint, not censored) or a genuinely left-censored onset (no visit
 # within CARRYOVER_GAP days). One record per visit day; 'yes' wins a same-day
 # conflict, exactly as in onset().
-# onset_lo and onset_hi bracket the onset (rules.md section 2): standard, the last
+# onset_lo and onset_hi bracket the onset (scripts/headline_rules.md section 2): standard, the last
 # 'no' before the first 'yes' (NA when left-censored) and that first 'yes';
 # bridged, day 1 (the December 'no' expressed as a day of this year, clamped to 1)
 # and the first January 'yes'; carried over, the later no-to-yes pair (both NA when
@@ -429,7 +429,7 @@ leaf_run_span <- function(doy, yes) {
   }
   total
 }
-# Year-boundary bridge (rules.md section 7). A run that touches the year's first
+# Year-boundary bridge (scripts/headline_rules.md section 7). A run that touches the year's first
 # or last Leaves visit is censored there unless a visit across the new year closes
 # it: the plant's last Leaves visit of the previous year (or first of the next) at
 # most CARRYOVER_GAP (31) days away, the same gap as the green-up carry-over rule.
@@ -558,7 +558,7 @@ individual_summary <- function(obs, inds) {
                      leaf_active = med(.data$leaf_active[.data$leaf_supported]),
                      .groups="drop")
   # the median span is a lower bound when the visits allow a much longer one
-  # (rules.md section 8 applied to one plant)
+  # (scripts/headline_rules.md section 8 applied to one plant)
   agg$leaf_active_lower_bound <- ifelse(is.na(agg$leaf_active), NA,
                                         agg$leaf_active_hi - agg$leaf_active >= BOUND_POINT_TOL)
   # years watched regardless of support, so a plant whose only years were
@@ -592,7 +592,7 @@ greenup_fallback_share <- function(ind_s) {
   round(mean(ind_s$greenup_source[fin] %in% "young-leaves"), 3)
 }
 # Two-stage green-up bounds over a set of plant-years (supported years with a
-# finite green-up; one group = one site or one species at a site), rules.md
+# finite green-up; one group = one site or one species at a site), scripts/headline_rules.md
 # section 6. k needs individualID, greenup, greenup_lo, greenup_hi, left_censored.
 #   per plant: mid = median green-up; lo = median last 'no' (a left-censored or
 #     missing lo counts as -Inf); hi = median first 'yes'
@@ -635,7 +635,7 @@ greenup_label <- function(value, lo, hi, status, n_seasons = NA_integer_) {
     NA_character_)
 }
 
-# Two-stage leaf-active summary (rules.md section 8). k = plant-year rows that are
+# Two-stage leaf-active summary (scripts/headline_rules.md section 8). k = plant-year rows that are
 # leaf-supported with a finite leaf_active, carrying individualID, leaf_active,
 # leaf_active_hi, leaf_edge_start and leaf_edge_end. Per plant n = median span and
 # m = median longest-allowed span; value and hi are their medians across plants
@@ -753,7 +753,7 @@ leaf_active_trend <- function(obs, support = NULL) {
   out
 }
 
-# Hollow trend points (rules.md section 9): a green-up point whose median has no
+# Hollow trend points (scripts/headline_rules.md section 9): a green-up point whose median has no
 # lower bound (lc_share >= BOUND_SHARE), or a leaf point whose unbridged edges
 # allow BOUND_POINT_TOL or more extra days (onset_hi - onset). Logical, never NA.
 trend_hollow <- function(tr) {
@@ -762,7 +762,7 @@ trend_hollow <- function(tr) {
   if ("onset_hi" %in% names(tr)) { w <- tr$onset_hi - tr$onset; return(!is.na(w) & w >= BOUND_POINT_TOL) }
   rep(FALSE, nrow(tr))
 }
-# Trend verdict (rules.md section 9). Fit A = lm(year median ~ year) over the solid
+# Trend verdict (scripts/headline_rules.md section 9). Fit A = lm(year median ~ year) over the solid
 # points only (the year median is the median of that year's solid species
 # points); fit B = the same over every point as recorded. Fewer than min_years
 # years with a solid point -> "too_short". A's 95% CI (slope -/+ qt(0.975, ny - 2)
@@ -1022,11 +1022,15 @@ plot_summary_phe <- function(obs, inds, ind_s = NULL) {
     dplyr::summarise(n_ind = dplyr::n(),
                      gu_share = sum(is.finite(.data$greenup)) / dplyr::n(),
                      greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
-                     # leaf_active_hi and the lower-bound flag also come BEFORE the
-                     # `leaf_active =` redefine (same gotcha as gu_share)
+                     # the lower-bound flag comes BEFORE the `leaf_active_hi =` and
+                     # `leaf_active =` redefines and takes both medians itself from the
+                     # plot's columns, so it reads no reassigned name (same gotcha as
+                     # gu_share; suite lint L13)
+                     leaf_active_lower_bound = {
+                       hi <- round(stats::median(.data$leaf_active_hi, na.rm=TRUE))
+                       la <- round(stats::median(.data$leaf_active, na.rm=TRUE))
+                       if (is.finite(hi) && is.finite(la)) hi - la >= BOUND_POINT_TOL else NA },
                      leaf_active_hi = round(stats::median(.data$leaf_active_hi, na.rm=TRUE)),
-                     leaf_active_lower_bound = { la <- round(stats::median(.data$leaf_active, na.rm=TRUE))
-                       if (is.finite(la)) leaf_active_hi - la >= BOUND_POINT_TOL else NA },
                      leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
                      lat = stats::median(.data$lat, na.rm=TRUE), lng = stats::median(.data$lng, na.rm=TRUE), .groups="drop")
 }
@@ -1117,7 +1121,7 @@ site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
   if (short) bnd <- list(value = NA_real_, lo = NA_real_, hi = NA_real_, status = "short_record", n_plants = 0L)
   # leaf-active summary over leaf-supported plant-years (value equals the median
   # of ind_s$leaf_active); hi is the median longest span the visits allow. Only
-  # plants listed in inds count (rules.md section 8): the site value has always
+  # plants listed in inds count (scripts/headline_rules.md section 8): the site value has always
   # come from individual_summary(), which is built on inds, and an obs plant
   # missing from inds (DSNY 00653) must not move the value, hi or edge share.
   # Green-up stays on every plant in obs (section 6).
@@ -1273,7 +1277,7 @@ site_species_onsets <- function(obs, inds, meta) {
   }))
   out$leaf_active_lower_bound <- ifelse(is.na(out$leaf_active), NA,
                                         out$leaf_active_hi - out$leaf_active >= BOUND_POINT_TOL)
-  # years behind each value (rules.md section 10), the floor the gradient applies:
+  # years behind each value (scripts/headline_rules.md section 10), the floor the gradient applies:
   # n_years = distinct supported green-up years among the group's rows;
   # leaf_n_years = distinct leaf-supported years with a leaf row for any of its plants
   yrs <- lapply(split(seq_len(nrow(d)), key), function(rows) {
