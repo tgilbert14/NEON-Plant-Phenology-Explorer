@@ -1,10 +1,10 @@
 # NEON Plant Phenology Explorer
 
-**[Live landing and launch](https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/)** · [Deploy runbook](DEPLOY.md) · [Project status](docs/project-status.md) · NEON `DP1.10055.001` · RELEASE-2026 ([DOI 10.48443/p75s-7p48](https://doi.org/10.48443/p75s-7p48)) · 46 sites · observations 2016 to December 2024
+**[Live landing and launch](https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/)** · [Live app (Posit Connect)](https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/) · [Deploy runbook](DEPLOY.md) · [Project status](docs/project-status.md) · NEON `DP1.10055.001` · RELEASE-2026 ([DOI 10.48443/p75s-7p48](https://doi.org/10.48443/p75s-7p48)) · 46 sites · observations 2016 to December 2024
 
 An unofficial R/Shiny explorer for NEON's **Plant phenology observations**
-(**DP1.10055.001**), a NEONize sibling of the Small Mammal Tracker built to the same
-Desert Data Labs quality bar. Part of the NEON explorer suite; the suite hub is the
+(**DP1.10055.001**), a sibling of the Small Mammal Tracker in the NEON explorer suite.
+The suite hub is the
 [NEON Cross-Product Response Atlas](https://tgilbert14.github.io/NEON-Driver-Cascade/).
 
 > The unit is a **tagged plant individual** with a multi-year phenophase record. Phenology
@@ -41,13 +41,20 @@ senescence amber on warm parchment, Fraunces headings).
   leaves carried over, not a new green-up. Evergreen shrubs without leaf buds, cacti, and
   growth forms that sprout with autumn rain or stay green across the new year have no
   calendar-year green-up.
-- **Site green-up** is the median across plants of each plant's median. When some onsets
-  were already underway at the first visit, the app shows a range (it bounds that
-  censoring, not sampling error). When most were, it shows "day N or earlier" and no
-  single day.
+- **Site green-up** is the median across plants of each plant's median. Each onset lies
+  between a plant's last 'no' and first 'yes' visit, so the app also takes the same
+  median of those two days. When they are 14 or more days apart it shows a range (it
+  bounds visit spacing and censoring, not sampling error). When most onsets were
+  already underway at the first visit, it shows "day N or earlier" and no single day.
 - **Leaf-active days** are the interval-censored span of each run of visits with leaves
   present, summed per plant-year, so a shrub that flushes twice with the rains gets two
-  short seasons, not one 300-day season.
+  short seasons, not one 300-day season. A run that reaches the new year is bridged when
+  the next visit is within 31 days. Where runs cut off at the year's first or last visit
+  could add 14 or more days, the site reads "at least N days".
+- **Trends** need 6 years. Green-up years where at least half the plants were already
+  greening at the first visit, and leaf-active years whose spans could run 14 or more
+  days longer, are drawn open and left out of the fit; no direction is claimed when
+  leaving them out changes it.
 - **Support**: a site-year counts only when the site was visited on its usual schedule that
   year (the 2020 sampling cut is left out), when a late first visit did not cut off what
   that metric could see, and when the site has at least 3 monitored seasons.
@@ -72,7 +79,14 @@ The data are NEON **RELEASE-2026**, released data only, observations from Januar
 through December 2024. The 2013 to 2015 seasons that exist for 28 sites are not bundled:
 they were early, pre-operational years under an earlier protocol, and starting every site
 in 2016 keeps sites comparable. PUUM (Pu'u Maka'ala, Hawaii) is not yet bundled; see
-[`docs/project-status.md`](docs/project-status.md).
+[`docs/project-status.md`](docs/project-status.md). NEON's issue log records that from
+2026 plant phenology is observed only at core sites and that Dead Lake (DELA) closed at
+the end of 2025, so releases covering 2026 onward add years only at core sites.
+
+Exact duplicate observation rows are dropped and rows are stored in a canonical order, so
+rebuilding the same release gives byte-identical bundles. `scripts/verify_bundle.R`
+checks every headline number against an independent oracle (`scripts/headline_oracle.R`,
+written from the rule sheet `scripts/headline_rules.md`).
 
 ### Rebuild
 1. `PHE_RAW_OUT_DIR=/empty/staging Rscript scripts/fetch_all_phe.R` pulls every expected

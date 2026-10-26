@@ -10,6 +10,51 @@
   nor the existing temperature -> green-up vote is authorized to change or vote in
   Driver from this package.
 
+## 2026-10-26 bracketed estimand (hk follow-ups and audit items)
+
+- Decision: `HOLD / NO DRIVER BYTE CHANGE` (`scientific-contract`,
+  `Driver-impacting`). The app estimand is refined; no Driver artifact, adapter,
+  model or vote changed, and none is authorized from this package. The
+  application contract stays `PENDING` until PR #14's head, its merge, the Connect
+  deploy and the post-merge raw refresh pass.
+- Scientific support. The green-up summary now brackets the median onset by the
+  visit gap and censoring: `greenup_lo` is the two-stage median of each
+  plant-year's last 'no', `greenup_hi` the median of the first 'yes', and the
+  value stays the midpoint median (point when the bracket is under 14 days, else
+  range; an upper bound reads the first-'yes' median). Leaf-active is the
+  interval-censored span with a 31-day year-boundary bridge; where unbridged edges
+  could add 14 days or more, the value is a lower bound ("at least N days", 27 of
+  the 42 sites with a leaf value). A trend direction needs 6 solid years and must
+  agree with and without the censoring-heavy points. An independent oracle,
+  written from the signed rule sheet `scripts/headline_rules.md`, reproduces every
+  headline exactly at site, site-year, plant-year and species level.
+- Opportunity and support: unchanged from the 2026-10-21 entry (plant-year
+  opportunities; the site-year support gate; 369 watched site-years). Exact
+  duplicate obs rows (30,332, 0.53%) are removed, so obs row counts fall while every
+  onset and span is unchanged; uncertain records are disclosed where they reach 10%
+  (NIWO 25%, RMNP 14%).
+- Eligible joins. Trend keys and onsets are unchanged (the Atlas Gate-0 audit sees
+  the same rows; `trend` gains only `lc_share`). Driver-calendar compatibility for
+  the corrected family remains `UNMEASURED`. NEON's issue log (2026-01-28) limits
+  phenology to core sites from 2026, and DELA observations ended on 2025-12-31, so
+  any future join adds years only at core sites; the release watch in
+  `refresh-data.yml` warns on both entries.
+- Atlas implication. The Atlas computes its own weeks x 7 leaf-active, which has the
+  same edge problem the app now labels; iris's recommendation to HOLD the
+  leaf-active feed unless the adapter adopts the interval-censored span and the
+  edge rule stands. The Atlas bundle validator passes all 46 rebuilt bundles; the
+  obs byte change reaches the Atlas refresh without a PR gate.
+- CANNOT (new): read a green-up range as a confidence interval (it bounds visit
+  spacing and censoring, not sampling error); read "at least N days" as the full
+  leaf period; give a trend direction that flips depending on how censoring-heavy
+  points are treated; fit a leaf slope through lower-bound sites.
+- Engineering learning: write the oracle from a signed rule sheet and compare
+  exactly at every level, reimplementing the support gate (medians hid a
+  carry-over bug); canonical row order plus content-keyed writes give
+  byte-identical rebuilds; cap within-year spans at the year, not +Inf; gate a
+  device-feedback call (vibrate) on user activation once deep links can load a view
+  without a tap.
+
 ## 2026-10-21 estimand correction (audit 2026-10-18 item 12)
 
 - Decision: `HOLD / NO DRIVER BYTE CHANGE` (`scientific-contract`,
