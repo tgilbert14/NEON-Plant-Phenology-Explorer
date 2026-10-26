@@ -104,9 +104,20 @@ site_table <- if (length(BUNDLED)) {
   want <- intersect(c("n_individuals","n_species","n_obs","dominant_form","median_greenup","median_leaf_active","n_plots","gu_share","median_visit_interval",
                       "greenup_lc_share","greenup_fallback_share","n_supported_years","n_years_watched",
                       "greenup_hi","greenup_lo","greenup_status","greenup_autumn_forms",
-                      "greenup_carry_forms","greenup_carry_share"), names(SITE_INDEX))
+                      "greenup_carry_forms","greenup_carry_share",
+                      "leaf_active_hi","leaf_active_status","leaf_edge_share","uncertain_share"), names(SITE_INDEX))
   cbind(m, SITE_INDEX[match(m$site, SITE_INDEX$site), want, drop = FALSE])
 } else neon_sites[0, ]
+
+# Within-species latitude fits, computed ONCE at boot from national_onsets (hk):
+# green-up over n_years, leaf-active over leaf_n_years. Each is NULL when no
+# species spans enough sites with three or more seasons; the server guards that.
+WS_GREENUP <- tryCatch(within_species_gradient(NATIONAL_ONSETS), error = function(e) NULL)
+WS_LEAF <- tryCatch(within_species_gradient(NATIONAL_ONSETS, value = "leaf_active", years = "leaf_n_years"),
+                    error = function(e) NULL)
+# Disclose a site's share of 'uncertain' status records at or above this (iris).
+# phe_helpers.R defines no constant for it, so it lives here.
+UNCERTAIN_DISCLOSE <- 0.10
 
 # The picker opens on this site (and its state) when it is bundled; server.R
 # falls back to the first bundled state/site otherwise.

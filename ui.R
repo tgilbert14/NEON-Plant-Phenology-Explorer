@@ -299,7 +299,7 @@ ui <- bslib::page_fillable(
             div(class = "search-table-wrap", DTOutput("searchThresholdTbl")))),
         div(class = "search-foot",
           p(class = "caveat", bs_icon("info-circle"),
-            " Median green-up day is pooled across a site's monitored plants. For a species, green-up is shown where at least three tagged plants at that site have one in fully visited years, and days carrying leaves where at least three plants carry a value; other rows still list the species with those values blank. Day 1 is January 1; day 120 is about the end of April. Sites where most plants were already greening at the first visit, or watched for fewer than three seasons, have no green-up day and are left out of the day search; where a site's green-up is a range, the day search uses its later end."))),
+            " Median green-up day is pooled across a site's monitored plants. For a species, green-up is shown where at least three tagged plants at that site have one in fully visited years, and days carrying leaves where at least three plants carry a value; other rows still list the species with those values blank. Day 1 is January 1; day 120 is about the end of April. Sites where most plants were already greening at the first visit, or watched for fewer than three seasons, have no green-up day and are left out of the day search; where a site's green-up is a range, the day search uses its published median day, which lies inside that range. A leaf-active value marked \"at least\" is a lower bound: those spans run into the year's first or last visit."))),
 
       nav_panel(title = tagList(bs_icon("info-circle"), " About"), value = "about", uiOutput("aboutPanel"))
     ))),

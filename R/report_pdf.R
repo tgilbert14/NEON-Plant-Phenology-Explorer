@@ -298,19 +298,44 @@ rp_line_chart <- function(x0, yTop, w, h, df, title, ylab, empty_msg, col = RP$p
   o <- order(yr); yo <- yr[o]; vo <- v[o]
   for (i in seq_len(length(yo) - 1)) if (yo[i + 1] - yo[i] == 1)
     grid.lines(x = unit(px(yo[i:(i + 1)]), "in"), y = rp_gy(py(vo[i:(i + 1)])), gp = gpar(col = col, lwd = 1.4))
-  grid.points(x = unit(px(yr), "in"), y = rp_gy(py(v)), pch = 21, size = unit(5, "pt"),
+  # a hollow year (every species point that year is a bound) is drawn open
+  hol <- if ("hollow" %in% names(df)) df$hollow %in% TRUE else rep(FALSE, length(v))
+  if (any(!hol)) grid.points(x = unit(px(yr[!hol]), "in"), y = rp_gy(py(v[!hol])), pch = 21, size = unit(5, "pt"),
               gp = gpar(fill = col, col = "white", lwd = 0.8))
+  if (any(hol)) grid.points(x = unit(px(yr[hol]), "in"), y = rp_gy(py(v[hol])), pch = 21, size = unit(5, "pt"),
+              gp = gpar(fill = "white", col = col, lwd = 1.2))
   invisible()
 }
 
-# site-year median across species of the species-year medians
+# site-year median across species of the species-year medians. Hollow species
+# points (trend_hollow: a bound, not a value) are left out of the year's median
+# when the year has a solid point, as in the app's trend fit; a year with only
+# hollow points keeps their median and is drawn open.
 rp_site_year <- function(tr) {
   if (is.null(tr) || !nrow(tr)) return(NULL)
   tr <- tr[is.finite(tr$onset), , drop = FALSE]; if (!nrow(tr)) return(NULL)
-  out <- do.call(rbind, lapply(split(tr, tr$year), function(d)
-    data.frame(year = as.integer(d$year[1]), value = round(stats::median(d$onset)),
-               n_species = length(unique(d$scientificName)))))
+  tr$hollow <- if (exists("trend_hollow", inherits = TRUE)) trend_hollow(tr) else rep(FALSE, nrow(tr))
+  out <- do.call(rbind, lapply(split(tr, tr$year), function(d) {
+    solid <- d[!d$hollow, , drop = FALSE]; use <- if (nrow(solid)) solid else d
+    data.frame(year = as.integer(d$year[1]), value = round(stats::median(use$onset)),
+               n_species = length(unique(d$scientificName)), hollow = !nrow(solid)) }))
   out[order(out$year), , drop = FALSE]
+}
+# one-line verdict from trend_verdict() in the app's words
+rp_verdict <- function(tr, leaf = FALSE) {
+  if (is.null(tr) || !nrow(tr) || !exists("trend_verdict", inherits = TRUE)) return(NA_character_)
+  v <- tryCatch(trend_verdict(tr), error = function(e) NULL); if (is.null(v)) return(NA_character_)
+  left <- if (v$n_left_out > 0) sprintf(" %d species-year %s left out as %s.", v$n_left_out,
+    if (v$n_left_out == 1) "point is" else "points are", if (leaf) "lower bounds" else "upper bounds") else ""
+  switch(v$verdict,
+    too_short = sprintf("Too short to fit a trend: %d %s with a solid median; about %d or more are needed.%s",
+                        v$ny, rp_plural(v$ny, "year"), TREND_MIN_YEARS, left),
+    none = sprintf("No detectable linear shift (%.1f days/yr, 95%% interval %.1f to %.1f).%s", v$slope, v$lo, v$hi, left),
+    depends = sprintf("The direction depends on how the left-out points are treated, so none is claimed.%s", left),
+    up = , down = sprintf("Changed %.1f days/yr %s (95%% interval %.1f to %.1f), descriptive only.%s", abs(v$slope),
+                          if (leaf) (if (v$verdict == "up") "longer" else "shorter") else (if (v$verdict == "up") "later" else "earlier"),
+                          v$lo, v$hi, left),
+    NA_character_)
 }
 
 # ---- the composer -----------------------------------------------------------
@@ -348,30 +373,34 @@ phe_report_pdf <- function(file, site, label, inds, obs, ind_summary, site_row,
   if (is.na(n_sp) && nrow(inds)) n_sp <- length(unique(species_level_only(inds)$scientificName))
   n_plots <- rp_num(g("n_plots")); if (is.na(n_plots) && "plotID" %in% names(inds)) n_plots <- length(unique(inds$plotID))
   status <- rp_str(g("greenup_status")); if (is.na(status)) status <- "none"
-  hi <- rp_num(g("greenup_hi")); lo <- rp_num(g("greenup_lo"))
+  hi <- rp_num(g("greenup_hi")); lo <- rp_num(g("greenup_lo")); med <- rp_num(g("median_greenup"))
   n_watch <- rp_num(g("n_years_watched")); n_sup <- rp_num(g("n_supported_years"))
   cov <- rp_num(g("gu_share")); if (is.na(cov)) cov <- tryCatch(greenup_coverage(ind_summary), error = function(e) NA_real_)
   la <- rp_num(g("median_leaf_active")); cad <- rp_num(g("median_visit_interval"))
+  la_hi <- rp_num(g("leaf_active_hi")); la_edge <- rp_num(g("leaf_edge_share")); unc <- rp_num(g("uncertain_share"))
+  la_status <- rp_str(g("leaf_active_status")); if (is.na(la_status)) la_status <- if (is.na(la)) "none" else "point"
   lc_share <- rp_num(g("greenup_lc_share")); fb_share <- rp_num(g("greenup_fallback_share"))
   autumn_forms <- rp_str(g("greenup_autumn_forms")); carry_forms <- rp_str(g("greenup_carry_forms"))
   if (status %in% c("point", "range", "upper_bound") && is.na(hi)) status <- "none"
+  if (status == "point" && is.na(med)) status <- "none"
   if (status == "range" && is.na(lo)) status <- "upper_bound"
 
-  gu_lab <- tryCatch(greenup_label(hi, lo, status, n_watch), error = function(e) NA_character_)
+  gu_lab <- tryCatch(greenup_label(med, lo, hi, status, n_watch), error = function(e) NA_character_)
   gu_value <- switch(status, point = , range = , upper_bound = gu_lab, short_record = "Unavailable", "None")
   gu_month <- switch(status,
-    point = rp_month(hi), range = sprintf("%s to %s", rp_month(lo), rp_month(hi)),
+    point = rp_month(med), range = sprintf("%s to %s", rp_month(lo), rp_month(hi)),
     upper_bound = sprintf("%s or earlier", rp_month(hi)), NA_character_)
   gu_note <- switch(status,
     point = sprintf("median day of year (%s); %s of supported onsets left-censored", gu_month, rp_pct(lc_share)),
-    range = sprintf("median day of year (%s); %s of supported onsets left-censored", gu_month, rp_pct(lc_share)),
+    range = sprintf("median day %s lies in %s; %s of supported onsets left-censored", rp_int(med), gu_month, rp_pct(lc_share)),
     upper_bound = sprintf("latest possible median (%s); %s of supported onsets left-censored", gu_month, rp_pct(lc_share)),
     short_record = "too few seasons monitored to check the visit schedule",
     "no supported green-up onset at this site")
   gu_explain <- switch(status,
-    point = sprintf("Green-up %s: the two censoring bounds are within 7 days, so one day is shown.", gu_lab),
-    range = sprintf(paste("Green-up %s: the range bounds the left-censoring (plants already greening at their",
-                          "first visit), not sampling error, and is not a confidence interval."), gu_lab),
+    point = sprintf("Green-up %s: the last 'no' and first 'yes' bounds are less than 14 days apart, so one day is shown.", gu_lab),
+    range = sprintf(paste("Green-up %s (median day %s). Each plant's green-up is known only to lie between its last 'no'",
+                          "and first 'yes' visit; onsets underway at the first visit could be earlier. This is not a confidence interval."),
+                    gu_lab, rp_int(med)),
     upper_bound = sprintf(paste("Green-up %s: most plants were already greening at their first visit, so only",
                                 "the latest possible median is known and no single day is given."), gu_lab),
     short_record = paste0("Green-up ", if (is.na(gu_lab)) "unavailable: too few seasons monitored" else gu_lab, ".",
@@ -382,9 +411,17 @@ phe_report_pdf <- function(file, site, label, inds, obs, ind_summary, site_row,
   cov_note <- if (is.na(cov)) "undefined without a supported season"
     else if (is.finite(fb_share) && fb_share > 0) sprintf("of tagged plants; %s of those onsets from first Young leaves", rp_pct(fb_share))
     else "of tagged plants with a supported green-up onset"
+  la_lab <- if (is.na(la)) NA_character_ else leaf_label(la, if (la_status == "lower_bound") "lower_bound" else "point")
   la_note <- if (is.na(la)) {
     if (status == "short_record") "too few seasons monitored" else "no supported leaf-active span"
-  } else "median days carrying leaves per plant-year, supported years only"
+  } else if (la_status == "lower_bound") "lower bound: many spans run into the year's first or last visit"
+  else "median days carrying leaves per plant-year, supported years only"
+  # the leaf status in one line
+  la_explain <- if (is.na(la)) NA_character_ else if (la_status == "lower_bound")
+    sprintf(paste("Leaf-active %s: %s of leaf plant-years run into the year's first or last visit, and the visits allow up to",
+                  "%s days, so %s is the shortest the leaf period could be, not its full length."),
+            la_lab, rp_pct(la_edge), rp_int(la_hi), rp_int(la))
+  else sprintf("Leaf-active %s: the spans the visits allow add less than 14 days, so the median is read as the leaf period.", la_lab)
   lead_leaf <- is.finite(cov) && cov < 0.5
 
   # ---- derived series ---------------------------------------------------------
@@ -445,7 +482,7 @@ phe_report_pdf <- function(file, site, label, inds, obs, ind_summary, site_row,
   t_gu <- list(value = gu_value, label = "Green-up (median onset)", note = gu_note,
                muted = !(status %in% c("point", "range", "upper_bound")))
   t_cov <- list(value = rp_pct(cov), label = "Green-up coverage", note = cov_note, muted = is.na(cov))
-  t_la <- list(value = if (is.na(la)) "Unavailable" else sprintf("%s days", rp_int(la)),
+  t_la <- list(value = if (is.na(la)) "Unavailable" else la_lab,
                label = "Leaf-active (median)", note = la_note, muted = is.na(la), lead = lead_leaf)
   timing <- if (lead_leaf) list(t_la, t_gu, t_cov) else list(t_gu, t_cov, t_la)
   y <- rp_tiles(st, c(list(
@@ -458,6 +495,10 @@ phe_report_pdf <- function(file, site, label, inds, obs, ind_summary, site_row,
                                    "onset, so the green-up median describes a minority of plants."), rp_pct(cov)),
                  y, fontsize = 9, fontface = 2, col = RP$amber2, gap = 0.06)
   y <- rp_para(st, gu_explain, y, fontsize = 9, gap = 0.06)
+  if (!is.na(la_explain)) y <- rp_para(st, la_explain, y, fontsize = 9, gap = 0.06)
+  if (is.finite(unc) && unc >= (if (exists("UNCERTAIN_DISCLOSE", inherits = TRUE)) get("UNCERTAIN_DISCLOSE", inherits = TRUE) else 0.10))
+    y <- rp_para(st, sprintf("%d%% of scored records here were marked uncertain and are left out of every rate and onset.",
+                             as.integer(round(unc * 100))), y, fontsize = 9, gap = 0.06)
   if (!is.na(autumn_forms))
     y <- rp_para(st, sprintf(paste("No calendar-year green-up for %s: these forms sprout with autumn rain, so their",
                                    "season spans two calendar years; read them by leaf-active days."), autumn_forms),
@@ -502,8 +543,12 @@ phe_report_pdf <- function(file, site, label, inds, obs, ind_summary, site_row,
   span_txt <- function(sy, what) if (is.null(sy)) sprintf("%s: no points.", what) else
     sprintf("%s: %d %s (%s to %s), %d to %d species per year.", what, nrow(sy), rp_plural(nrow(sy), "year"),
             min(sy$year), max(sy$year), min(sy$n_species), max(sy$n_species))
+  vtxt <- function(tr, lf, what) { x <- rp_verdict(tr, lf); if (is.na(x)) "" else sprintf("%s trend: %s%s", what, tolower(substr(x, 1, 1)), substring(x, 2)) }
   y <- rp_para(st, paste(span_txt(sy_gu, "Green-up"), span_txt(sy_la, "Leaf-active"),
                          if (!is.null(sy_gu) || !is.null(sy_la)) "A gap in a line is a year left out." else "",
+                         if (any(c(sy_gu$hollow, sy_la$hollow) %in% TRUE))
+                           "An open point is a year whose every species point is a bound (green-up: most plants already greening at the first visit; leaf-active: spans that run into the year's first or last visit); bounds are left out of each year's median and of the trend fit." else "",
+                         vtxt(tr_gu, FALSE, "Green-up"), vtxt(tr_la, TRUE, "Leaf-active"),
                          "The green-up trend uses bud-break onsets only:",
                          "forms read by first Young leaves flush with rain several times a year, so their first",
                          "flush is not a comparable annual onset."), y, fontsize = 8.5, gap = 0.06)
@@ -542,15 +587,18 @@ phe_report_pdf <- function(file, site, label, inds, obs, ind_summary, site_row,
   y <- rp_h(st, "This report CAN", y)
   can <- c("Describe when tagged plants at this site were recorded in each phenophase across a typical year.",
            "Give a site green-up onset as one day, a censoring range, or an upper bound, with its coverage and censored share.",
-           "Give leaf-active days per plant-year where green-up is sparse, as at warm-desert sites.",
+           "Give leaf-active days per plant-year where green-up is sparse, as at warm-desert sites, as N days or, where spans run into the year's first or last visit, at least N days.",
            "Show site-year medians across species for supported years.")
   for (s in can) y <- rp_para(st, paste0("-  ", s), y, fontsize = 9, gap = 0.03, indent = 0.1)
   y <- rp_h(st, "This report CANNOT", y + 0.1)
   cannot <- c(
     "Give a calendar-year green-up for evergreens, cacti or autumn-sprouting annuals; read those by leaf-active days.",
     "Treat a Young-leaves green-up as the same day-for-day event as bud-break; it is the first new-leaf flush of drought-deciduous shrubs.",
-    "Read a green-up range as sampling error; it bounds left-censoring and is not a confidence interval.",
+    "Read a green-up range as a confidence interval; it bounds visit spacing and censoring, not sampling error.",
     "Give a green-up where most plants were already greening at their first visit (an upper bound only), or from fewer than three seasons.",
+    "Read \"at least N days\" of leaf-active as the full leaf period; those spans run into the year's first or last visit.",
+    "Give a trend direction that flips depending on how the censoring-heavy points are treated; those trends claim no direction.",
+    "Fit a leaf-active slope through lower-bound sites or points; they are left out.",
     "Estimate plant abundance, productivity or demographic performance, or attribute a trend to climate.")
   for (s in cannot) y <- rp_para(st, paste0("-  ", s), y, fontsize = 9, gap = 0.03, indent = 0.1)
 
