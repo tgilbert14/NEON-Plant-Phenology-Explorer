@@ -25,8 +25,8 @@ server <- function(input, output, session) {
 
   # ---- green-up coverage badge (the desert biome-conditional honesty) ------
   # When < ~half of a site's plants ever resolve a green-up onset, the
-  # median green-up is a thin, biased subsample (warm deserts log most plants
-  # straight into "Leaves"). Surface a small CLICKABLE badge — clean by default,
+  # median green-up is a thin, biased subsample (cacti, leafless evergreens and
+  # Larrea have no calendar-year green-up). Surface a small CLICKABLE badge, clean by default,
   # the why behind a tap (a bslib popover, the app's existing disclosure chrome).
   GU_COVERAGE_FLOOR <- 0.5
   # a site whose median in-season visit interval exceeds this is "coarse cadence":

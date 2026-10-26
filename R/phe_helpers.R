@@ -513,12 +513,14 @@ key_onsets <- function(obs, support = NULL) {
 }
 
 # green-up COVERAGE share: fraction of tagged plants that ever resolve a finite
-# green-up onset. In warm deserts the green-up *phenophase* ("Breaking leaf buds"
-# / "Initial growth") is rarely scored — drought-deciduous / cactus / evergreen
-# plants are logged straight into "Leaves" — so a desert median_greenup rests on a
-# small, non-random subsample (SRER 19%, JORN 54%) while leaf_active survives.
-# This is the number behind the coverage badge; computed at runtime from the
-# per-plant summary so it needs no bundle rebuild.
+# green-up onset. Coverage is low where growth forms have no calendar-year
+# green-up: cacti and leafless evergreens score no leaf phenophase, evergreen
+# shrubs without leaf buds (Larrea) never score bud-break, and forms that sprout
+# with autumn rain or stay green across the new year are dropped per site
+# (drought-deciduous shrubs count through the Young-leaves fallback). A low share
+# means median_greenup rests on a small, non-random subsample while leaf_active
+# survives. This is the number behind the coverage badge; computed at runtime
+# from the per-plant summary so it needs no bundle rebuild.
 greenup_coverage <- function(ind_s) {
   if (is.null(ind_s) || !nrow(ind_s) || !("greenup" %in% names(ind_s))) return(NA_real_)
   n <- nrow(ind_s); if (!n) return(NA_real_)
