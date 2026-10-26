@@ -1022,11 +1022,15 @@ plot_summary_phe <- function(obs, inds, ind_s = NULL) {
     dplyr::summarise(n_ind = dplyr::n(),
                      gu_share = sum(is.finite(.data$greenup)) / dplyr::n(),
                      greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
-                     # leaf_active_hi and the lower-bound flag also come BEFORE the
-                     # `leaf_active =` redefine (same gotcha as gu_share)
+                     # the lower-bound flag comes BEFORE the `leaf_active_hi =` and
+                     # `leaf_active =` redefines and takes both medians itself from the
+                     # plot's columns, so it reads no reassigned name (same gotcha as
+                     # gu_share; suite lint L13)
+                     leaf_active_lower_bound = {
+                       hi <- round(stats::median(.data$leaf_active_hi, na.rm=TRUE))
+                       la <- round(stats::median(.data$leaf_active, na.rm=TRUE))
+                       if (is.finite(hi) && is.finite(la)) hi - la >= BOUND_POINT_TOL else NA },
                      leaf_active_hi = round(stats::median(.data$leaf_active_hi, na.rm=TRUE)),
-                     leaf_active_lower_bound = { la <- round(stats::median(.data$leaf_active, na.rm=TRUE))
-                       if (is.finite(la)) leaf_active_hi - la >= BOUND_POINT_TOL else NA },
                      leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
                      lat = stats::median(.data$lat, na.rm=TRUE), lng = stats::median(.data$lng, na.rm=TRUE), .groups="drop")
 }
