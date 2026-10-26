@@ -106,7 +106,7 @@ ui <- bslib::page_fillable(
           if (!is.null(rel$doi) && nzchar(rel$doi))
             tags$a(href = rel$doi, target = "_blank", rel = "noopener", "Data citation (DOI)"))
       }),
-      p("Tap a site on the map. ", tags$b("Bigger dots"), " carry more tagged plants; ", tags$b("color"), " is median green-up (green = early spring, amber = late).")),
+      p(tags$b("Bigger dots"), " carry more tagged plants; ", tags$b("color"), " is median green-up (green = early spring, amber = late).")),
     div(class = "picker-map-wrap", leafletOutput("nationalMap", height = "460px")),
 
     # ---- relocated select panel (was the sidebar) ----------------------
