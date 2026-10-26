@@ -4,6 +4,275 @@ This is the durable cross-session record for the application, its scientific
 contract, generated data, release state, and publication evidence. Read it before
 work and re-read the latest entry immediately before appending or revising it.
 
+## 2026-10-26 MST - [Claude, Opus 5.5] finish pass: hk follow-ups, PDF report, audit appendix P1 to P3
+
+- Scope: Tim's 2026-10-22 finish instruction (`neon-audit-2026-10-18/reports/FINISH-LEDGER.md`):
+  every Plant Phenology finding in the 2026-10-18 audit appendix (P1, then P2,
+  then P3), the ledger's cross-cutting list and the PDF report, plus hk's three
+  deferred PR #14 items and audit items a to l. The child session "Phenology hk
+  follow-ups" did the estimand, pipeline and gate files under an agreed file split
+  (branch `claude/silly-mirzakhani-e217cb`, tip `c27aaad`, merged here at `deedc1e`
+  and `f85d09a`); this session did the app, report, workflow and doc files. All
+  of it stays in PR #14: no stacked PR.
+- Identities: PR #14, branch `fix/phenology-audit-12-13` from `master` `b6bc165`;
+  code head `2a5f2bb`; watched branch `master`; Pages and Connect URLs as in the
+  2026-10-21 entry. State at start: pushed head `895242b`, whose CI run
+  `39730467992` failed only the committed-manifest gate; nothing merged.
+- Model note: planned and reviewed on Opus 5.5 at max effort because the Fable
+  limit was reached (fleet policy fallback, approved by Tim 2026-10-21); the PDF
+  report and UI-wiring workers ran on Opus 5.5 at medium. iris signed off every
+  estimand and QC rule (three reviews, including a line-by-line review of
+  `scripts/headline_rules.md`); hk set the gradient statistics and the oracle design.
+- Estimand (child, `R/phe_helpers.R`, every threshold a named constant):
+  - green-up is bracketed by the visit gap: `greenup_lo` is the two-stage median of
+    each plant-year's last 'no' (left-censored years count as -Inf), `greenup_hi`
+    the median of the first 'yes', and the published value stays the midpoint
+    median; point when hi - lo < 14 days (`BOUND_POINT_TOL` 7 -> 14), else range;
+    an upper bound reads the first-'yes' median;
+  - leaf spans bridge the new year when the nearest visit on the other side is at
+    most 31 days away; an unbridged edge fills to the year boundary in
+    `leaf_active_hi`, and a site reads "at least N days" (`leaf_active_status`
+    lower_bound) when hi exceeds the value by 14 days or more;
+  - trend points are hollow when `lc_share` >= 0.5 (green-up) or onset_hi - onset
+    >= 14 (leaf); `trend_verdict()` needs 6 solid years (`TREND_MIN_YEARS`) and the
+    fits with and without the hollow points to agree, else "depends";
+  - `within_species_gradient()` adds Spearman rho with a Fisher z (Bonett-Wright)
+    interval, a per species-site year floor and min_sites 6;
+  - `uncertain_share` per site (disclosed in the app at 0.10 or more); exact
+    duplicate obs rows removed; a same-visit yes/no conflict QC flag; the
+    out-of-sequence flag redesigned; the latest-edited identity row wins;
+  - deterministic bundles (`scripts/bundle_identity.R`: canonical row order and
+    write-if-changed), the SRER demo, and an independent headline oracle
+    (`scripts/headline_oracle.R`, written from the signed `scripts/headline_rules.md`)
+    that `verify_bundle.R` compares exactly at site, site-year, plant-year and
+    species level.
+- App, report and pipeline (this session, `5012010` to `2a5f2bb`):
+  - `R/report_pdf.R`: a three-page vector PDF site report (base grid and
+    `cairo_pdf`, no new package) with headline tiles, green-up status and coverage,
+    composition, season bands, trends with the years left out, caveats, CAN and
+    CANNOT, and the NEON citation on every page; the CSV stays as "site summary".
+  - `?site=CODE` deep links with Back and Forward; an allowlist before any bundle
+    path; NEON strings HTML-escaped in pin cards, popups and tables.
+  - Provenance: `PHE_RELEASE` (RELEASE-2026, DOI 10.48443/p75s-7p48, CC BY 4.0) in
+    `R/site_metadata.R`; the hero, About and codebook name the release, DOI and
+    "observations through December 2024"; About names NEON's 2026 scope cut (core
+    sites only from 2026; DELA closed on 2025-12-31).
+  - The bracketed estimand wired into every surface: greenup_label and
+    leaf_label, iris's range note, the threshold table, hollow trend points and the
+    verdict banner, "at least N days" (hero, insights, Onset Lab, plant card, plot
+    map, search, gradient, species-across, report card, PDF), `WS_GREENUP` and
+    `WS_LEAF` in `global.R`, the uncertain disclosure, bound columns in the export,
+    and the About CANNOT list.
+  - Shell, phone and copy: CTA within the 375 px fold, phone text sizes, 16 px
+    selectize, 44 px targets, AA footer contrast, skip link, overlay Close button,
+    scope chips, info-dot labels, ten-explorer registry with the NEON Cross-Product
+    Response Atlas, no em dashes in visible copy (`check_cover.mjs` now fails on
+    any), no sincerity labels (two "honest" codebook rows fixed in `8b8cb26`), the
+    haptic tick only after a tap (`8c07db2`), and a pin-card close button with a
+    type and an accessible name plus a legend-only picker hint (`2a5f2bb`).
+  - Pipeline: build-fingerprint smoke (`plant-phenology-v1 build-<manifest md5[:12]>`
+    plus title and lang); a refresh-ready issue opened by the publisher and closed
+    by post-deploy; a release and issue-log watch; neonUtilities 4.0.1 pinned and
+    asserted; the fetch pins RELEASE-2026 with `include.provisional = FALSE`, fails
+    on any site error and never reads a token file in CI; the handler check scans R
+    sources; `scripts/deploy.R` removed.
+- Outcome. Before = `master` `b6bc165`; first estimand = `3c40912`; final = this head.
+
+  | Site | Green-up master | 3c40912 | final | Leaf-active master | 3c40912 | final |
+  |---|---|---|---|---|---|---|
+  | SRER | day 33 | 77 to 88 | 73 to 91 (value 88) | 268 d | 350 d | 358 d |
+  | ONAQ | day 66 | 46 or earlier | 49 or earlier | 77 d | 100 d | at least 100 d |
+  | STER | day 186 | unavailable | unavailable (2 seasons) | 35 d | unavailable | unavailable |
+  | LAJA | day 5 | 156 | 144 to 160 (value 156) | 258 d | 331 d | at least 336 d |
+  | HARV | day 116 | 116 | 116 (bracket 114 to 118) | 147 d | 174 d | 174 d |
+
+  Network: green-up 32 point, 5 range (CPER, LAJA, LENO, SOAP, SRER), 5 upper bound
+  (BARR, NIWO, ONAQ, WOOD, YELL), 4 short record (DCFS, KONA, STEI, STER);
+  leaf-active 15 point, 27 lower bound, 4 short record. national_onsets 710 rows
+  (556 point, 55 range, 99 upper bound). obs 5,735,598 -> 5,705,266 rows (30,332
+  exact duplicates; no estimate moves). Uncertain share at 0.10 or more: NIWO 0.254,
+  RMNP 0.143. QC over 9,537 plants: out-of-sequence 1,083 -> 135, green-up outlier
+  749 -> 73, same-visit conflict 573 plants (1,007 cells). Red maple within-species
+  gradient (8 sites; SCBI's single season left out): green-up +4.33 d per degree N
+  (1.91 to 6.76), rho 0.874 (0.310 to 0.983); leaf-active -8.25 (-11.99 to -4.51),
+  rho -0.922 (-0.990 to -0.506). Trend verdicts over all 46 sites: green-up down 3
+  (ABBY, JERC, SCBI), depends 1 (BLAN), none 25, too short 17; leaf-active down 1
+  (OAES), depends 1 (CPER), none 20, too short 24. Search: 818 taxon-site rows,
+  575 species. Data sha256 prefixes: `data/site_index.rds` 737f7b13,
+  `data/national_onsets.rds` eb006c9a, `data/search_index.rds` b1b1412c,
+  `data-sample/demo.rds` = `data/sites/SRER.rds` f7e84ff3.
+- Commands (macOS 26.6.2, R 4.5.2, Node v24.20.0, actionlint 1.7.12), final tree:
+  `Rscript --vanilla scripts/test_helpers.R` 46/46; `scripts/test_bundle_identity.R`
+  27/27; `scripts/normalize_empty_trends.R` no-op; `scripts/rebuild_indexes.R`
+  reproduces every committed `data/` and `data-sample/` byte, then stops at its
+  manifest step on macOS as before (`manifest.json` untouched);
+  `scripts/verify_bundle.R` passes every bundle, index and science gate with the
+  oracle receipt "compared site 46, support 369, plant_years 34474, species 710
+  rows; mismatches site 0, support 0, plant_years 0, species 0", and reports only
+  the expected manifest notes (file set lacks `R/report_pdf.R`; checksums); offline
+  source, the handler check (5 one-payload handlers, every sent type handled),
+  `check_cover.mjs`, `bash -n` on the smoke and actionlint pass; `git diff --check`
+  clean; no em dash on any added line. `phe_report_pdf()` for SRER, ONAQ and STER
+  gives three US-letter pages each (`pdfinfo`), and the extracted text carries the
+  table's headlines ("day 73 to 91", "358 days"; "day 49 or earlier", "at least 100
+  days"; "Unavailable"), the release and DOI on every page, and no em dash. Suite lint
+  (`neon-suite-lint.mjs --worktree --app phenology`): GREEN, 0 red, 0 yellow (the
+  2026-10-22 baseline on `master` had 5 red, 14 yellow).
+- Browser (in-app Chromium, local `runApp`), final tree: title, lang and one main
+  landmark; `?site=` deep links for SRER, ONAQ, STER, LAJA and NIWO read as the
+  table; NIWO discloses 25% uncertain records; the report PDF downloads (47,633
+  bytes, `%PDF`); About shows the 2026 scope note; no horizontal overflow at 390 px;
+  no server errors; no haptic call on a site load without a tap; an Onset Lab pin's
+  close button has `type="button"` and the name "Close card" and closes the card. The hidden preview
+  pane runs no requestAnimationFrame, so hero count-ups read 0 until a frame paints
+  (a screenshot shows NIWO 201, 22, 2); the count-up code is unchanged from master.
+  Not checked: Safari, Edge, a real phone, the deployed app.
+- Release identities: pinned-validator run `40339102270` on code head `2a5f2bb`
+  passed every validator step and failed only the committed-byte gate; its
+  release-candidate artifact matched all 50 committed data files byte for byte.
+  `efadd17` promotes that artifact's `manifest.json` unchanged (63 files, R 4.5.2,
+  terra 1.8-50, no neonUtilities, `R/report_pdf.R` listed; md5 build id
+  `5a1a0c2aefdf`, so the deploy marker is `plant-phenology-v1 build-5a1a0c2aefdf`),
+  and `scripts/verify_bundle.R` passes against it. This records commit sits on top
+  and changes no manifest-listed file; CI on the final PR head is in PR #14.
+- Failed attempts and cleanup: two child workers stopped on the weekly usage limit
+  (2026-10-21); their saved work was finished on 2026-10-26, and the signed rule
+  sheet, lost from a cleared scratchpad, was restored into the repo. The local test
+  rebuild was discarded (`git checkout -- data data-sample`) before merging the
+  child's rebuild. CI runs on `5012010`, `fe9b475` and `9380306` were cancelled by
+  newer pushes; the `895242b` run failed only the manifest gate and its artifacts
+  expired before promotion. The hero once never filled because `#heroStats:empty`
+  hid it and Shiny suspends hidden outputs; `outputOptions(suspendWhenHidden = FALSE)`
+  fixed it (`04cc088`).
+- Residual risks: obs bytes changed in all 46 bundles (duplicates removed,
+  canonical order), and the Atlas refresh reads `data/sites` from this repo's HEAD
+  without a PR gate (note for cass); the identity-row rule (latest editedDate wins)
+  is unmeasured until the next raw refresh; 27 of 42 sites with a leaf value now read
+  "at least N days", a large visible change; from 2026 NEON observes phenology only
+  at core sites, so gradient sites will add no years after 2025.
+- Next action: Tim merges PR #14; CI must pass on the merge; dispatch
+  `refresh-data.yml` with `skip_download=false` from `master` and review the
+  automation PR (it should reproduce the bundles; review the inds diff for the
+  identity-row rule); confirm Connect serves `plant-phenology-v1 build-<id>` for the
+  merged manifest.
+
+## 2026-10-21 MST - [Claude, Opus 5.5] audit 2026-10-18 items 12 and 13 plus shell items
+
+- Scope: the Wave 2 Plant Phenology items of the 2026-10-18 suite audit. Item 12
+  (green-up definition, leaf-active effort confound, capped n_years, NA dayOfYear,
+  calendar-year anchor and left-censoring artifacts) and item 13 (Onset Lab and QC
+  card PNG export, "Find a plant" roster), plus this app's share of the suite
+  shell items (page title and lang, one main landmark, picker-map keepInView and
+  resize guard, SRER default, QC flags operable with Enter and Space).
+- Identities: PR #14, source branch `fix/phenology-audit-12-13` from `master`
+  `b6bc165cdf2b60a68eecc63249679d91914b88f0` (after the cron PR #13 merge);
+  watched deployment branch `master`; Pages
+  <https://tgilbert14.github.io/NEON-Plant-Phenology-Explorer/>; Connect
+  <https://019ee118-bf17-1622-bd5d-e59cab3b36a7.share.connect.posit.cloud/>.
+  Test state at start: clean tree, last refresh runs skipped by the calendar gate.
+- Model note: planned and reviewed on Opus 5.5 at max effort because the Fable
+  limit was reached (fleet policy fallback, approved by Tim 2026-10-21). The
+  estimand rules were set by the iris review (Opus, max), reviewed by hk (Opus,
+  max, verdict SHIP WITH FIXES), and the two estimand amendments hk asked for
+  were signed off by iris before the final rebuild.
+- Estimand (R/phe_helpers.R, every threshold a named constant):
+  - green-up is the earliest bud-break onset, with a per-plant-year Young-leaves
+    fallback for Drought deciduous broadleaf only (`greenup_source`);
+  - a 31-day carry-over rule at the year boundary (`carryover`);
+  - growth forms dropped per site when >= 35% of >= 10 onsets fall on or after
+    day 274 (SJER and SOAP forbs and graminoids) or >= 35% of >= 10 plant-years
+    carry over the new year (LAJA graminoids and semi-evergreen broadleaf);
+  - separate support flags (`greenup_supported`, `leaf_supported`): >= 3 watched
+    seasons else `short_record`; median visit-weeks >= 0.75 of the site's typical;
+    a first visit > 30 days after the site's typical counts as `late_start` only
+    when that metric was truncated (green-up: >= half of the year's onsets
+    left-censored, or coverage < half the site's typical; leaf: >= half of the
+    plant-years already in leaf at the first visit);
+  - two-stage site and species medians with a censoring lower bound
+    (`greenup_status` point, range, upper_bound, short_record; the numeric median
+    is withheld for upper_bound);
+  - leaf-active as the interval-censored span of each run of Leaves = yes visits,
+    with weeks x 7 kept as `leaf_weeks`; two-stage species flowering and
+    leaf-active;
+  - `*_n_years` counted before the summarise reassignment; dayOfYear coalesced
+    from date in the bundler and in `rebuild_indexes.R`, which now re-derives
+    `ind_summary` and `trend` from `obs` and rewrites a bundle only when they change.
+- Network outcome: 33 point, 4 range (CPER, LENO, SOAP, SRER), 5 upper-bound
+  (BARR, NIWO, ONAQ, WOOD, YELL) and 4 short-record sites (DCFS, KONA, STEI, STER).
+  Of 369 watched site-years, 276 are supported for green-up (76 low effort, 36 of
+  them in 2020; 11 late start; 6 short record) and 273 for the leaf metrics (14 late
+  start). Supported finite-green-up site-years: 272 across 42 sites, 33 with >= 6
+  (was 346 across 45, 39 with >= 6).
+
+  | Site | Green-up before | Green-up after | Leaf-active before | Leaf-active after |
+  |---|---|---|---|---|
+  | SRER | day 33 (coverage 0.18) | day 77 to 88 (coverage 0.64) | 268 d | 350 d |
+  | ONAQ | day 66 | day 46 or earlier (value withheld) | 77 d | 100 d |
+  | STER | day 186 | unavailable, 2 seasons | 35 d | unavailable |
+  | SJER | day 80 | day 64, woody plants only | 122 d | 140 d |
+  | LAJA | day 5 | day 156 (coverage 0.19) | 258 d | 331 d |
+  | TEAK | day 162 | day 154 | 119 d | 166 d |
+  | HARV | day 116 | day 116 | 147 d | 174 d |
+
+- Runtime and shell: PNG export renders through a data: URL (blob: URLs taint
+  the canvas in Chromium and WebKit); the search roster lists every species-level
+  plant (818 taxon-site rows, 575 species, SRER 20 species, was 723 / 499 / 7),
+  with green-up from `national_onsets` and leaf-active from the per-plant summary
+  (>= 3 plants); `<title>`, `lang="en"` and `<main id="main">`; picker popups
+  `keepInView = FALSE` and `kickMaps` invalidates only maps with `clientWidth > 0`;
+  SRER (Arizona) is the default site; one delegated keydown handler makes
+  `.qc-flag-click` operable with Enter and Space; a stale Windows `setwd()` left
+  `scripts/build_search_index.R` (suite lint L12).
+- Commands (macOS 26.6.2, R 4.5.2, Node v24.20.0), final tree: `Rscript --vanilla
+  scripts/test_helpers.R` (26/26 PASS; new fixtures for n_years, dayOfYear,
+  fallback scope, carry-over, autumn and carry-over forms, bounds, short record,
+  per-metric late start, coverage guard, leaf span); `scripts/test_bundle_identity.R`
+  (11/11); `scripts/rebuild_indexes.R` (bundles re-derived, indexes rebuilt);
+  `scripts/normalize_empty_trends.R` (no-op); `scripts/verify_bundle.R` (all
+  bundle, index and science gates PASS; the only failure is the manifest checksum,
+  which the pinned CI regenerates); handler and cover checks PASS; offline source
+  PASS; `git diff --check` clean; no em dash on any added line. The new verify
+  gates fire against master's bundles (n_years cap in 42 bundles, NA dayOfYear in
+  8, 95 unfindable species, non-reproducing summaries, unsupported trend years).
+  The Atlas v2 adapter's own `phenology_v2_validate_bundle` (sourced read-only
+  from NEON-Driver-Cascade) passes 46/46 rebuilt bundles. The suite lint
+  (`neon-suite-lint.mjs --app phenology --worktree`) clears L1, L2, L12 and L13 on
+  the branch; L15 (refresh publish gate) remains a pipeline-lane item.
+- CI evidence on the first PR head `27fab70`: run `39691847702` passed every step
+  on the pinned validator (tests, the two-build deterministic index check,
+  manifest regeneration, `verify_bundle.R`, offline source) and failed only the
+  intentional committed-byte gate on `manifest.json`. Its release-candidate
+  artifact matched all 50 local data files byte for byte, so macOS and Linux
+  builds of the same code agree; only the manifest needs promotion.
+- Browser (in-app Chromium pane, local `shiny::runApp`): title, lang and one main
+  landmark present; SRER/AZ selected on first paint; the Onset Lab PNG (243 KB)
+  and QC card PNG (1.3 MB) save, and a same-page control reproduces the
+  tainted-canvas SecurityError with a blob: URL; Enter and Space open the QC flag
+  inspector; SRER, ONAQ, STER, SJER and LAJA heroes and insights read as in the
+  table; no horizontal overflow at 1280 and 390 px; the picker map returns at full
+  width after "change site"; the analysis zip (731 KB) and the status-aware report
+  card download. Not checked: Safari and Edge, a real phone, the deployed app.
+- Failed attempts and cleanup: the first estimand review died on the Fable usage
+  limit and was re-run on Opus. A first draft labelled every year of a site with
+  its first year's support reason (`ifelse()` on a scalar); the label is fixed and
+  tested. `rebuild_indexes.R` stops at the manifest step on macOS (rsconnect cannot
+  bundle the local library); the tracked `manifest.json` was never hand-edited.
+- hk follow-ups not in this PR: species-year trend points where most plants were
+  left-censored are drawn and fitted like the others (11% of points); the bounds
+  carry censoring but not the visit-interval width; leaf spans that touch the
+  year's first or last visit are not labelled "at least N days" (54% of supported
+  plant-years, most at year-round sites).
+- Residual risks: leaf-active rises at most sites (span plus the support gate);
+  nine sites no longer publish a single green-up day; the Atlas computes its own
+  green-up (bud-break only, no carry-over) and weeks x 7 leaf-active from these
+  bundles, so the same defects remain there until cass decides; the raw refresh
+  path (`bundle_phe_data.R` from NEON) runs only in the refresh workflow.
+- Next action: promote the manifest from the final head's validator artifact,
+  require green CI on that exact head, Tim merges, then dispatch
+  `refresh-data.yml` with `skip_download=false` from `master` so the review branch
+  reproduces the bundles from raw, and verify Connect deploys the merge with the
+  `plant-phenology-v1` marker.
+
 ## 2026-08-05 19:37:36 MST - [Codex] pinned release-byte promotion
 
 - Draft PR #11 validated exact source head

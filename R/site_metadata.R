@@ -102,3 +102,18 @@ site_label <- function(code) {
   if (nrow(row) == 0) return(code)
   sprintf("%s · %s, %s · NEON %s", row$name[1], row$site[1], row$state[1], row$domain[1])
 }
+
+# ---------------------------------------------------------------------------
+# NEON release identity for the bundled data. The fetch (scripts/fetch_all_phe.R)
+# pins this release with include.provisional = FALSE, the app cites it (About,
+# landing line, report), and the refresh workflow warns when a newer release or
+# issue-log entry appears. Re-pin here, in one place, when NEON publishes the
+# next release (RELEASE-2027 is expected in late January 2027).
+# ---------------------------------------------------------------------------
+PHE_RELEASE <- list(
+  tag = "RELEASE-2026",
+  doi = "https://doi.org/10.48443/p75s-7p48",
+  product = "DP1.10055.001",
+  product_name = "Plant phenology observations",
+  license = "CC BY 4.0"
+)

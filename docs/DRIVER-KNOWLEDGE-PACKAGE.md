@@ -10,6 +10,100 @@
   nor the existing temperature -> green-up vote is authorized to change or vote in
   Driver from this package.
 
+## 2026-10-26 bracketed estimand (hk follow-ups and audit items)
+
+- Decision: `HOLD / NO DRIVER BYTE CHANGE` (`scientific-contract`,
+  `Driver-impacting`). The app estimand is refined; no Driver artifact, adapter,
+  model or vote changed, and none is authorized from this package. The
+  application contract stays `PENDING` until PR #14's head, its merge, the Connect
+  deploy and the post-merge raw refresh pass.
+- Scientific support. The green-up summary now brackets the median onset by the
+  visit gap and censoring: `greenup_lo` is the two-stage median of each
+  plant-year's last 'no', `greenup_hi` the median of the first 'yes', and the
+  value stays the midpoint median (point when the bracket is under 14 days, else
+  range; an upper bound reads the first-'yes' median). Leaf-active is the
+  interval-censored span with a 31-day year-boundary bridge; where unbridged edges
+  could add 14 days or more, the value is a lower bound ("at least N days", 27 of
+  the 42 sites with a leaf value). A trend direction needs 6 solid years and must
+  agree with and without the censoring-heavy points. An independent oracle,
+  written from the signed rule sheet `scripts/headline_rules.md`, reproduces every
+  headline exactly at site, site-year, plant-year and species level.
+- Opportunity and support: unchanged from the 2026-10-21 entry (plant-year
+  opportunities; the site-year support gate; 369 watched site-years). Exact
+  duplicate obs rows (30,332, 0.53%) are removed, so obs row counts fall while every
+  onset and span is unchanged; uncertain records are disclosed where they reach 10%
+  (NIWO 25%, RMNP 14%).
+- Eligible joins. Trend keys and onsets are unchanged (the Atlas Gate-0 audit sees
+  the same rows; `trend` gains only `lc_share`). Driver-calendar compatibility for
+  the corrected family remains `UNMEASURED`. NEON's issue log (2026-01-28) limits
+  phenology to core sites from 2026, and DELA observations ended on 2025-12-31, so
+  any future join adds years only at core sites; the release watch in
+  `refresh-data.yml` warns on both entries.
+- Atlas implication. The Atlas computes its own weeks x 7 leaf-active, which has the
+  same edge problem the app now labels; iris's recommendation to HOLD the
+  leaf-active feed unless the adapter adopts the interval-censored span and the
+  edge rule stands. The Atlas bundle validator passes all 46 rebuilt bundles; the
+  obs byte change reaches the Atlas refresh without a PR gate.
+- CANNOT (new): read a green-up range as a confidence interval (it bounds visit
+  spacing and censoring, not sampling error); read "at least N days" as the full
+  leaf period; give a trend direction that flips depending on how censoring-heavy
+  points are treated; fit a leaf slope through lower-bound sites.
+- Engineering learning: write the oracle from a signed rule sheet and compare
+  exactly at every level, reimplementing the support gate (medians hid a
+  carry-over bug); canonical row order plus content-keyed writes give
+  byte-identical rebuilds; cap within-year spans at the year, not +Inf; gate a
+  device-feedback call (vibrate) on user activation once deep links can load a view
+  without a tap.
+
+## 2026-10-21 estimand correction (audit 2026-10-18 item 12)
+
+- Decision: `HOLD / NO DRIVER BYTE CHANGE` (`scientific-contract`,
+  `Driver-impacting`). The app-local green-up and leaf-active estimands changed;
+  no Driver artifact, adapter, model, or vote changed, and none is authorized
+  from this package. The application contract returns to `PENDING` until the PR
+  head, merge, Connect deploy, and the post-merge raw refresh pass.
+- Scientific support. Green-up per plant-year is the earliest bud-break onset,
+  with the first new Young leaves as a per-plant-year fallback for Drought
+  deciduous broadleaf only (NEON never scores bud-break for that form). Evergreen
+  shrubs without leaf buds (Larrea), cacti, leafless evergreens, and forms that
+  sprout with autumn rain (SJER and SOAP forbs and graminoids) have no
+  calendar-year green-up, and neither do forms that are green across the new year
+  in most years (LAJA grasses and semi-evergreen broadleaf). A January 'yes' that
+  was also 'yes' at the plant's last visit within 31 days is carried-over leaves,
+  not an onset. Site and species
+  green-up are two-stage medians over supported years with a censoring lower bound;
+  the published value is withheld (upper bound) where most plants were already
+  greening at the first visit. Leaf-active is the interval-censored span of each
+  run of Leaves = yes visits; the earlier weeks x 7 tracked visit effort (median
+  within-site correlation 0.73 with visited weeks) and is kept only as `leaf_weeks`.
+- Opportunity and support. A site-year enters a metric's medians and trends only
+  when the site has >= 3 watched seasons, was visited on its usual schedule that
+  year (median visit-weeks >= 0.75 of its typical), and was not truncated by a
+  late start for that metric (green-up: >= half of the year's onsets censored or
+  coverage < half the site's typical; leaf: >= half of the plant-years already in
+  leaf at the first visit). Result: of 369 watched site-years, 276 supported for
+  green-up (76 low effort, 36 of them in 2020; 11 late start; 6 short record) and
+  273 for the leaf metrics. Sites: 33 point, 4 range, 5 upper-bound (BARR, NIWO,
+  ONAQ, WOOD, YELL), 4 short-record (DCFS, KONA, STEI, STER).
+- Eligible joins. App-supported finite-green-up site-years fall from 346 across 45
+  sites (39 with >= 6) to 272 across 42 sites (33 with >= 6). Driver-calendar and
+  eligible adapter rows for the corrected family are `UNMEASURED`; the 346/346
+  calendar match belongs to the prior release only.
+- Atlas implication. The Atlas v2 adapter reads these bundles and computes its own
+  green-up (bud-break phases only, no carry-over, no Young-leaves fallback) and its
+  own weeks x 7 leaf-active, so the corrected definitions do not reach the Atlas
+  until cass adopts them; its bundle validator passes all 46 rebuilt bundles. The
+  existing HOLD stays.
+- CANNOT (new): a calendar-year green-up for evergreens, cacti or autumn-sprouting
+  annuals; a Young-leaves green-up treated as the same day-for-day event as
+  bud-break; a green-up range read as a confidence interval (it bounds censoring,
+  not sampling error); a green-up where most plants were already greening at the
+  first visit, or from fewer than three seasons.
+- Engineering learning: count summary columns before reassigning their source in
+  one `summarise()`; re-derive stored summaries from `obs` in the index rebuild and
+  gate that they reproduce; locale-independent (`method = "radix"`) ordering for
+  any character key that reaches committed bytes.
+
 ## 2026-08-05 cover-label refinement
 
 - Decision: `NONE / NO DRIVER BYTE CHANGE` (`cover-system`, `suite-platform`).
@@ -49,14 +143,17 @@
 
 ## Candidate trusted signals
 
-1. Plant-year green-up onset, summarized only after plant-year collapse and support
-   gates. Unit: day of year. Earlier values mean earlier observed onset, subject to
-   interval/left censoring.
-2. Leaf-active duration, estimated as distinct weeks with `Leaves = yes` times
-   seven. Unit: approximate active-leaf days; preferred where green-up phenophases
-   are sparsely recorded.
-3. Green-up coverage, the share of monitored tagged plants with a finite green-up
-   onset. This is a support/interpretability signal, not phenological timing.
+1. Plant-year green-up onset (bud-break, or first new Young leaves for drought-
+   deciduous shrubs, with the 31-day carry-over rule), summarized only after
+   plant-year collapse, the site-year support gate, and the censoring bounds.
+   Unit: day of year, published as a point, a range, or withheld as an upper
+   bound. Earlier values mean earlier observed onset.
+2. Leaf-active duration, the interval-censored span of each run of `Leaves = yes`
+   visits summed per plant-year, over supported site-years only. Unit: days. The
+   earlier weeks x 7 estimate is retained only as the `leaf_weeks` QC column.
+3. Green-up coverage, the share of monitored tagged plants with a green-up onset
+   in a supported year. This is a support/interpretability signal, not
+   phenological timing.
 
 These are trusted app-local signals after the fixture, bundle, deterministic-index,
 manifest, offline-source, and public release receipts passed. They remain Driver

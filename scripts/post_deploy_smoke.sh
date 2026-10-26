@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
 # Cold-start-aware semantic health check. Posit host error pages can return HTTP
-# 200, so the app surface must also contain this repository's ready marker.
+# 200, so the app surface must also contain this repository's ready marker. The
+# marker carries the build fingerprint (first 12 hex of manifest.json's md5, set
+# by post-deploy.yml), so a stale deploy of an older commit does not pass, and
+# the app page must ship its <title> and lang="en".
 
 set -uo pipefail
 
@@ -10,6 +13,7 @@ SLEEP_BASE="${SMOKE_SLEEP_BASE:-5}"
 CONNECT_TIMEOUT="${SMOKE_CONNECT_TIMEOUT:-15}"
 MAX_TIME="${SMOKE_MAX_TIME:-45}"
 APP_MARKER="${SMOKE_APP_MARKER:-plant-phenology-v1}"
+APP_TITLE="${SMOKE_APP_TITLE:-<title>NEON Plant Phenology Explorer</title>}"
 failed=0
 
 check_one() {
@@ -23,7 +27,9 @@ check_one() {
       if grep -Eqi 'startup error|application failed to start|application error|service unavailable' "$body"; then
         echo "wait [$label] HTTP $code but host error page detected ($attempt/$MAX_ATTEMPTS)"
       elif [[ "$label" == *"app"* ]] && ! grep -Fq "$APP_MARKER" "$body"; then
-        echo "wait [$label] HTTP $code but app marker is absent ($attempt/$MAX_ATTEMPTS)"
+        echo "wait [$label] HTTP $code but app marker '$APP_MARKER' is absent, likely an older build ($attempt/$MAX_ATTEMPTS)"
+      elif [[ "$label" == *"app"* ]] && ! { grep -Fq "$APP_TITLE" "$body" && grep -Eq '<html[^>]*lang="en"' "$body"; }; then
+        echo "wait [$label] HTTP $code but <title> or lang=\"en\" is missing ($attempt/$MAX_ATTEMPTS)"
       else
         echo "ok [$label] HTTP $code + semantic body check (attempt $attempt)"
         rm -f "$body"

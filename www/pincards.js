@@ -1,3 +1,4 @@
+// copied from tgilbert14/NEON-Small-Mammal-Tracker-App@62457f6 (www/pincards.js), the nearest commit to the 2026-06-19 working-tree copy; adapted for Plant Phenology since.
 /* =========================================================================
    pincards.js — tap-to-pin cards + export-with-pins for the Size Lab scatter.
 
@@ -80,7 +81,7 @@
     var pin = document.createElement("div");
     pin.className = "smt-pin";
     pin.__box = box; pin.__key = key; pin.__dx = dx; pin.__dy = dy;
-    pin.innerHTML = "<button class='smt-pin-close' title='Close'>&times;</button>" + html;
+    pin.innerHTML = "<button class='smt-pin-close' type='button' title='Close card' aria-label='Close card'>&times;</button>" + html;
     pin.querySelectorAll("em.smt-pin-hint").forEach(function (em) {
       var br = em.previousElementSibling;
       if (br && br.tagName === "BR") br.remove();
@@ -232,7 +233,7 @@
 
   /* ---- local exports (with a toast + double-fire guard) -------------------
      No CDN is required. We clone the export node, inline computed styles, wrap it
-     in an SVG foreignObject, and rasterize that local blob to a PNG canvas. */
+     in an SVG foreignObject, and rasterize that local data: URL to a PNG canvas. */
   function toastStart(msg) {
     toastDone(msg, false, true);
   }
@@ -277,8 +278,8 @@
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
         '<foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="width:' + width + 'px;height:' + height + 'px;background:' + opts.backgroundColor + '">' +
         markup + '</div></foreignObject></svg>';
-      var blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-      var blobUrl = URL.createObjectURL(blob);
+      // a data: URL (not a blob: URL) keeps the canvas untainted in Chrome, Edge and Safari
+      var src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
       var image = new Image();
       image.onload = function () {
         try {
@@ -289,12 +290,11 @@
           ctx.scale(ratio, ratio);
           ctx.fillStyle = opts.backgroundColor; ctx.fillRect(0, 0, width, height);
           ctx.drawImage(image, 0, 0, width, height);
-          URL.revokeObjectURL(blobUrl);
           resolve(canvas.toDataURL("image/png"));
-        } catch (err) { URL.revokeObjectURL(blobUrl); reject(err); }
+        } catch (err) { reject(err); }
       };
-      image.onerror = function () { URL.revokeObjectURL(blobUrl); reject(new Error("local PNG renderer failed")); };
-      image.src = blobUrl;
+      image.onerror = function () { reject(new Error("local PNG renderer failed")); };
+      image.src = src;
     });
   }
   var saving = false;
@@ -310,7 +310,7 @@
     setTimeout(function () {
       localPng(node, { pixelRatio: 2, backgroundColor: bgColor() })
         .then(function (url) { downloadUrl(url, name); toastDone("Saved ✓"); })
-        .catch(function () { toastDone("Render failed — try again", true); })
+        .catch(function () { toastDone("Could not save the image in this browser.", true); })
         .then(function () { saving = false; });
     }, 90);
   }
@@ -340,6 +340,13 @@
     if (e.key !== "Enter" && e.key !== " ") return;
     var el = e.target.closest && e.target.closest(".smt-open");
     if (el) { e.preventDefault(); openChip(el); }
+  });
+  // QC flags are divs with role=button and an inline onclick: make Enter and
+  // Space activate them like a native button.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var el = e.target.closest && e.target.closest(".qc-flag-click");
+    if (el) { e.preventDefault(); el.click(); }
   });
 
   document.addEventListener("DOMContentLoaded", function () {

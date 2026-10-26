@@ -1,3 +1,4 @@
+// copied from tgilbert14/NEON-Small-Mammal-Tracker-App@22ae61c (www/app.js); adapted for Plant Phenology since.
 /* =========================================================================
    app.js — count-up stat counters, the loading overlay, popover dismissal,
    and the Shiny custom-message handlers for the Plant Phenology Explorer.
@@ -51,11 +52,13 @@ function smtLoadStart(label) {
   var siteEl = document.getElementById("loadSite");
   if (siteEl) siteEl.textContent = siteText;
   ov.style.display = "flex";
-  if (navigator.vibrate) { try { navigator.vibrate(12); } catch (e) {} }
+  // haptic tick only after a tap: a ?site= deep link loads with no user gesture
+  var tapped = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  if (navigator.vibrate && tapped) { try { navigator.vibrate(12); } catch (e) {} }
   clearTimeout(smtSafetyTimer);
   smtSafetyTimer = setTimeout(function () {  // safety net so it can never stick
     var note = document.querySelector(".load-note");
-    if (note) note.textContent = "Still working — a large site or a slow NEON Portal can take a bit. You can close this and try again.";
+    if (note) note.textContent = "Still working. A large site or a slow NEON Portal can take a while. Close this and try again.";
     setTimeout(smtLoadDone, 5000);
   }, 90000);
 }
@@ -96,8 +99,22 @@ document.addEventListener("DOMContentLoaded", function () {
   // the relocated select panel) needs a moment to settle its width before
   // Leaflet measures, or the national map captures a half-width and paints
   // narrow. Dispatch resize across several frames to catch the settled layout.
+  // Each pass only touches maps that are laid out (clientWidth > 0): a hidden
+  // map measured at width 0 would cache a zero size and paint blank or narrow.
   Shiny.addCustomMessageHandler("kickMaps", function (_msg) {
-    var kick = function () { try { window.dispatchEvent(new Event("resize")); } catch (e) {} };
+    var kick = function () {
+      var shown = 0;
+      document.querySelectorAll(".leaflet-container").forEach(function (el) {
+        if (!(el.clientWidth > 0)) return;
+        shown++;
+        try {
+          var w = (el.id && window.HTMLWidgets) ? HTMLWidgets.find("#" + el.id) : null;
+          var map = w && w.getMap ? w.getMap() : null;
+          if (map && map.invalidateSize) map.invalidateSize();
+        } catch (e) {}
+      });
+      if (shown) { try { window.dispatchEvent(new Event("resize")); } catch (e) {} }
+    };
     requestAnimationFrame(kick);
     [80, 250, 500, 900].forEach(function (t) { setTimeout(kick, t); });
   });

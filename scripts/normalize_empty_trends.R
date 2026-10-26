@@ -5,6 +5,8 @@
 # site had observations but every species-year failed the n >= 3 support gate.
 # The release contract requires NULL for that unavailable state.
 
+source("scripts/bundle_identity.R")   # write_rds_if_changed
+
 paths <- c(
   list.files("data/sites", pattern = "[.]rds$", full.names = TRUE),
   list.files("data-sample", pattern = "[.]rds$", full.names = TRUE)
@@ -22,8 +24,7 @@ for (path in sort(paths)) {
     # `bundle$trend <- NULL` would delete the field from an R list. Subset
     # assignment preserves the required named field with a NULL value.
     bundle["trend"] <- list(NULL)
-    saveRDS(bundle, path, compress = "xz")
-    changed <- c(changed, path)
+    if (write_rds_if_changed(bundle, path)) changed <- c(changed, path)
   }
 }
 
