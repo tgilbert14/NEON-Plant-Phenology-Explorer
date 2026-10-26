@@ -19,13 +19,13 @@
 suppressWarnings(suppressMessages({ library(dplyr); library(tibble) }))
 source("R/site_metadata.R")     # neon_sites (name/state/domain/elevation_m)
 source("R/phe_helpers.R")       # individual_summary / onset_trend / site_phe_summary / site_species_onsets
-source("scripts/bundle_identity.R") # stable first-row identity deduplication
+source("scripts/bundle_identity.R") # identity dedup, canonical order, content-keyed writes
 
-RAW <- Sys.getenv("PHE_RAW_DIR", "../phe-data-fetch"); DEMO <- "HARV"
+RAW <- Sys.getenv("PHE_RAW_DIR", "../phe-data-fetch"); DEMO <- "SRER"
 # bundle every raw site present (resumable national build); CLI args = subset
 SITES <- sub("_raw\\.rds$", "", list.files(RAW, pattern = "_raw\\.rds$"))
 if (length(commandArgs(trailingOnly = TRUE))) SITES <- commandArgs(trailingOnly = TRUE)
-if (!length(SITES)) stop("No <SITE>_raw.rds in ", RAW, " — run scripts/fetch_all_phe.R first.")
+if (!length(SITES)) stop("No <SITE>_raw.rds in ", RAW, ": run scripts/fetch_all_phe.R first.")
 is_species_rank <- function(rank, sci){ ok <- is.na(rank)|rank %in% c("species","subspecies","variety","speciesGroup")
   amb <- grepl("\\bsp\\.?$", ifelse(is.na(sci),"",sci))|grepl("/",ifelse(is.na(sci),"",sci),fixed=TRUE); ok & !amb }
 
@@ -33,6 +33,8 @@ build_site <- function(site) {
   f <- file.path(RAW, paste0(site,"_raw.rds")); if(!file.exists(f)){cat("  MISSING",f,"\n"); return(NULL)}
   r <- readRDS(f)
   validate_phenology_raw_result(r, site)
+  # one identity row per plant: the latest record wins (newest editedDate, then
+  # date, then uid; see first_phenology_identity_rows in scripts/bundle_identity.R)
   pind <- first_phenology_identity_rows(r$phe_perindividual, site)
   pind <- tibble::as_tibble(pind); si <- tibble::as_tibble(r$phe_statusintensity)
   num <- function(x) suppressWarnings(as.numeric(x))
@@ -56,6 +58,13 @@ build_site <- function(site) {
     # layer; nativeStatusCode intentionally NOT carried (lives on inds — re-joined
     # only at CSV export) to save memory at the 46-site scale.
     dplyr::left_join(dplyr::select(ident, "individualID","scientificName","growthForm","is_species"), by = "individualID")
+  # Status rows that repeat a plant x phenophase x date are kept, never thinned to the
+  # latest editedDate: NEON's duplicates are mostly commissioning checks (two observers
+  # scoring the same phenophase), and 'yes' already wins a same-visit conflict in the
+  # estimand (iris, 2026-10-21). Only rows identical in every bundled column collapse.
+  # Canonical order and exact-duplicate removal: the same raw rows always give the
+  # same obs bytes. Labels sort the same before and after the factor encoding below.
+  obs <- canonical_obs(obs)
   # factor-encode the low-cardinality, high-repetition columns (RAM ~40% lower;
   # all helper comparisons are by value so behaviour is unchanged). Join/group
   # keys (individualID/plotID/scientificName) stay character to avoid factor-join
@@ -65,6 +74,7 @@ build_site <- function(site) {
   # identity may be drawn from obs plots; keep ident rows that actually have obs
   inds <- ident %>% dplyr::semi_join(obs, by = "individualID")
   if (!nrow(inds)) inds <- ident
+  inds <- inds[order(as.character(inds$individualID), method = "radix"), , drop = FALSE]
   meta <- list(site = site, lat = stats::median(inds$lat, na.rm=TRUE), lng = stats::median(inds$lng, na.rm=TRUE),
                years = sort(unique(obs$year)))
   # helpers read status/phenophaseName as character — coerce a working copy so
@@ -73,9 +83,10 @@ build_site <- function(site) {
     if (cc %in% names(obs_chr)) obs_chr[[cc]] <- as.character(obs_chr[[cc]])
   ind_summary <- individual_summary(obs_chr, inds)
   trend <- onset_trend(obs_chr)
-  list(obs = obs, inds = inds, meta = meta, ind_summary = ind_summary, trend = trend,
-       .summary = site_phe_summary(obs_chr, inds, meta, ind_summary),
-       .species = site_species_onsets(obs_chr, inds, meta))
+  b <- canonical_bundle(list(obs = obs, inds = inds, meta = meta,
+                             ind_summary = ind_summary, trend = trend))
+  c(b, list(.summary = site_phe_summary(obs_chr, b$inds, meta, b$ind_summary),
+            .species = site_species_onsets(obs_chr, b$inds, meta)))
 }
 
 dir.create("data/sites", showWarnings=FALSE, recursive=TRUE); dir.create("data-sample", showWarnings=FALSE)
@@ -83,8 +94,8 @@ summ <- list(); nat <- list()
 for (s in SITES) {
   cat("=== bundling", s, "===\n"); b <- build_site(s); if (is.null(b)) next
   ssum <- b$.summary; sp_onsets <- b$.species; b$.summary <- NULL; b$.species <- NULL
-  saveRDS(b, file.path("data/sites", paste0(s,".rds")), compress="xz")
-  if (identical(s, DEMO)) saveRDS(b, file.path("data-sample","demo.rds"), compress="xz")
+  write_rds_if_changed(b, file.path("data/sites", paste0(s,".rds")))
+  if (identical(s, DEMO)) write_rds_if_changed(b, file.path("data-sample","demo.rds"))
   summ[[s]] <- ssum
   if (!is.null(sp_onsets)) nat[[s]] <- sp_onsets
   cat(sprintf("  %s: %d individuals, %d species, %s obs, mostly %s | greenup %s | size %s\n",
@@ -106,7 +117,8 @@ if (!("gu_share" %in% names(site_index))) site_index$gu_share <- NA_real_
 # emits it). Carried for the cadence badge + the coarse-cadence grey/footnote on the
 # cross-site gradient. Backfill NA if an older summary predates the column.
 if (!("median_visit_interval" %in% names(site_index))) site_index$median_visit_interval <- NA_real_
-saveRDS(site_index, "data/site_index.rds", compress="xz")
+site_index <- site_index[order(as.character(site_index$site), method = "radix"), , drop = FALSE]
+write_rds_if_changed(site_index, "data/site_index.rds")
 
 # ---- national_onsets: one row per (site × species) for the cross-site tab --
 national_onsets <- dplyr::bind_rows(nat)
@@ -114,7 +126,12 @@ if (nrow(national_onsets)) {
   national_onsets$state <- neon_sites$state[match(national_onsets$site, neon_sites$site)]
   national_onsets$elevation_m <- neon_sites$elevation_m[match(national_onsets$site, neon_sites$site)]
 }
-saveRDS(national_onsets, "data/national_onsets.rds", compress="xz")
+if (nrow(national_onsets))
+  national_onsets <- national_onsets[order(as.character(national_onsets$site),
+                                           as.character(national_onsets$scientificName),
+                                           as.character(national_onsets$growthForm),
+                                           na.last = TRUE, method = "radix"), , drop = FALSE]
+write_rds_if_changed(national_onsets, "data/national_onsets.rds")
 
 cat("\nsite_index:\n"); print(as.data.frame(site_index)); cat("\n")
 cat(sprintf("national_onsets: %d site×species rows, %d species, %d sites\n",
