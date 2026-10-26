@@ -117,12 +117,25 @@ SUPPORT_MIN_YEARS <- 3
 # against a site median of 357).
 LATE_START_LC <- 0.5
 LATE_START_COVERAGE <- 0.5
-# Left-censoring bounds. hi = the two-stage median (per plant over supported
-# years, then across plants); lo = the same with every left-censored plant-year
-# set to -Inf, the tightest valid lower bound. hi - lo < BOUND_POINT_TOL reads as
-# one day; a finite lo reads as a range; lo = -Inf reads "day hi or earlier" and
-# the numeric median is withheld (NA) from the map, gradient and indexes.
-BOUND_POINT_TOL <- 7
+# Visit-interval bounds (iris sign-off 2026-10-21, rules.md sections 6 to 9). A
+# green-up is bracketed by the last 'no' (lo) and the first 'yes' (hi) around it;
+# the site value is a two-stage median of the midpoints and lies between the
+# two-stage medians of lo and hi. BOUND_POINT_TOL is one weekly visit interval for
+# the bracket itself plus one week of censoring, so a weekly-visited, uncensored
+# site still reads as one day. It is used three ways: a green-up is a point when
+# hi - lo < BOUND_POINT_TOL; a leaf-active value is a lower bound when
+# hi - value >= BOUND_POINT_TOL; a leaf trend point is hollow when
+# onset_hi - onset >= BOUND_POINT_TOL. A left-censored lo is -Inf, and a site lo
+# of -Inf reads "day hi or earlier" with the numeric value withheld (NA) from the
+# map, gradient and indexes.
+BOUND_POINT_TOL <- 14
+# A median of n values with k censored on one side has no bound on that side
+# exactly when 2k >= n (R's median), that is when the censored share is at least
+# BOUND_SHARE: a green-up trend point with lc_share >= BOUND_SHARE is hollow.
+BOUND_SHARE <- 0.5
+# Years with a solid (not hollow) trend point needed before any trend verdict; a
+# shorter series reads "too short". One constant so a later review can move it.
+TREND_MIN_YEARS <- 6
 
 # NEON leaves dayOfYear blank on some valid-date rows (Oct 2016 to Mar 2017 at
 # eight sites, ~15k rows); every onset filters on dayOfYear, so derive it from
@@ -279,6 +292,11 @@ onset <- function(obs, phenophases = NULL) {
 # clamped midpoint, not censored) or a genuinely left-censored onset (no visit
 # within CARRYOVER_GAP days). One record per visit day; 'yes' wins a same-day
 # conflict, exactly as in onset().
+# onset_lo and onset_hi bracket the onset (rules.md section 2): standard, the last
+# 'no' before the first 'yes' (NA when left-censored) and that first 'yes';
+# bridged, day 1 (the December 'no' expressed as a day of this year, clamped to 1)
+# and the first January 'yes'; carried over, the later no-to-yes pair (both NA when
+# there is no later transition, like onset_doy).
 onset_carry <- function(obs, phenophases, max_gap = CARRYOVER_GAP) {
   d <- obs[obs$status %in% c("yes", "no") & is.finite(obs$dayOfYear) &
              obs$phenophaseName %in% phenophases, , drop = FALSE]
@@ -298,10 +316,21 @@ onset_carry <- function(obs, phenophases, max_gap = CARRYOVER_GAP) {
         if (!length(y)) NA_real_ else { f <- min(y); p <- n[n < f]; if (length(p)) (max(p) + f) / 2 else f } },
       lc_std = { y <- .data$doy[.data$yes]; n <- .data$doy[!.data$yes]
         if (!length(y)) NA else !any(n < min(y)) },
+      lo_std = { y <- .data$doy[.data$yes]; n <- .data$doy[!.data$yes]
+        if (!length(y)) NA_real_ else { p <- n[n < min(y)]; if (length(p)) as.numeric(max(p)) else NA_real_ } },
+      hi_std = { y <- .data$doy[.data$yes]; if (!length(y)) NA_real_ else as.numeric(min(y)) },
       onset_later = { y <- .data$doy[.data$yes]; n <- .data$doy[!.data$yes]; f <- .data$doy[1]
         n1 <- n[n > f]
         if (!length(n1)) NA_real_ else { y2 <- y[y > min(n1)]
           if (!length(y2)) NA_real_ else { y2 <- min(y2); (max(n[n < y2]) + y2) / 2 } } },
+      lo_later = { y <- .data$doy[.data$yes]; n <- .data$doy[!.data$yes]; f <- .data$doy[1]
+        n1 <- n[n > f]
+        if (!length(n1)) NA_real_ else { y2 <- y[y > min(n1)]
+          if (!length(y2)) NA_real_ else as.numeric(max(n[n < min(y2)])) } },
+      hi_later = { y <- .data$doy[.data$yes]; n <- .data$doy[!.data$yes]; f <- .data$doy[1]
+        n1 <- n[n > f]
+        if (!length(n1)) NA_real_ else { y2 <- y[y > min(n1)]
+          if (!length(y2)) NA_real_ else as.numeric(min(y2)) } },
       .groups = "drop")
   prev <- yr %>% dplyr::transmute(.data$individualID, .data$phenophaseName, year = .data$year + 1L,
                                   prev_date = .data$last_date, prev_yes = .data$last_yes)
@@ -309,26 +338,30 @@ onset_carry <- function(obs, phenophases, max_gap = CARRYOVER_GAP) {
   near <- !is.na(yr$prev_date) & as.numeric(yr$first_date - yr$prev_date) <= max_gap
   carry <- near & yr$first_yes %in% TRUE & yr$prev_yes %in% TRUE
   bridged <- near & yr$first_yes %in% TRUE & yr$prev_yes %in% FALSE
-  onset_doy <- yr$onset_std; lc <- yr$lc_std
+  onset_doy <- yr$onset_std; lc <- yr$lc_std; lo <- yr$lo_std; hi <- yr$hi_std
   if (any(bridged)) {
     jan1 <- as.Date(sprintf("%d-01-01", as.integer(yr$year[bridged])))
     prev_doy <- as.numeric(yr$prev_date[bridged] - jan1) + 1   # <= 0: days before Jan 1
     onset_doy[bridged] <- pmax(1, (prev_doy + yr$onset_std[bridged]) / 2)
+    lo[bridged] <- pmax(1, prev_doy)
     lc[bridged] <- FALSE
   }
   onset_doy[carry] <- yr$onset_later[carry]; lc[carry] <- FALSE
+  lo[carry] <- yr$lo_later[carry]; hi[carry] <- yr$hi_later[carry]
   tibble::tibble(individualID = yr$individualID, phenophaseName = yr$phenophaseName, year = yr$year,
-                 onset_doy = onset_doy, left_censored = lc, carryover = carry)
+                 onset_doy = onset_doy, onset_lo = lo, onset_hi = hi, left_censored = lc, carryover = carry)
 }
 
 # green-up per plant-year: earliest bud-break onset, else (drought-deciduous
 # shrubs only) the first Young-leaves onset, both under the carry-over rule; then
 # growth forms whose onsets mostly fall in autumn are dropped (AUTUMN_*). One row
-# per plant-year with greenup, left_censored, carryover and greenup_source; the
+# per plant-year with greenup, its visit bracket (greenup_lo, greenup_hi, from
+# the same phase row), left_censored, carryover and greenup_source; the
 # dropped forms ride along as attr(, "autumn_forms"). Shared by key_onsets(),
 # onset_trend() and site_species_onsets() so every green-up surface agrees.
 greenup_onsets <- function(obs) {
   ek <- tibble::tibble(individualID = character(), year = integer(), greenup = numeric(),
+                       greenup_lo = numeric(), greenup_hi = numeric(),
                        left_censored = logical(), carryover = logical(), greenup_source = character())
   ph <- onset_carry(obs, c(GREENUP, GREENUP_FALLBACK_PHASE))
   if (is.null(ph) || !nrow(ph)) return(NULL)
@@ -349,6 +382,9 @@ greenup_onsets <- function(obs) {
     if (!nrow(o)) return(ek)
     o %>% dplyr::group_by(.data$individualID, .data$year) %>%
       dplyr::summarise(greenup = min(.data$onset_doy),
+                       # the bracket comes from the same phase row as the value
+                       greenup_lo = .data$onset_lo[which.min(.data$onset_doy)],
+                       greenup_hi = .data$onset_hi[which.min(.data$onset_doy)],
                        left_censored = .data$left_censored[which.min(.data$onset_doy)],
                        carryover = .data$carryover[which.min(.data$onset_doy)], .groups = "drop") %>%
       dplyr::mutate(greenup_source = src)
@@ -393,21 +429,64 @@ leaf_run_span <- function(doy, yes) {
   }
   total
 }
+# Year-boundary bridge (rules.md section 7). A run that touches the year's first
+# or last Leaves visit is censored there unless a visit across the new year closes
+# it: the plant's last Leaves visit of the previous year (or first of the next) at
+# most CARRYOVER_GAP (31) days away, the same gap as the green-up carry-over rule.
+# A 'yes' across the boundary moves the run's edge to the boundary itself (day 1,
+# or day ylen + 1); a 'no' moves it to the midpoint, clamped to the boundary. With
+# no such visit the edge is flagged (leaf_edge_start, leaf_edge_end) and
+# leaf_active_hi adds the unwatched days between the edge and the boundary: the
+# longest span the visits allow, so leaf_active is then a lower bound. Every year's
+# visits feed the bridge (a year with no 'yes', supported or not), so callers pass
+# all years and filter afterwards. Within-year runs are exactly leaf_run_span().
 leaf_spans <- function(obs) {
   ek <- tibble::tibble(individualID = character(), year = integer(), leaf_active = numeric(),
-                       leaf_weeks = integer(), leaf_off = numeric())
+                       leaf_weeks = integer(), leaf_off = numeric(), leaf_edge_start = logical(),
+                       leaf_edge_end = logical(), leaf_active_hi = numeric())
   d <- obs[obs$phenophaseName == "Leaves" & obs$status %in% c("yes", "no") & is.finite(obs$dayOfYear),
            c("individualID", "year", "dayOfYear", "status"), drop = FALSE]
   if (!nrow(d)) return(ek)
   v <- d %>% dplyr::group_by(.data$individualID, .data$year, .data$dayOfYear) %>%
     dplyr::summarise(yes = any(.data$status == "yes"), .groups = "drop") %>%
     dplyr::arrange(.data$individualID, .data$year, .data$dayOfYear)
+  # every plant-year's first and last Leaves visit, 'yes' or not (the bridge ends)
+  ends <- v %>% dplyr::group_by(.data$individualID, .data$year) %>%
+    dplyr::summarise(first_day = dplyr::first(.data$dayOfYear), first_yes = dplyr::first(.data$yes),
+                     last_day = dplyr::last(.data$dayOfYear), last_yes = dplyr::last(.data$yes),
+                     .groups = "drop")
   out <- v %>% dplyr::group_by(.data$individualID, .data$year) %>%
     dplyr::summarise(leaf_active = leaf_run_span(.data$dayOfYear, .data$yes),
                      leaf_weeks = dplyr::n_distinct(doy_week(.data$dayOfYear[.data$yes])) * 7L,
                      leaf_off = if (any(.data$yes)) as.numeric(max(.data$dayOfYear[.data$yes])) else NA_real_,
                      .groups = "drop")
-  out[out$leaf_weeks > 0L, , drop = FALSE]
+  out <- out[out$leaf_weeks > 0L, , drop = FALSE]
+  if (!nrow(out)) return(ek)
+  out <- dplyr::left_join(out, ends, by = c("individualID", "year"))
+  prev <- dplyr::transmute(ends, .data$individualID, year = .data$year + 1L,
+                           p_day = .data$last_day, p_yes = .data$last_yes)
+  nxt <- dplyr::transmute(ends, .data$individualID, year = .data$year - 1L,
+                          q_day = .data$first_day, q_yes = .data$first_yes)
+  out <- dplyr::left_join(out, prev, by = c("individualID", "year"))
+  out <- dplyr::left_join(out, nxt, by = c("individualID", "year"))
+  ylen <- function(y) ifelse((y %% 4L == 0L & y %% 100L != 0L) | y %% 400L == 0L, 366, 365)
+  yl <- ylen(out$year)
+  p_rel <- out$p_day - ylen(out$year - 1L)   # previous visit as a day <= 0 of this year
+  q_rel <- out$q_day + yl                    # next visit as a day > ylen of this year
+  near_s <- out$first_yes & !is.na(out$p_day) & (out$first_day - p_rel) <= CARRYOVER_GAP
+  near_e <- out$last_yes & !is.na(out$q_day) & (q_rel - out$last_day) <= CARRYOVER_GAP
+  near_s <- near_s %in% TRUE; near_e <- near_e %in% TRUE
+  # a run touching the first (last) visit starts (ends) exactly there inside
+  # leaf_run_span(), so the bridge only moves that one edge
+  new_start <- ifelse(out$p_yes %in% TRUE, 1, pmax(1, (p_rel + out$first_day) / 2))
+  new_end <- ifelse(out$q_yes %in% TRUE, yl + 1, pmin(yl + 1, (out$last_day + q_rel) / 2))
+  out$leaf_active <- out$leaf_active + ifelse(near_s, out$first_day - new_start, 0) +
+    ifelse(near_e, new_end - out$last_day, 0)
+  out$leaf_edge_start <- out$first_yes & !near_s
+  out$leaf_edge_end <- out$last_yes & !near_e
+  out$leaf_active_hi <- out$leaf_active + (out$first_day - 1) * out$leaf_edge_start +
+    (yl + 1 - out$last_day) * out$leaf_edge_end
+  out[, names(ek), drop = FALSE]
 }
 
 key_onsets <- function(obs, support = NULL) {
@@ -415,7 +494,8 @@ key_onsets <- function(obs, support = NULL) {
   ek <- tibble::tibble(individualID = character(), year = integer())
   guo <- greenup_onsets(obs)
   gu <- if (!is.null(guo) && nrow(guo)) guo else
-    dplyr::mutate(ek, greenup = numeric(), left_censored = logical(), carryover = logical(), greenup_source = character())
+    dplyr::mutate(ek, greenup = numeric(), greenup_lo = numeric(), greenup_hi = numeric(),
+                  left_censored = logical(), carryover = logical(), greenup_source = character())
   flo <- onset(obs, "Open flowers")
   fl <- if (!is.null(flo) && nrow(flo)) flo %>% dplyr::transmute(individualID, year, flower = .data$onset_doy)
         else dplyr::mutate(ek, flower = numeric())
@@ -466,23 +546,33 @@ individual_summary <- function(obs, inds) {
                        (.data$greenup_supported & (is.finite(.data$greenup) | is.finite(.data$flower))) |
                        (.data$leaf_supported & (is.finite(.data$leaf_off) | is.finite(.data$leaf_active)))]),
                      greenup_lc_years = sum(.data$left_censored %in% TRUE & is.finite(.data$greenup) & .data$greenup_supported),
+                     # supported leaf years whose span touches an unbridged edge (a count,
+                     # so it stays above the leaf_active reassignment)
+                     leaf_edge_years = sum(is.finite(.data$leaf_active) & .data$leaf_supported &
+                                             (.data$leaf_edge_start %in% TRUE | .data$leaf_edge_end %in% TRUE)),
                      greenup_source = mode_chr(.data$greenup_source[is.finite(.data$greenup) & .data$greenup_supported]),
                      greenup = med(.data$greenup[.data$greenup_supported]),
                      flower = med(.data$flower[.data$greenup_supported]),
                      leaf_off = med(.data$leaf_off[.data$leaf_supported]),
+                     leaf_active_hi = med(.data$leaf_active_hi[.data$leaf_supported]),
                      leaf_active = med(.data$leaf_active[.data$leaf_supported]),
                      .groups="drop")
+  # the median span is a lower bound when the visits allow a much longer one
+  # (rules.md section 8 applied to one plant)
+  agg$leaf_active_lower_bound <- ifelse(is.na(agg$leaf_active), NA,
+                                        agg$leaf_active_hi - agg$leaf_active >= BOUND_POINT_TOL)
   # years watched regardless of support, so a plant whose only years were
   # unsupported still shows as watched (with n_years 0 and NA medians)
   watched <- ko %>% dplyr::group_by(.data$individualID) %>%
     dplyr::summarise(n_years_watched = dplyr::n_distinct(.data$year), .groups = "drop")
   out <- dplyr::left_join(inds, agg, by = "individualID")
   out <- dplyr::left_join(out, watched, by = "individualID")
-  for (cc in c("greenup_n_years", "flower_n_years", "leaf_active_n_years", "n_years", "greenup_lc_years"))
+  for (cc in c("greenup_n_years", "flower_n_years", "leaf_active_n_years", "n_years", "greenup_lc_years",
+               "leaf_edge_years"))
     out[[cc]][is.na(out[[cc]]) & !is.na(out$n_years_watched)] <- 0L
-  out[, c(names(inds), "greenup", "flower", "leaf_off", "leaf_active", "greenup_source",
+  out[, c(names(inds), "greenup", "flower", "leaf_off", "leaf_active", "leaf_active_hi", "greenup_source",
           "greenup_n_years", "flower_n_years", "leaf_active_n_years", "greenup_lc_years",
-          "n_years", "n_years_watched"), drop = FALSE]
+          "leaf_edge_years", "leaf_active_lower_bound", "n_years", "n_years_watched"), drop = FALSE]
 }
 
 # share of SUPPORTED plant-year green-up onsets that were left-censored (already
@@ -502,39 +592,75 @@ greenup_fallback_share <- function(ind_s) {
   round(mean(ind_s$greenup_source[fin] %in% "young-leaves"), 3)
 }
 # Two-stage green-up bounds over a set of plant-years (supported years with a
-# finite green-up; one group = one site or one species at a site):
-#   hi = median across plants of each plant's median (the published median)
-#   lo = the same with every left-censored plant-year set to -Inf
-# status: "point" (hi - lo < BOUND_POINT_TOL), "range" (finite lo), "upper_bound"
-# (lo = -Inf: most plants were already greening at the first visit), or "none".
-# value is the number the map, gradient and indexes may use: hi for point and
-# range, NA for upper_bound (the median is only an upper bound there).
+# finite green-up; one group = one site or one species at a site), rules.md
+# section 6. k needs individualID, greenup, greenup_lo, greenup_hi, left_censored.
+#   per plant: mid = median green-up; lo = median last 'no' (a left-censored or
+#     missing lo counts as -Inf); hi = median first 'yes'
+#   site: value = median of the plants' mid; lo and hi = medians of their lo, hi
+# The value lies between lo and hi. status: "upper_bound" (lo = -Inf: at least
+# half the plants' brackets are open below), "point" (hi - lo < BOUND_POINT_TOL),
+# "range" (finite lo), or "none". value is the number the map, gradient and
+# indexes may use: NA unless point or range. lo is NA unless finite; hi is
+# published whenever there are rows (it is the "or earlier" day of an upper bound).
 greenup_bounds <- function(k) {
-  none <- list(value = NA_real_, hi = NA_real_, lo = NA_real_, status = "none", n_plants = 0L)
+  none <- list(value = NA_real_, lo = NA_real_, hi = NA_real_, status = "none", n_plants = 0L)
   if (is.null(k) || !nrow(k)) return(none)
   k <- k[is.finite(k$greenup), , drop = FALSE]
   if (!nrow(k)) return(none)
+  k$lo_b <- ifelse(k$left_censored %in% TRUE | !is.finite(k$greenup_lo), -Inf, k$greenup_lo)
   per <- k %>% dplyr::group_by(.data$individualID) %>%
-    dplyr::summarise(hi = round(stats::median(.data$greenup)),
-                     lo = stats::median(ifelse(.data$left_censored %in% TRUE, -Inf, .data$greenup)),
+    dplyr::summarise(mid = round(stats::median(.data$greenup)),
+                     lo = stats::median(.data$lo_b),
+                     hi = round(stats::median(.data$greenup_hi)),
                      .groups = "drop")
   per$lo <- ifelse(is.finite(per$lo), round(per$lo), per$lo)
-  hi <- round(stats::median(per$hi))
+  value <- round(stats::median(per$mid)); hi <- round(stats::median(per$hi))
   lo <- stats::median(per$lo); if (is.finite(lo)) lo <- round(lo)
   status <- if (!is.finite(lo)) "upper_bound" else if (hi - lo < BOUND_POINT_TOL) "point" else "range"
-  list(value = if (status %in% c("point", "range")) hi else NA_real_, hi = hi,
-       lo = if (is.finite(lo)) lo else NA_real_, status = status, n_plants = nrow(per))
+  list(value = if (status %in% c("point", "range")) value else NA_real_,
+       lo = if (is.finite(lo)) lo else NA_real_, hi = hi, status = status, n_plants = nrow(per))
 }
-# plain-words headline for a green-up summary (hi, lo, status as above, plus
-# "short_record"); the app adds the month and the explanation around it
-greenup_label <- function(hi, lo, status, n_seasons = NA_integer_) {
+# plain-words headline for a green-up summary (value, lo, hi, status from
+# greenup_bounds(), plus "short_record"): a point names the value, a range its
+# visit bracket, an upper bound the median first 'yes'. The app adds the month
+# and the explanation around it.
+greenup_label <- function(value, lo, hi, status, n_seasons = NA_integer_) {
   switch(as.character(status %||% "none"),
-    point = sprintf("day %d", round(hi)),
-    range = sprintf("day %d to %d", round(lo), round(hi)),
-    upper_bound = sprintf("day %d or earlier", round(hi)),
+    point = sprintf("day %d", as.integer(round(value))),
+    range = sprintf("day %d to %d", as.integer(round(lo)), as.integer(round(hi))),
+    upper_bound = sprintf("day %d or earlier", as.integer(round(hi))),
     short_record = if (is.finite(n_seasons)) sprintf("unavailable: %d season%s monitored, too few to check the schedule",
                                                      as.integer(n_seasons), if (n_seasons == 1) "" else "s")
                    else "unavailable: too few seasons monitored to check the schedule",
+    NA_character_)
+}
+
+# Two-stage leaf-active summary (rules.md section 8). k = plant-year rows that are
+# leaf-supported with a finite leaf_active, carrying individualID, leaf_active,
+# leaf_active_hi, leaf_edge_start and leaf_edge_end. Per plant n = median span and
+# m = median longest-allowed span; value and hi are their medians across plants
+# (value equals the median of individual_summary's leaf_active). "lower_bound"
+# when hi - value >= BOUND_POINT_TOL (unbridged edges could hide that many more
+# days), else "point"; "none" with no rows. edge_share = share of the rows with an
+# unbridged edge (NA with no rows).
+leaf_bounds <- function(k) {
+  none <- list(value = NA_real_, hi = NA_real_, status = "none", edge_share = NA_real_, n_plants = 0L)
+  if (is.null(k) || !nrow(k)) return(none)
+  k <- k[is.finite(k$leaf_active), , drop = FALSE]
+  if (!nrow(k)) return(none)
+  per <- k %>% dplyr::group_by(.data$individualID) %>%
+    dplyr::summarise(n = round(stats::median(.data$leaf_active)),
+                     m = round(stats::median(.data$leaf_active_hi)), .groups = "drop")
+  value <- round(stats::median(per$n)); hi <- round(stats::median(per$m))
+  list(value = value, hi = hi, status = if (hi - value >= BOUND_POINT_TOL) "lower_bound" else "point",
+       edge_share = round(mean(k$leaf_edge_start %in% TRUE | k$leaf_edge_end %in% TRUE), 3),
+       n_plants = nrow(per))
+}
+# plain-words headline for a leaf-active summary
+leaf_label <- function(value, status) {
+  switch(as.character(status %||% "none"),
+    point = sprintf("%d days", as.integer(round(value))),
+    lower_bound = sprintf("at least %d days", as.integer(round(value))),
     NA_character_)
 }
 
@@ -582,9 +708,13 @@ onset_trend <- function(obs) {
   if (!nrow(g)) return(NULL)
   sci <- obs[!duplicated(obs$individualID), c("individualID", "scientificName"), drop = FALSE]
   o <- dplyr::left_join(g, sci, by = "individualID") %>%
-    dplyr::transmute(individualID, scientificName, year, onset_doy = .data$greenup)
+    dplyr::transmute(individualID, scientificName, year, onset_doy = .data$greenup,
+                     left_censored = .data$left_censored)
+  # lc_share = share of the species-year's plant-years left-censored; at
+  # BOUND_SHARE or above the median has no lower bound (a hollow point)
   out <- o %>% dplyr::group_by(.data$scientificName, .data$year) %>%
-    dplyr::summarise(onset = round(stats::median(.data$onset_doy)), n = dplyr::n_distinct(.data$individualID), .groups="drop") %>%
+    dplyr::summarise(onset = round(stats::median(.data$onset_doy)), n = dplyr::n_distinct(.data$individualID),
+                     lc_share = round(mean(.data$left_censored %in% TRUE), 3), .groups="drop") %>%
     dplyr::filter(.data$n >= 3)   # >=3 individuals/species/year before a point is shown
   # A site can have green-up observations yet no species-year that clears the
   # support gate. Preserve that as an unavailable result, not a typed 0-row table:
@@ -605,15 +735,73 @@ onset_trend <- function(obs) {
 leaf_active_trend <- function(obs, support = NULL) {
   obs <- normalize_doy(obs)
   sup <- if (!is.null(support)) support else site_year_support(obs)
-  la <- leaf_spans(obs[obs$year %in% sup$year[sup$leaf_supported], , drop = FALSE])   # leaf-supported site-years only
+  # spans from ALL years first (the year-boundary bridge reads the neighbouring
+  # years, supported or not), then the leaf-supported site-years only: filtering
+  # first leaves a false edge (357 days instead of 361 for a plant in leaf all year)
+  la <- leaf_spans(obs)
+  la <- la[la$year %in% sup$year[sup$leaf_supported], , drop = FALSE]
   if (!nrow(la)) return(NULL)
   sci <- obs[!duplicated(obs$individualID), c("individualID", "scientificName"), drop = FALSE]
   la$scientificName <- sci$scientificName[match(la$individualID, sci$individualID)]
+  # onset_hi = median longest span the visits allow; the point is hollow when it
+  # exceeds onset by BOUND_POINT_TOL or more (trend_hollow)
   out <- la %>% dplyr::group_by(.data$scientificName, .data$year) %>%
-    dplyr::summarise(onset = round(stats::median(.data$leaf_active)), n = dplyr::n_distinct(.data$individualID), .groups="drop") %>%
+    dplyr::summarise(onset = round(stats::median(.data$leaf_active)), n = dplyr::n_distinct(.data$individualID),
+                     onset_hi = round(stats::median(.data$leaf_active_hi)), .groups="drop") %>%
     dplyr::filter(.data$n >= 3)
   if (!nrow(out)) return(NULL)
   out
+}
+
+# Hollow trend points (rules.md section 9): a green-up point whose median has no
+# lower bound (lc_share >= BOUND_SHARE), or a leaf point whose unbridged edges
+# allow BOUND_POINT_TOL or more extra days (onset_hi - onset). Logical, never NA.
+trend_hollow <- function(tr) {
+  if (is.null(tr) || !nrow(tr)) return(logical(0))
+  if ("lc_share" %in% names(tr)) return(!is.na(tr$lc_share) & tr$lc_share >= BOUND_SHARE)
+  if ("onset_hi" %in% names(tr)) { w <- tr$onset_hi - tr$onset; return(!is.na(w) & w >= BOUND_POINT_TOL) }
+  rep(FALSE, nrow(tr))
+}
+# Trend verdict (rules.md section 9). Fit A = lm(year median ~ year) over the solid
+# points only (the year median is the median of that year's solid species
+# points); fit B = the same over every point as recorded. Fewer than min_years
+# years with a solid point -> "too_short". A's 95% CI (slope -/+ qt(0.975, ny - 2)
+# x se) spanning zero -> "none". A and B both excluding zero on the same side ->
+# "up" (positive slope: later green-up or a longer leaf season) or "down",
+# reported from A. A excluding zero while B does not, or points the other way ->
+# "depends" (the direction rests on the left-out points). n_left_out = hollow
+# points; site_yr = fit A's year medians.
+trend_verdict <- function(tr, hollow = trend_hollow(tr), min_years = TREND_MIN_YEARS) {
+  yr_med <- function(d) {
+    if (!nrow(d)) return(tibble::tibble(year = integer(), onset = numeric()))
+    d %>% dplyr::group_by(.data$year) %>%
+      dplyr::summarise(onset = stats::median(.data$onset), .groups = "drop")
+  }
+  fit <- function(sy) {
+    na <- list(slope = NA_real_, lo = NA_real_, hi = NA_real_)
+    if (nrow(sy) < 3L || diff(range(sy$year)) == 0) return(na)
+    co <- summary(stats::lm(onset ~ year, data = sy))$coefficients
+    if (nrow(co) < 2L || !is.finite(co[2, 2])) return(na)
+    tc <- stats::qt(0.975, df = nrow(sy) - 2L)
+    list(slope = co[2, 1], lo = co[2, 1] - tc * co[2, 2], hi = co[2, 1] + tc * co[2, 2])
+  }
+  if (is.null(tr) || !nrow(tr))
+    return(list(verdict = "too_short", slope = NA_real_, lo = NA_real_, hi = NA_real_,
+                slope_all = NA_real_, lo_all = NA_real_, hi_all = NA_real_, ny = 0L, ny_all = 0L,
+                n_points = 0L, n_left_out = 0L, site_yr = tibble::tibble(year = integer(), onset = numeric())))
+  hollow <- hollow %in% TRUE
+  site_yr <- yr_med(tr[!hollow, , drop = FALSE]); all_yr <- yr_med(tr)
+  a <- fit(site_yr); b <- fit(all_yr)
+  side <- function(f) if (!is.finite(f$lo)) 0L else if (f$lo > 0) 1L else if (f$hi < 0) -1L else 0L
+  sa <- side(a); sb <- side(b)
+  verdict <- if (nrow(site_yr) < min_years) "too_short" else if (sa == 0L) "none" else
+    if (sb == sa) (if (sa > 0L) "up" else "down") else "depends"
+  # a refused verdict carries no slope, so no caller can print one
+  if (verdict == "too_short") a <- b <- list(slope = NA_real_, lo = NA_real_, hi = NA_real_)
+  list(verdict = verdict, slope = a$slope, lo = a$lo, hi = a$hi,
+       slope_all = b$slope, lo_all = b$lo, hi_all = b$hi,
+       ny = nrow(site_yr), ny_all = nrow(all_yr), n_points = nrow(tr), n_left_out = sum(hollow),
+       site_yr = site_yr)
 }
 
 # one individual's full phenophase record (the career timeline + card)
@@ -624,17 +812,57 @@ indiv_history <- function(obs, id) {
 }
 
 # vegetative-only sequence for the ordering check. Reproductive phenophases
-# (Open flowers, Fruits, pollen cones) are EXCLUDED — many trees flower before
-# leaf-out (e.g. red maple), so flower-before-leaf is not an error.
+# (Open flowers, Fruits, pollen cones) are EXCLUDED: many trees flower before
+# leaf-out (e.g. red maple), so flower-before-leaf is not an error. Colored and
+# Falling leaves share rank 4 (iris 2026-10-21): leaves often start to fall
+# before most of the canopy colours, so their order is not a recording error.
 VEG_SEQ <- c("Breaking leaf buds"=1, "Initial growth"=1, "Emerging needles"=1, "Breaking needle buds"=1,
              "Increasing leaf size"=2, "Young leaves"=2, "Young needles"=2,
-             "Leaves"=3, "Colored leaves"=4, "Falling leaves"=5)
+             "Leaves"=3, "Colored leaves"=4, "Falling leaves"=4)
+# Growth forms with one orderly leaf cycle per year: the only forms the ordering
+# and green-up outlier checks apply to. Drought-deciduous, forb, graminoid and
+# semi-evergreen plants flush and drop leaves several times a year with the rain.
+SINGLE_CYCLE_FORMS <- "^Deciduous|conifer|^Pine"
+# An inversion whose earlier stage was first seen at the plant's very next visit
+# lies inside one visit interval, so the two onsets cannot be ordered: allow it.
+OO_SLACK_VISITS <- 1L
+# Green-up year-outlier: a same-season (uncensored, not carried-over) onset more
+# than OUTLIER_DAYS from the plant's own median, among at least OUTLIER_MIN_YEARS
+# such years.
+OUTLIER_DAYS <- 45
+OUTLIER_MIN_YEARS <- 3
+
+# Per-year leaf-stage onsets used only by the ordering check (iris 2026-10-21).
+# doy, phase, yes are one year's scored VEG_SEQ rows of one plant. One status per
+# phase per visit day ('yes' wins). The year is skipped (NULL) when the first
+# scored Leaves record is 'yes': the plant entered the year carrying leaves, so the
+# year holds no single cycle to order. A leaf-out stage (rank 1 to 3) has an onset
+# only when its first 'yes' directly follows a 'no' of that phase at most max_gap
+# days earlier (an observed transition); a senescence stage (rank 4) takes its
+# first observed no-to-yes transition on or after the year's first leaf-out 'yes',
+# so last year's leaves falling in February are not read as this year's. Returns a
+# named vector phase -> onset day, observed onsets only.
+oo_year_onsets <- function(doy, phase, yes, max_gap = CARRYOVER_GAP) {
+  v <- stats::aggregate(list(yes = yes), by = list(phase = phase, doy = doy), FUN = any)
+  v <- v[order(v$phase, v$doy, method = "radix"), , drop = FALSE]
+  byp <- split(v, v$phase)
+  lv <- byp[["Leaves"]]
+  if (!is.null(lv) && isTRUE(lv$yes[1])) return(NULL)
+  rk <- VEG_SEQ[names(byp)]
+  observed <- function(x) x$yes & c(FALSE, !x$yes[-nrow(x)]) & c(Inf, diff(x$doy)) <= max_gap
+  lo_yes <- unlist(lapply(byp[names(byp)[rk <= 3]], function(x) x$doy[x$yes]))
+  anchor <- if (length(lo_yes)) min(lo_yes) else NA_real_
+  on <- vapply(names(byp), function(p) {
+    x <- byp[[p]]; t <- observed(x)
+    if (rk[[p]] <= 3) { f <- which(x$yes)[1]; if (!is.na(f) && t[f]) x$doy[f] else NA_real_ }
+    else { if (!is.finite(anchor)) return(NA_real_)
+      k <- which(t & x$doy >= anchor); if (length(k)) x$doy[k[1]] else NA_real_ } }, 0)
+  on[is.finite(on)]
+}
 
 # per-individual QC flags (ported from veg tree_qc_flags). Low-noise by design:
-# "verify, not wrong" — only flag things a human should actually look at.
-# growth_form gates the ordering check: drought-deciduous / forb / semi-evergreen
-# plants legitimately flush and drop leaves MULTIPLE times a year (rain-driven),
-# so leaf-stage "out of order" within a year is normal for them, not an error.
+# "verify, not wrong": only flag things a human should actually look at.
+# growth_form gates the ordering and outlier checks (SINGLE_CYCLE_FORMS).
 # Returns list(flags = list(level,text,key,n), sets = named list of the exact
 # offending rows behind each flag). The UI lists each flag clickable -> a DT
 # inspector of its `sets[[key]]` + a per-flag CSV downloadHandler, and
@@ -656,47 +884,90 @@ pheno_qc_flags <- function(hist, growth_form = NULL) {
     out$flags[[length(out$flags)+1L]] <<- list(level=level, title=title, key=key, n=n, text=text)
     if (n) out$sets[[key]] <<- tidy(rows, title) }
 
-  yes_idx <- which(hist$status == "yes")
+  ph <- as.character(hist$phenophaseName); st <- as.character(hist$status)
+  yes_idx <- which(st == "yes")
   if (!length(yes_idx)) { add("info", "No phenophase recorded 'yes' yet", "noyes", integer(0),
     "No phenophase has been recorded 'yes' yet for this plant.", allow_empty = TRUE); return(out) }
+  single_cycle <- is.null(growth_form) || grepl(SINGLE_CYCLE_FORMS, growth_form)
 
-  # (1) out-of-order VEGETATIVE phenophases within a year (single-cycle plants only).
-  single_cycle <- is.null(growth_form) || grepl("^Deciduous|conifer|^Pine", growth_form)
-  oo_rows <- integer(0); oo_years <- integer(0)
-  if (single_cycle) for (y in unique(hist$year[yes_idx])) {
-    yidx <- which(hist$status == "yes" & hist$year == y & hist$phenophaseName %in% names(VEG_SEQ) & is.finite(hist$dayOfYear))
-    if (!length(yidx)) next
-    fr <- tapply(hist$dayOfYear[yidx], as.character(hist$phenophaseName[yidx]), min)
-    rk <- VEG_SEQ[names(fr)]; ok <- is.finite(rk) & is.finite(fr); fr <- fr[ok]; rk <- rk[ok]
-    if (length(fr) >= 2) { o <- order(fr)
-      if (any(diff(rk[o]) < 0)) { oo_rows <- c(oo_rows, yidx); oo_years <- c(oo_years, y) } }
+  # (1) leaf stages out of sequence, per calendar year (single-cycle forms only).
+  # Fires when a higher-rank stage's observed onset is strictly earlier than a
+  # lower-rank one (a same-visit tie passes), unless the lower one came at the
+  # next visit (OO_SLACK_VISITS). Rows: the later stage's onset 'yes' and the
+  # earlier stage's rows on both onset days.
+  oo_rows <- integer(0); oo_desc <- character(0)
+  if (single_cycle) for (y in sort(unique(hist$year[yes_idx]))) {
+    iy <- which(hist$year == y & ph %in% names(VEG_SEQ) & st %in% c("yes", "no") & is.finite(hist$dayOfYear))
+    if (!length(iy)) next
+    on <- oo_year_onsets(hist$dayOfYear[iy], ph[iy], st[iy] == "yes")
+    if (length(on) < 2) next
+    r <- VEG_SEQ[names(on)]
+    visits <- sort(unique(hist$dayOfYear[hist$year == y & is.finite(hist$dayOfYear)]))
+    bad <- which(outer(on, on, "<") & outer(r, r, ">"), arr.ind = TRUE)
+    bad <- bad[order(on[bad[, 1]], on[bad[, 2]]), , drop = FALSE]
+    for (k in seq_len(nrow(bad))) {
+      a <- bad[k, 1]; b <- bad[k, 2]
+      if (sum(visits > on[[a]] & visits <= on[[b]]) <= OO_SLACK_VISITS) next
+      late <- names(on)[a]; early <- names(on)[b]
+      oo_rows <- c(oo_rows, iy[ph[iy] == late & hist$dayOfYear[iy] == on[[a]] & st[iy] == "yes"],
+                   iy[ph[iy] == early & hist$dayOfYear[iy] %in% c(on[[a]], on[[b]])])
+      oo_desc <- c(oo_desc, sprintf("%s on day %d before %s on day %d (%d)", late, as.integer(on[[a]]),
+                                    early, as.integer(on[[b]]), as.integer(y)))
+    }
   }
-  add("high", "Leaf phenophases out of sequence", "outoforder", oo_rows,
-    sprintf("In %s, leaf phenophases were recorded out of sequence (a later leaf stage before an earlier one, e.g. falling/colored leaves before leaf-out). Worth checking the records for %s.",
-      paste(sort(unique(oo_years)), collapse=", "), if (length(unique(oo_years))==1) "that year" else "those years"))
+  if (length(oo_desc)) add("warn", "Leaf phenophases out of sequence", "outoforder", oo_rows,
+    sprintf("A later leaf stage was first recorded before an earlier one: %s. Check whether the earlier stage was missed at those visits or the later record is a mistake.",
+            paste(oo_desc, collapse = "; ")))
+
+  # Same visit recorded both yes and no: the same phenophase on the same date has
+  # a 'yes' row and a 'no' row (an exact duplicate is not a conflict). Yes-wins
+  # counts the visit as 'yes'; that matters most when the visit is the phase-year's
+  # first 'yes', where it sets an onset, so those conflicts are "warn", the rest
+  # "info". Both rows of every conflict are listed.
+  vd <- obs_dates(hist)
+  sc <- st %in% c("yes", "no") & !is.na(vd)
+  ck <- paste(format(vd), ph, sep = "\r")
+  has_yes <- tapply(st[sc] == "yes", ck[sc], any); has_no <- tapply(st[sc] == "no", ck[sc], any)
+  cf_keys <- names(has_yes)[has_yes & has_no[names(has_yes)]]
+  cf_rows <- which(sc & ck %in% cf_keys)
+  if (length(cf_rows)) {
+    nv <- length(cf_keys)
+    # first 'yes' date per phenophase x year
+    yi <- which(sc & st == "yes")
+    first_yes <- tapply(vd[yi], paste(ph[yi], hist$year[yi], sep = "\r"), min)
+    cf_first <- any(vd[cf_rows] == as.Date(first_yes[paste(ph[cf_rows], hist$year[cf_rows], sep = "\r")]), na.rm = TRUE)
+    add(if (cf_first) "warn" else "info", "Same visit recorded both yes and no", "conflict", cf_rows,
+      sprintf("On %d visit%s, two records for the same phenophase on the same day disagree: one says 'yes', the other 'no' (often two observers checking each other). The app counts the phenophase as 'yes' on that visit. Check which record is right.",
+              nv, if (nv == 1) "" else "s"))
+  }
 
   # Bud-break phases only. The Young-leaves fallback forms flush with rain, so a
   # first flush in January one year and July the next is biology, not a date to
   # verify; the plant-history checks stay bud-break-only (audit 2026-10-18). Both
   # checks read the same carry-over-aware onsets as the estimand, so leaves
   # carried over from December are neither an "early year" nor a censored onset.
-  gy_idx <- which(hist$status == "yes" & hist$phenophaseName %in% GREENUP & is.finite(hist$dayOfYear))
+  gy_idx <- which(st == "yes" & ph %in% GREENUP & is.finite(hist$dayOfYear))
   oc <- if (length(gy_idx)) onset_carry(cbind(individualID = "plant", hist, stringsAsFactors = FALSE), GREENUP) else NULL
   oc <- if (!is.null(oc)) oc[is.finite(oc$onset_doy), , drop = FALSE] else NULL
   per_year <- if (!is.null(oc) && nrow(oc)) oc %>% dplyr::group_by(.data$year) %>%
-      dplyr::summarise(onset = min(.data$onset_doy), lc = .data$left_censored[which.min(.data$onset_doy)], .groups = "drop")
+      dplyr::summarise(onset = min(.data$onset_doy), lc = .data$left_censored[which.min(.data$onset_doy)],
+                       carry = .data$carryover[which.min(.data$onset_doy)], .groups = "drop")
     else NULL
 
-  # (2) green-up year-outlier: a year >45 d from this plant's own median.
-  if (!is.null(per_year) && nrow(per_year) >= 3) {
-    med <- stats::median(per_year$onset); off <- per_year$onset - med
+  # (2) green-up year-outlier: a year more than OUTLIER_DAYS from this plant's own
+  # median, single-cycle forms only, over observed same-season onsets (a censored
+  # or carried-over year is not a comparable onset).
+  py <- if (!is.null(per_year) && single_cycle)
+    per_year[!(per_year$lc %in% TRUE) & !(per_year$carry %in% TRUE), , drop = FALSE] else NULL
+  if (!is.null(py) && nrow(py) >= OUTLIER_MIN_YEARS) {
+    med <- stats::median(py$onset); off <- py$onset - med
     i <- which.max(abs(off))
-    if (length(i) == 1 && is.finite(off[i]) && abs(off[i]) > 45) {
-      oy <- per_year$year[i]
+    if (length(i) == 1 && is.finite(off[i]) && abs(off[i]) > OUTLIER_DAYS) {
+      oy <- py$year[i]
       out_rows <- gy_idx[hist$year[gy_idx] == oy]
       add("warn", "Green-up year well off the plant's norm", "outlier", out_rows,
         sprintf("In %s this plant broke leaf around day %d, %d days %s than its usual day-%d. Could be a real shift, or a date to verify.",
-          oy, round(per_year$onset[i]), round(abs(off[i])), if (off[i] < 0) "earlier" else "later", round(med)))
+          oy, round(py$onset[i]), round(abs(off[i])), if (off[i] < 0) "earlier" else "later", round(med)))
     }
   }
 
@@ -741,6 +1012,8 @@ comp_by <- function(inds, by = c("growthForm","scientificName")) {
 plot_summary_phe <- function(obs, inds, ind_s = NULL) {
   if (is.null(ind_s)) ind_s <- individual_summary(obs, inds)
   if (is.null(ind_s)) return(NULL)
+  # a summary built before leaf_active_hi existed reads as unknown, not as a point
+  if (!"leaf_active_hi" %in% names(ind_s)) ind_s$leaf_active_hi <- NA_real_
   ind_s %>% dplyr::group_by(.data$plotID) %>%
     # gu_share MUST be computed BEFORE the `greenup =` redefine below: inside one
     # summarise(), once `greenup` is reassigned to the scalar median, `.data$greenup`
@@ -749,6 +1022,11 @@ plot_summary_phe <- function(obs, inds, ind_s = NULL) {
     dplyr::summarise(n_ind = dplyr::n(),
                      gu_share = sum(is.finite(.data$greenup)) / dplyr::n(),
                      greenup = round(stats::median(.data$greenup, na.rm=TRUE)),
+                     # leaf_active_hi and the lower-bound flag also come BEFORE the
+                     # `leaf_active =` redefine (same gotcha as gu_share)
+                     leaf_active_hi = round(stats::median(.data$leaf_active_hi, na.rm=TRUE)),
+                     leaf_active_lower_bound = { la <- round(stats::median(.data$leaf_active, na.rm=TRUE))
+                       if (is.finite(la)) leaf_active_hi - la >= BOUND_POINT_TOL else NA },
                      leaf_active = round(stats::median(.data$leaf_active, na.rm=TRUE)),
                      lat = stats::median(.data$lat, na.rm=TRUE), lng = stats::median(.data$lng, na.rm=TRUE), .groups="drop")
 }
@@ -831,12 +1109,22 @@ site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
   if (is.null(ind_s)) ind_s <- individual_summary(obs, inds)
   ko <- key_onsets(obs); sup <- site_year_support(obs, gu = ko)
   sp <- species_level_only(inds)
-  safe_med <- function(x) { v <- suppressWarnings(stats::median(x, na.rm=TRUE)); if (is.finite(v)) round(v) else NA_real_ }
-  # green-up bounds over supported plant-years (hi equals the median of the
-  # per-plant medians in ind_s); a site with too few seasons is short_record
+  # green-up bounds over supported plant-years: value is the median of the
+  # per-plant medians in ind_s, hi the median first 'yes', lo the median last
+  # 'no', and value lies between them. A site with too few seasons is short_record.
   bnd <- greenup_bounds(if (!is.null(ko)) ko[ko$greenup_supported %in% TRUE, , drop = FALSE] else NULL)
   short <- nrow(sup) > 0L && all(sup$greenup_reason == "short_record")
-  if (short) bnd <- list(value = NA_real_, hi = NA_real_, lo = NA_real_, status = "short_record", n_plants = 0L)
+  if (short) bnd <- list(value = NA_real_, lo = NA_real_, hi = NA_real_, status = "short_record", n_plants = 0L)
+  # leaf-active summary over leaf-supported plant-years (value equals the median
+  # of ind_s$leaf_active); hi is the median longest span the visits allow. Only
+  # plants listed in inds count (rules.md section 8): the site value has always
+  # come from individual_summary(), which is built on inds, and an obs plant
+  # missing from inds (DSNY 00653) must not move the value, hi or edge share.
+  # Green-up stays on every plant in obs (section 6).
+  lb <- leaf_bounds(if (!is.null(ko) && "leaf_active_hi" %in% names(ko))
+                      ko[ko$leaf_supported %in% TRUE & is.finite(ko$leaf_active) &
+                           ko$individualID %in% inds$individualID, , drop = FALSE] else NULL)
+  if (short) lb <- list(value = NA_real_, hi = NA_real_, status = "short_record", edge_share = NA_real_, n_plants = 0L)
   autumn <- attr(ko, "autumn_forms"); carry_f <- attr(ko, "carry_forms")
   ksup <- if (!is.null(ko)) ko[ko$greenup_supported %in% TRUE & is.finite(ko$greenup), , drop = FALSE] else NULL
   tibble::tibble(
@@ -848,7 +1136,12 @@ site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
     # short record is withheld from the map, gradient and search)
     median_greenup = bnd$value,
     greenup_hi = bnd$hi, greenup_lo = bnd$lo, greenup_status = bnd$status,
-    median_leaf_active = if (!is.null(ind_s) && !short) safe_med(ind_s$leaf_active) else NA_real_,
+    median_leaf_active = lb$value,
+    # leaf_active_hi: the longest span the visits allow (unbridged edges filled to
+    # the year boundary); status lower_bound when it exceeds the value by
+    # BOUND_POINT_TOL or more; leaf_edge_share = share of the plant-years with an
+    # unbridged edge
+    leaf_active_hi = lb$hi, leaf_active_status = lb$status, leaf_edge_share = lb$edge_share,
     # green-up COVERAGE share (fraction of plants with a green-up onset in a
     # supported year). Cacti, leafless and no-leaf-bud evergreens and autumn-
     # germinating forms have none, so this flags when median_greenup rests on a
@@ -863,6 +1156,12 @@ site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
     # how many site-years passed the support gate (the n behind every median).
     greenup_lc_share = greenup_lc_share(ko),
     greenup_fallback_share = greenup_fallback_share(ind_s),
+    # share of the site's scored rows (yes, no or uncertain; all years and
+    # phenophases) recorded 'uncertain', which every onset and share ignores.
+    # Kept unrounded (iris): the app discloses it at >= 0.10 on the raw value.
+    # Computed on the obs received (the rebuild de-duplicates obs first).
+    uncertain_share = { n_sc <- sum(obs$status %in% c("yes", "no", "uncertain"))
+                        if (n_sc) sum(obs$status %in% "uncertain") / n_sc else NA_real_ },
     greenup_autumn_forms = if (length(autumn)) paste(autumn, collapse = "; ") else NA_character_,
     greenup_carry_forms = if (length(carry_f)) paste(carry_f, collapse = "; ") else NA_character_,
     # share of the supported green-up plant-years whose value is the next flush
@@ -876,38 +1175,69 @@ site_phe_summary <- function(obs, inds, meta, ind_s = NULL) {
     lat = meta$lat, lng = meta$lng)
 }
 
-# within-species latitude gradient — the CONFOUND-CONTROLLED read of the cross-
+# within-species latitude gradient: the CONFOUND-CONTROLLED read of the cross-
 # site gradient. The network slope (median_greenup ~ lat) pools different species
 # mixes at every site; holding ONE widespread species constant removes that
-# confound (red maple alone ~ +4.4 d/°N, R² 0.78 vs the network's +2.5, R² 0.41).
-# Picks the species spanning the most sites (>= min_sites), fits greenup ~ lat,
-# and returns the slope + its 95% CI + R² so the banner can LEAD with it. Reads
-# the precomputed national_onsets table (one row per site×species); NULL if none
-# qualifies. Pure base lm, no extra deps.
-within_species_gradient <- function(national_onsets, min_sites = 4) {
+# confound. On the 2026-10-21 bundles red maple (Acer rubrum, 8 sites with at
+# least 3 seasons; SCBI's single season is dropped) gives green-up +4.33 d per
+# degree N (95% CI 1.91 to 6.76, R2 0.76, rho 0.87) and leaf-active -8.25 days
+# per degree N (-11.99 to -4.51, R2 0.83, rho -0.92).
+# Reads the precomputed national_onsets table (one row per site x species) for one
+# value column (greenup, or leaf_active with years = "leaf_n_years"). Rows whose
+# value or lat is not finite, or with fewer than min_years supported years behind
+# the value, are dropped BEFORE the species is chosen, so a species cannot win on
+# sites that rest on one or two seasons. The species with the most remaining sites
+# (at least min_sites; ties to the first in radix order) is fitted value ~ lat with
+# base lm (slope, t CI, R2, p), plus Spearman's rho with a Fisher z interval using
+# the Bonett-Wright variance (NA at perfect ranks, where atanh is infinite).
+# n_excluded_short and excluded_sites name the chosen species' rows the year floor
+# dropped. NULL when a needed column is missing, when no species qualifies, or when
+# a site appears twice within the chosen species (a growth-form split that would
+# double-count the site). The site column is optional; without it the duplicate
+# check and excluded_sites are skipped.
+within_species_gradient <- function(national_onsets, value = "greenup", years = "n_years",
+                                    min_sites = 6, min_years = SUPPORT_MIN_YEARS) {
   no <- national_onsets
-  if (is.null(no) || !nrow(no) || !all(c("scientificName","greenup","lat") %in% names(no))) return(NULL)
-  no <- no[is.finite(no$greenup) & is.finite(no$lat), , drop=FALSE]
-  if (!nrow(no)) return(NULL)
-  tab <- sort(table(no$scientificName), decreasing = TRUE)
-  cand <- names(tab)[tab >= min_sites]
-  if (!length(cand)) return(NULL)
-  sp <- cand[1]                       # the most widely-monitored species
-  d <- no[no$scientificName == sp, , drop=FALSE]
+  if (is.null(no) || !nrow(no) || !all(c("scientificName", value, years, "lat") %in% names(no))) return(NULL)
+  v <- suppressWarnings(as.numeric(no[[value]])); ny <- suppressWarnings(as.numeric(no[[years]]))
+  has_site <- "site" %in% names(no)
+  ok_val <- is.finite(v) & is.finite(no$lat) & !is.na(no$scientificName)
+  keep <- ok_val & !is.na(ny) & ny >= min_years
+  if (!any(keep)) return(NULL)
+  sp_all <- as.character(no$scientificName[keep])
+  tab <- table(factor(sp_all, levels = sort(unique(sp_all), method = "radix")))
+  if (max(tab) < min_sites) return(NULL)
+  sp <- names(tab)[which.max(tab)]   # first maximum in radix order wins a tie
+  in_sp <- no$scientificName %in% sp
+  if (has_site && anyDuplicated(as.character(no$site[in_sp]))) return(NULL)
+  short <- in_sp & ok_val & !keep
+  excluded <- if (has_site) sort(unique(as.character(no$site[short])), method = "radix") else character(0)
+  d <- data.frame(value = v[in_sp & keep], lat = no$lat[in_sp & keep])
   if (nrow(d) < 3 || diff(range(d$lat)) == 0) return(NULL)
-  fit <- stats::lm(greenup ~ lat, data = d); co <- summary(fit)$coefficients
+  fit <- stats::lm(value ~ lat, data = d); co <- summary(fit)$coefficients
   if (nrow(co) < 2) return(NULL)
   slope <- co[2,1]; se <- co[2,2]; df <- nrow(d) - 2
   tcrit <- stats::qt(0.975, df = df)
-  list(species = sp, n_sites = nrow(d), slope = slope,
+  n <- nrow(d)
+  rho <- stats::cor(d$lat, d$value, method = "spearman")
+  rho_ci <- if (is.finite(rho) && abs(rho) <= 1 - 1e-9 && n > 3) {
+    z <- atanh(rho); zse <- sqrt((1 + rho^2 / 2) / (n - 3)); q <- stats::qnorm(0.975)
+    c(tanh(z - q * zse), tanh(z + q * zse)) } else c(NA_real_, NA_real_)
+  list(species = sp, n_sites = n, slope = slope,
        lo = slope - tcrit*se, hi = slope + tcrit*se,
-       r2 = summary(fit)$r.squared, p = co[2,4])
+       r2 = summary(fit)$r.squared, p = co[2,4],
+       rho = rho, rho_lo = rho_ci[1], rho_hi = rho_ci[2],
+       n_excluded_short = sum(short), excluded_sites = excluded)
 }
 
 # one row per (site × species-level taxon) with ≥3 individuals: feeds the
 # same-species-across-sites cross-site comparison (computed in the bundler).
+# greenup is the two-stage median of the plant-year midpoints (NA unless a point
+# or a range); greenup_hi is the median first 'yes', greenup_lo the median last
+# 'no' (NA when censoring leaves it open), and greenup lies between them.
 site_species_onsets <- function(obs, inds, meta) {
   ko <- key_onsets(obs); if (is.null(ko)) return(NULL)
+  ko_leaf <- ko[ko$leaf_supported %in% TRUE & is.finite(ko$leaf_active), , drop = FALSE]
   spmap <- inds[, c("individualID","scientificName","growthForm","is_species"), drop=FALSE]
   # flowering and leaf-active are two-stage too (per plant over ALL its supported
   # years, then across plants), not pooled over only the plant-years that also
@@ -915,6 +1245,7 @@ site_species_onsets <- function(obs, inds, meta) {
   per_plant <- ko %>% dplyr::group_by(.data$individualID) %>%
     dplyr::summarise(fl = suppressWarnings(stats::median(.data$flower[.data$greenup_supported], na.rm = TRUE)),
                      la = suppressWarnings(stats::median(.data$leaf_active[.data$leaf_supported], na.rm = TRUE)),
+                     la_hi = suppressWarnings(stats::median(.data$leaf_active_hi[.data$leaf_supported], na.rm = TRUE)),
                      .groups = "drop")
   ko <- ko[ko$greenup_supported %in% TRUE, , drop = FALSE]   # supported site-years only
   d <- dplyr::left_join(ko, spmap, by = "individualID")
@@ -931,8 +1262,27 @@ site_species_onsets <- function(obs, inds, meta) {
                    flower = { v <- per_plant$fl[per_plant$individualID %in% g$individualID]
                               v <- v[is.finite(v)]; if (length(v)) round(stats::median(v)) else NA_real_ },
                    leaf_active = { v <- per_plant$la[per_plant$individualID %in% g$individualID]
-                                   v <- v[is.finite(v)]; if (length(v)) round(stats::median(v)) else NA_real_ })
+                                   v <- v[is.finite(v)]; if (length(v)) round(stats::median(v)) else NA_real_ },
+                   # same plants as leaf_active (a finite la); the edge share is over
+                   # their supported plant-years with a finite leaf_active
+                   leaf_active_hi = { pp <- per_plant[per_plant$individualID %in% g$individualID & is.finite(per_plant$la), ]
+                                      if (nrow(pp)) round(stats::median(pp$la_hi)) else NA_real_ },
+                   leaf_edge_share = { r <- ko_leaf[ko_leaf$individualID %in% g$individualID, , drop = FALSE]
+                                       if (nrow(r)) round(mean(r$leaf_edge_start %in% TRUE | r$leaf_edge_end %in% TRUE), 3)
+                                       else NA_real_ })
   }))
+  out$leaf_active_lower_bound <- ifelse(is.na(out$leaf_active), NA,
+                                        out$leaf_active_hi - out$leaf_active >= BOUND_POINT_TOL)
+  # years behind each value (rules.md section 10), the floor the gradient applies:
+  # n_years = distinct supported green-up years among the group's rows;
+  # leaf_n_years = distinct leaf-supported years with a leaf row for any of its plants
+  yrs <- lapply(split(seq_len(nrow(d)), key), function(rows) {
+    ids <- unique(d$individualID[rows])
+    c(n_years = length(unique(d$year[rows])),
+      leaf_n_years = length(unique(ko_leaf$year[ko_leaf$individualID %in% ids]))) })
+  # (split() orders groups exactly as for `out` above, so rows align)
+  out$n_years <- as.integer(vapply(yrs, `[[`, 0, "n_years"))
+  out$leaf_n_years <- as.integer(vapply(yrs, `[[`, 0, "leaf_n_years"))
   out <- out[out$n_ind >= 3, , drop = FALSE]
   if (!nrow(out)) return(NULL)
   # C-locale (radix) order, like dplyr's grouping, so bytes match across platforms
